@@ -24,8 +24,13 @@
 #   bash ps5-toolbox.sh --remove-game [Juego.exe|"Nombre"]   # remove it (Steam, PortProton, disk), asking each step
 #   bash ps5-toolbox.sh --pp-collection [--dry-run|--yes]   # sync Steam's "PortProton" collection
 #   bash ps5-toolbox.sh --space [DIR]           # space taken by each folder in DIR (also the "espacio" command)
+#   bash ps5-toolbox.sh --self-update [v1.1.0]  # update this toolbox from its GitHub releases
+#   bash ps5-toolbox.sh --version
 # Setup blocks: locale cmdline wifi updates vram zram fans warmreboot hdmi bt disk brave nas bios media esde portproton atajos
 set -uo pipefail
+
+TOOLBOX_VERSION=1.0.0                    # bump on every release (see CHANGELOG.md and release.sh)
+TOOLBOX_REPO=fitamix/ps5-bazzite-toolbox
 
 MODE='' BOOT=0 SESSION_CMD='' STATUS_ONLY=0 ALL=0 ONLY='' UPDATE_TAG='' ARGS=()
 while [ $# -gt 0 ]; do
@@ -42,6 +47,9 @@ while [ $# -gt 0 ]; do
         --update) MODE=update; UPDATE_TAG=''
                   if [ $# -gt 1 ] && [[ $2 != -* ]]; then UPDATE_TAG=$2; shift; fi; shift ;;
         --screen) MODE=screen; shift ;;
+        --self-update) MODE=self-update; UPDATE_TAG=''
+                  if [ $# -gt 1 ] && [[ $2 != -* ]]; then UPDATE_TAG=$2; shift; fi; shift ;;
+        -V|--version) echo "ps5-toolbox $TOOLBOX_VERSION"; exit 0 ;;
         --add-game|--remove-game|--pp-collection|--space)       # the rest of the line goes to that tool
                   MODE=${1#--}; shift; ARGS=("$@"); break ;;
         -h|--help) awk 'NR > 1 { if (!/^#/) exit; sub(/^# ?/, ""); print }' "$0"; exit 0 ;;
@@ -616,7 +624,7 @@ apply_nas() {
         say "Ya hay un montaje del NAS: //$src en $mnt${cur:+ (ROMs en $cur)}."
     fi
     [ $ALL = 1 ] && [ -z "${NAS_IP:-}" ] && { say "Sin datos del NAS: ejecútalo sin --all para responder las preguntas."; return 1; }
-    value NAS_IP "IP del NAS (p. ej. 192.168.1.50)" "${NAS_IP:-}"
+    value NAS_IP "IP del NAS (p. ej. 192.168.1.x)" "${NAS_IP:-}"
     value NAS_SHARE "Carpeta compartida (como en \\\\NAS\\carpeta)" "${NAS_SHARE:-}"
     value NAS_USER "Usuario del NAS" "${NAS_USER:-}"
     value NAS_ROMS "Ruta de la carpeta roms dentro de la compartida" "${NAS_ROMS:-${cur:-Emulation/roms}}"
@@ -1250,7 +1258,8 @@ gpu_top() {                              # top N programs by VRAM: "name size" l
 }
 mem_watch() {
     local stop=0 dev csv start t vu vt gu gt ra rt ru su st zr tc cc gp cpu0 cpu1 ca cm top ram ev peak_v=0 peak_g=0 min_ra=999999 peak_r=0 peak_s=0 peak_z=0 su0='' peak_t=0 events=0 n=0 ram_top=''
-    local peak_ct=0 peak_ca=0 peak_gp=0 sum_ca=0 sum_gp=0 n_gpu=0 n_cpu=0    dev=$(ls -d /sys/class/drm/card*/device 2>/dev/null | head -1)
+    local peak_ct=0 peak_ca=0 peak_gp=0 sum_ca=0 sum_gp=0 n_gpu=0 n_cpu=0
+    dev=$(ls -d /sys/class/drm/card*/device 2>/dev/null | head -1)
     csv=$HOME/ps5-mem-$(date +%Y%m%d-%H%M%S).csv
     start=$(date '+%Y-%m-%d %H:%M:%S')
     echo "hora,vram_usada_mb,vram_total_mb,gtt_mb,gtt_total_mb,ram_usada_mb,ram_total_mb,ram_disponible_mb,swap_usada_mb,swap_total_mb,zram_en_ram_mb,temp_c,errores_gpu,top_vram,top_ram,cpu_pct,cpu_hilo_max_pct,gpu_pct,temp_cpu_c" >"$csv"
@@ -1352,6 +1361,67 @@ yesno() {                                # yesno "question" S|N -> 0 = yes
     local a d=${2:-N}
     if [ "$d" = S ]; then read -rp "$1 [S/n] " a; [[ $a != [nN]* ]]; else read -rp "$1 [s/N] " a; [[ $a == [sS]* ]]; fi
 }
+# --- this toolbox's own releases ----------------------------------------------------------------------------
+# Each release on GitHub carries ps5-toolbox.sh and ps5-toolbox.sh.sha256 (made by release.sh).
+toolbox_release() {                      # toolbox_release TAG|'' DIR [TIMEOUT] -> DIR/{tag,notes,url,sha} of that (or the latest) release
+    local api="https://api.github.com/repos/$TOOLBOX_REPO/releases"
+    if [ -n "$1" ]; then api="$api/tags/$1"; else api="$api/latest"; fi
+    curl -fsSL --max-time "${3:-20}" "$api" -o "$2/rel.json" 2>/dev/null || return 1
+    python3 -I - "$2/rel.json" "$2" <<'PY'
+import json, sys
+r = json.load(open(sys.argv[1])); d = sys.argv[2]
+a = {x["name"]: x["browser_download_url"] for x in r.get("assets", [])}
+for name, value in (("tag", r["tag_name"]), ("notes", r.get("body") or ""),
+                    ("url", a.get("ps5-toolbox.sh", "")), ("sha", a.get("ps5-toolbox.sh.sha256", ""))):
+    open(f"{d}/{name}", "w").write(value + "\n")
+PY
+}
+toolbox_newer() {                        # toolbox_newer TAG -> 0 if TAG is newer than this script
+    local v=${1#v}
+    [ "$v" != "$TOOLBOX_VERSION" ] && printf '%s\n%s\n' "$TOOLBOX_VERSION" "$v" | sort -V -C
+}
+toolbox_notice() {                       # one line in the menu when a newer release exists (quick, silent offline)
+    local tmp tag
+    command -v python3 >/dev/null || return 0
+    tmp=$(mktemp -d)
+    if toolbox_release '' "$tmp" 4 && tag=$(<"$tmp/tag") && toolbox_newer "$tag"; then
+        printf '%s  Hay una versión nueva de esta caja de herramientas: %s (tienes v%s). Opción 18 para actualizarla.%s\n' \
+            "$Y" "$tag" "$TOOLBOX_VERSION" "$N"
+    fi
+    rm -rf "$tmp"
+}
+self_update() {                          # self_update [TAG] -> download, check and replace this script (asks first)
+    local want=${1:-} tmp tag url sha target
+    command -v python3 >/dev/null || { echo "Falta python3." >&2; return 1; }
+    [ -z "$want" ] || [[ $want == v* ]] || want=v$want
+    tmp=$(mktemp -d)
+    echo "==> Consultando las versiones de $TOOLBOX_REPO en GitHub…"
+    toolbox_release "$want" "$tmp" ||
+        { echo "No encuentro ${want:-la última versión} (¿hay red? ¿existe esa versión?)." >&2; rm -rf "$tmp"; return 1; }
+    tag=$(<"$tmp/tag") url=$(<"$tmp/url") sha=$(<"$tmp/sha")
+    printf '\nTienes v%s. %s: %s\n' "$TOOLBOX_VERSION" "$([ -n "$want" ] && echo Elegida || echo Última)" "$tag"
+    if [ -z "$want" ] && ! toolbox_newer "$tag"; then echo "Ya tienes la última versión."; rm -rf "$tmp"; return 1; fi
+    toolbox_newer "$tag" || [ "${tag#v}" = "$TOOLBOX_VERSION" ] || echo "${Y}Ojo: $tag es más antigua que la tuya.$N"
+    [ -n "$url" ] && [ -n "$sha" ] || { echo "Esa versión no trae ps5-toolbox.sh y su .sha256." >&2; rm -rf "$tmp"; return 1; }
+    printf '\n%sNovedades de %s:%s\n' "$B" "$tag" "$N"; sed 's/^/  /' "$tmp/notes"
+    # Where to write: this file when it is a real file we can replace, else ~/ps5-toolbox.sh (e.g. run as bash <(curl …))
+    target=$(readlink -f "$0" 2>/dev/null)
+    if [ ! -f "$target" ] || [ ! -w "$(dirname "$target")" ]; then target=$HOME/ps5-toolbox.sh; fi
+    section
+    say "Descarga ps5-toolbox.sh de $tag, comprueba su SHA-256 y que bash lo lee bien, y sustituye $target." \
+        "Tus respuestas guardadas ($CONF) se conservan." \
+        "DESHACER: la copia anterior queda en $target.v$TOOLBOX_VERSION (cp $target.v$TOOLBOX_VERSION $target)."
+    yesno "¿Actualizar a $tag?" S || { rm -rf "$tmp"; return 1; }
+    curl -fsSL --retry 3 -o "$tmp/ps5-toolbox.sh" "$url" && curl -fsSL --retry 3 -o "$tmp/ps5-toolbox.sh.sha256" "$sha" ||
+        { echo "Falló la descarga." >&2; rm -rf "$tmp"; return 1; }
+    (cd "$tmp" && sha256sum -c ps5-toolbox.sh.sha256) || { echo "${R}El SHA-256 no coincide: no cambio nada.$N" >&2; rm -rf "$tmp"; return 1; }
+    bash -n "$tmp/ps5-toolbox.sh" || { echo "${R}El fichero descargado no es válido: no cambio nada.$N" >&2; rm -rf "$tmp"; return 1; }
+    [ -f "$target" ] && cp -p "$target" "$target.v$TOOLBOX_VERSION"
+    install -m 755 "$tmp/ps5-toolbox.sh" "$target" || { echo "No puedo escribir $target." >&2; rm -rf "$tmp"; return 1; }
+    rm -rf "$tmp"
+    echo "${G}Hecho:$N $target es ahora $tag. Ábrelo de nuevo para usarla: bash $target"
+}
+
 update_image() {
     local want=${1:-} tmp n i c tag date kind type url sha title def='' dir log rc
     command -v python3 >/dev/null || { echo "Falta python3." >&2; return 1; }
@@ -2244,9 +2314,11 @@ screen_kick() {
 
 # --- menu ----------------------------------------------------------------------------------------------------
 menu() {
-    local c a
+    local c a notice_done=''
     while :; do
-        printf '\n%sPS5 Bazzite Deck — caja de herramientas%s (%s, kernel %s)\n' "$B" "$N" "${VERSION:+v$VERSION}" "$(uname -r)"
+        printf '\n%sPS5 Bazzite Deck — caja de herramientas v%s%s (imagen %s, kernel %s)\n' \
+            "$B" "$TOOLBOX_VERSION" "$N" "${VERSION:+v$VERSION}" "$(uname -r)"
+        [ -n "$notice_done" ] || { toolbox_notice; notice_done=1; }
         cat <<'MENU'
  Diagnóstico (solo mira, no cambia nada)
    1) Revisión completa de este arranque (y guarda el informe)
@@ -2271,6 +2343,7 @@ menu() {
   16) Revisar o cambiar ajustes concretos (VRAM, idioma, NAS…; también los que dijiste que no)
  Sistema
   17) Actualizar la imagen desde GitHub (elige versión, descarga, comprueba e instala)
+  18) Actualizar esta caja de herramientas (muestra las novedades y pregunta)
    0) Salir
 MENU
         read -rp "Elige: " c
@@ -2294,6 +2367,7 @@ MENU
                 read -rp "¿Cuáles? (separados por espacios o comas): " a
                 [ -n "$a" ] && { STATUS_ONLY=0 ALL=0 ONLY=${a//,/ }; setup_run; ONLY=''; } ;;
             17) update_image ;;
+            18) self_update && { echo "Saliendo para que abras la versión nueva."; return 0; } ;;
             0|q|'') return 0 ;;
             *) echo "Opción no válida" ;;
         esac
@@ -2305,6 +2379,7 @@ case $MODE in                            # these need no root
     remove-game) pp_remove_game "${ARGS[@]}"; exit ;;
     pp-collection) pp_collection "${ARGS[@]}"; exit ;;
     space) space_report "${ARGS[@]}"; exit ;;
+    self-update) self_update "$UPDATE_TAG"; exit ;;
 esac
 sudo -v || exit 1                        # the journal, /efi, polkit's rules and SDDM need root
 case $MODE in

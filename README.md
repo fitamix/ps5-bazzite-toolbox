@@ -21,9 +21,11 @@ disco USB. No es un proyecto oficial de la imagen ni de sus autores.
 En la PS5 (terminal o SSH):
 
 ```sh
-curl -LO https://raw.githubusercontent.com/fitamix/ps5-bazzite-toolbox/main/ps5-toolbox.sh
+curl -LO https://github.com/fitamix/ps5-bazzite-toolbox/releases/latest/download/ps5-toolbox.sh
 bash ps5-toolbox.sh
 ```
+
+Ese enlace descarga siempre la **última versión publicada**. La rama `main` puede llevar cambios aún sin publicar.
 
 Sin opciones muestra un menú. Se ejecuta con tu usuario (no como root): pide `sudo` cuando lo necesita.
 
@@ -51,6 +53,7 @@ Sin opciones muestra un menú. Se ejecuta con tu usuario (no como root): pide `s
   16) Revisar o cambiar ajustes concretos
  Sistema
   17) Actualizar la imagen desde GitHub
+  18) Actualizar esta caja de herramientas
 ```
 
 Lo mismo sin menú:
@@ -70,6 +73,8 @@ bash ps5-toolbox.sh --setup --status          # solo el estado de cada bloque
 bash ps5-toolbox.sh --setup --all             # la respuesta recomendada en todo, sin preguntar
 bash ps5-toolbox.sh --setup --only vram,nas   # solo esos bloques (vuelve a preguntar)
 bash ps5-toolbox.sh --update [v1.8.4]         # actualizar la imagen
+bash ps5-toolbox.sh --self-update [v1.1.0]    # actualizar esta caja de herramientas
+bash ps5-toolbox.sh --version
 ```
 
 ## Diagnóstico
@@ -158,6 +163,22 @@ valor cuando el `.ppdb` del juego no dice nada.
 Lista las versiones publicadas (estables, preliminares y «rápidas» que solo cambian el kernel), muestra sus
 novedades, comprueba el espacio, descarga, verifica el SHA-256 y ejecuta el `update.sh` del autor. Después recuerda
 **apagar** y arrancar con el cargador, no reiniciar.
+
+## Versiones de la caja de herramientas
+
+Cada versión publicada está en [Releases](https://github.com/fitamix/ps5-bazzite-toolbox/releases) con sus
+novedades, y el historial completo en [CHANGELOG.md](CHANGELOG.md). La numeración sigue `MAYOR.MENOR.ARREGLO`:
+
+- **MENOR** (1.**1**.0): bloques de ajustes, opciones o comprobaciones nuevas. Tras actualizar, la opción 15
+  (`--setup`) ofrece solo lo nuevo que tengas pendiente.
+- **ARREGLO** (1.0.**1**): correcciones, sin nada nuevo que aplicar.
+- **MAYOR** (**2**.0.0): algo que cambia cómo se usaba (opciones renombradas, formato de las respuestas guardadas).
+  Las notas dicen qué hacer.
+
+Al abrir el menú, la caja de herramientas mira (en 4 segundos como mucho, y sin decir nada si no hay red) si hay
+una versión más nueva y lo avisa. La opción 18 (`--self-update`) muestra las novedades, pregunta, descarga,
+comprueba el SHA-256, guarda la copia anterior como `ps5-toolbox.sh.vX.Y.Z` y la sustituye. Tus respuestas
+guardadas en `~/.config/ps5-bazzite-postinstall.conf` no se tocan.
 
 ## Cosas que se hacen a mano
 
