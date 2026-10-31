@@ -9,7 +9,8 @@ y escritorio KDE). Es **un solo fichero** que se ejecuta en la consola y sirve p
 - **Poner a punto un sistema recién instalado**: idioma, VRAM, ventilador, NAS, EmuDeck/ES-DE… bloque a bloque,
   explicando cada cambio y preguntando antes. Incluye montar un NAS para las ROMs, BIOS e imágenes de
   EmuDeck/ES-DE.
-- **Añadir juegos de Windows** a PortProton y a Steam en un paso.
+- **Añadir y quitar juegos de Windows** en PortProton y Steam en un paso, con ajustes por defecto pensados para
+  que funcionen el máximo de juegos sin tocar nada.
 - **Actualizar la imagen** desde GitHub con comprobación de SHA-256.
 
 Todo está en español. Probado en una PS5 (FW 4.50) con las versiones v1.4 – v1.8 de la imagen, arrancando desde un
@@ -40,15 +41,16 @@ Sin opciones muestra un menú. Se ejecuta con tu usuario (no como root): pide `s
    9) Pasar al modo juego ahora y arrancar siempre en él
  PortProton y Steam
   10) Añadir un juego de Windows: probarlo con PortProton, accesos directos, Steam y colección
-  11) Sincronizar la colección «PortProton» de Steam
+  11) Quitar un juego: de Steam, de PortProton y del disco (pregunta cada paso)
+  12) Sincronizar la colección «PortProton» de Steam
  Utilidades
-  12) Ver lo que ocupa cada carpeta
+  13) Ver lo que ocupa cada carpeta
  Ajustes de la consola (cambian el sistema; cada uno explica y pregunta)
-  13) Ver qué ajustes están aplicados
-  14) Aplicar los ajustes pendientes, uno a uno
-  15) Revisar o cambiar ajustes concretos
+  14) Ver qué ajustes están aplicados
+  15) Aplicar los ajustes pendientes, uno a uno
+  16) Revisar o cambiar ajustes concretos
  Sistema
-  16) Actualizar la imagen desde GitHub
+  17) Actualizar la imagen desde GitHub
 ```
 
 Lo mismo sin menú:
@@ -60,6 +62,7 @@ bash ps5-toolbox.sh --mem                     # memoria en directo
 bash ps5-toolbox.sh --screen                  # pantalla en negro: recuperar la imagen
 bash ps5-toolbox.sh --session status|restart|desktop|gamemode
 bash ps5-toolbox.sh --add-game "/ruta/Juego.exe"
+bash ps5-toolbox.sh --remove-game ["/ruta/Juego.exe" | "Nombre"]
 bash ps5-toolbox.sh --pp-collection [--dry-run|--yes]
 bash ps5-toolbox.sh --space [carpeta]
 bash ps5-toolbox.sh --setup                   # ajustes, bloque a bloque
@@ -116,7 +119,8 @@ depende de cada consola (disco, idioma, NAS…) lo detecta o lo pregunta. Las re
 | `nas` | Monta un NAS por SMB y enlaza las ROMs de EmuDeck | ROMs compartidas con otros equipos (p. ej. una Steam Deck) |
 | `bios`, `media` | BIOS e imágenes de ES-DE desde el NAS | Una sola copia para todos los equipos |
 | `esde` | Arregla el `es_systems.xml` que deja EmuDeck (rutas de Windows, Citra) | Sin esto 3DS falla con *citra_libretro.dll* |
-| `atajos` | Botón derecho de Dolphin (añadir juego, espacio por carpeta), comando `espacio`, acceso «Colección PortProton» | Tenerlo todo a mano tras instalar |
+| `portproton` | Ajustes globales de PortProton: FSYNC/ESYNC y trazado de rayos para todos los juegos, salvo los que su `.ppdb` cambie | PortProton los trae apagados; el Proton de Steam lleva la sincronización rápida, y hay juegos que exigen trazado de rayos |
+| `atajos` | Botón derecho de Dolphin (añadir y quitar juego, espacio por carpeta), comando `espacio`, acceso «Colección PortProton» | Tenerlo todo a mano tras instalar |
 
 ## PortProton y Steam
 
@@ -129,9 +133,21 @@ depende de cada consola (disco, idioma, NAS…) lo detecta o lo pregunta. Las re
    de `shortcuts.vdf` y lo reescribe idéntico salvo la entrada nueva.
 4. Lo mete en la colección «PortProton» de Steam.
 
-**Juegos que piden trazado de rayos:** el driver de la PS5 en Linux (RADV) lo soporta, pero PortProton lo desactiva
-por defecto en AMD. Activa «Enable vkd3d support - Ray Tracing» en los ajustes del juego, o añade
-`export PW_USE_RAY_TRACING="1"` a su `.ppdb`.
+**Quitar un juego** (opción 11, `--remove-game`, o botón derecho sobre el `.exe` → «Quitar de PortProton y Steam»).
+Sin argumento lista los juegos de PortProton. Pregunta por separado: quitarlo de Steam (con copia de `shortcuts.vdf`
+y sus carátulas), borrar sus accesos directos y su script, y borrar su carpeta del disco, que muestra con su tamaño y
+pide escribir su nombre para confirmar. Las partidas guardadas en el prefijo de PortProton se conservan.
+
+**Ajustes para todos los juegos** (bloque `portproton`):
+
+- **Sincronización rápida (FSYNC/ESYNC):** PortProton la trae apagada; el Proton de Steam la lleva encendida. Menos
+  tirones en juegos que cargan la CPU.
+- **Trazado de rayos:** el driver de la PS5 en Linux (RADV) lo soporta, pero PortProton lo desactiva en AMD y los
+  juegos que lo exigen no arrancan. Si un juego lo enciende solo y va lento, bájalo en sus opciones gráficas o
+  desactívalo solo para él con `export PW_USE_RAY_TRACING="0"` en su `.ppdb`.
+
+PortProton lee sus ajustes globales (`data/user.conf`) después de los de cada juego, así que el bloque solo pone el
+valor cuando el `.ppdb` del juego no dice nada.
 
 ## Actualizar la imagen
 

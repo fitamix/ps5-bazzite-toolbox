@@ -5,8 +5,8 @@
 #    resets, hung tasks, Wi-Fi driver hangs, OOM kills, crashes, unclean shutdowns, heat, NAS mount, a dead
 #    graphical session) and the state of the settings; saves a full report (no passwords) to send for help.
 #  - Screen and graphical session: get the picture back, restart the session, start in desktop/game mode.
-#  - PortProton and Steam: add a Windows game (PortProton + Desktop + Steam + "PortProton" collection), sync
-#    the collection. Tools: space taken by each folder.
+#  - PortProton and Steam: add or remove a Windows game (PortProton + Desktop + Steam + "PortProton" collection),
+#    sync the collection; global PortProton defaults (setup block "portproton"). Tools: space taken by each folder.
 #  - Settings (setup): blocks that adapt the image (language, boot options, Wi-Fi, updates, VRAM, fans, warm
 #    reboot, HDMI fix, disk, Brave, NAS). Each explains what it changes, why and how to undo it, and asks.
 #    Answers are kept in ~/.config/ps5-bazzite-postinstall.conf; running it again only offers what is pending.
@@ -21,9 +21,10 @@
 #   bash ps5-toolbox.sh --update [v1.7.2]       # update the image from GitHub (asks which version)
 #   bash ps5-toolbox.sh --screen                # black screen: switch to another console and back
 #   bash ps5-toolbox.sh --add-game [Juego.exe]  # add a Windows game to PortProton and Steam
+#   bash ps5-toolbox.sh --remove-game [Juego.exe|"Nombre"]   # remove it (Steam, PortProton, disk), asking each step
 #   bash ps5-toolbox.sh --pp-collection [--dry-run|--yes]   # sync Steam's "PortProton" collection
 #   bash ps5-toolbox.sh --space [DIR]           # space taken by each folder in DIR (also the "espacio" command)
-# Setup blocks: locale cmdline wifi updates vram fans warmreboot hdmi bt disk brave nas bios media esde atajos
+# Setup blocks: locale cmdline wifi updates vram fans warmreboot hdmi bt disk brave nas bios media esde portproton atajos
 set -uo pipefail
 
 MODE='' BOOT=0 SESSION_CMD='' STATUS_ONLY=0 ALL=0 ONLY='' UPDATE_TAG='' ARGS=()
@@ -41,7 +42,7 @@ while [ $# -gt 0 ]; do
         --update) MODE=update; UPDATE_TAG=''
                   if [ $# -gt 1 ] && [[ $2 != -* ]]; then UPDATE_TAG=$2; shift; fi; shift ;;
         --screen) MODE=screen; shift ;;
-        --add-game|--pp-collection|--space)       # the rest of the line goes to that tool
+        --add-game|--remove-game|--pp-collection|--space)       # the rest of the line goes to that tool
                   MODE=${1#--}; shift; ARGS=("$@"); break ;;
         -h|--help) awk 'NR > 1 { if (!/^#/) exit; sub(/^# ?/, ""); print }' "$0"; exit 0 ;;
         *) echo "Opción desconocida: $1" >&2; exit 2 ;;
@@ -63,7 +64,7 @@ TOOLS_REPO=https://github.com/ps5-linux/ps5-linux-tools
 TOOLS_COMMIT=f1fa98a                     # the revision reviewed on 2026-10-27
 POLKIT_RULE=/etc/polkit-1/rules.d/50-ps5-no-kde-smart.rules
 BRAVE_FLAGS=$HOME/.var/app/com.brave.Browser/config/brave-flags.conf
-BLOCKS="locale cmdline wifi updates vram fans warmreboot hdmi bt disk brave nas bios media esde atajos"
+BLOCKS="locale cmdline wifi updates vram fans warmreboot hdmi bt disk brave nas bios media esde portproton atajos"
 
 # ======================================== settings (setup) ========================================
 # --- saved answers -------------------------------------------------------------------------------
@@ -757,6 +758,47 @@ apply_esde() {
     say "En ES-DE: Otros ajustes → Emuladores alternativos → Nintendo 3DS → Citra (Standalone), si no lo tenía ya."
 }
 
+# --- portproton -----------------------------------------------------------------------------------
+# Defaults for every PortProton game, in its global settings (data/user.conf). PortProton reads user.conf AFTER a
+# game's .ppdb (start.sh: pw_init_db, then source user.conf), so a plain export would beat the game's own setting:
+# each default applies only when the game's .ppdb doesn't set that variable.
+PP_USERCONF=$HOME/.var/app/ru.linux_gaming.PortProton/data/user.conf
+PP_DEFAULTS='PW_USE_FSYNC=1 PW_USE_ESYNC=1 PW_USE_RAY_TRACING=1'
+desc_portproton() {
+    section
+    say "Ajustes por defecto para TODOS los juegos de PortProton (en $PP_USERCONF), salvo los que el .ppdb"
+    say "de un juego fije él mismo:"
+    say "- PW_USE_FSYNC=1 y PW_USE_ESYNC=1: sincronización rápida entre los hilos del juego. PortProton la trae"
+    say "  apagada; el Proton de Steam (y la Steam Deck) la lleva encendida. Menos tirones en juegos que cargan la CPU."
+    say "- PW_USE_RAY_TRACING=1: trazado de rayos en DX12 (vkd3d «dxr»). PortProton lo apaga en AMD aunque el driver"
+    say "  de la PS5 lo tiene, y los juegos que lo exigen dicen que la gráfica no vale."
+    say "  Ojo: algún juego, al verlo, lo enciende en su calidad por defecto y va más lento: bájalo en sus opciones"
+    say "  gráficas, o apágalo solo para él con export PW_USE_RAY_TRACING=\"0\" en su .ppdb."
+    say "POR QUÉ: la máxima compatibilidad sin tocar nada juego a juego."
+    say "DESHACER: borra en ese fichero el bloque entre «# >>> ps5-toolbox» y «# <<< ps5-toolbox»."
+}
+check_portproton() {
+    flatpak info ru.linux_gaming.PortProton >/dev/null 2>&1 || return 2
+    [ -f "$PP_USERCONF" ] || return 2            # PortProton not opened yet: it creates the file the first time
+    grep -qs -F "PP_DEFAULTS: $PP_DEFAULTS" "$PP_USERCONF" || return 1
+}
+apply_portproton() {
+    local bak; bak="$PP_USERCONF.bak-$(date +%Y%m%d-%H%M%S)"
+    [ -e "$bak" ] || cp "$PP_USERCONF" "$bak" || return 1    # never over an earlier copy
+    sed -i '/^# >>> ps5-toolbox/,/^# <<< ps5-toolbox/d' "$PP_USERCONF"
+    cat >>"$PP_USERCONF" <<EOF
+# >>> ps5-toolbox (bloque portproton) PP_DEFAULTS: $PP_DEFAULTS
+# Defaults for every game unless its .ppdb sets the variable (this file is read after the .ppdb).
+for _pp_kv in $PP_DEFAULTS; do
+    grep -qs "^export \${_pp_kv%%=*}=" "\${PORTWINE_DB_FILE:-/nonexistent}" || export "\${_pp_kv%%=*}=\${_pp_kv#*=}"
+done
+unset _pp_kv
+# <<< ps5-toolbox
+EOF
+    bash -n "$PP_USERCONF" || { say "El fichero no ha quedado bien: restaura la copia .bak."; return 1; }
+    say "Ajustes globales de PortProton: $PP_DEFAULTS (los juegos abiertos los cogen al volver a abrirlos)."
+}
+
 # --- atajos --------------------------------------------------------------------------------------
 # Desktop shortcuts that call this toolbox, so they follow it when it is updated.
 TOOLBOX_SELF=$(realpath "$0" 2>/dev/null)
@@ -775,7 +817,7 @@ COLL_DESKTOP="$(desk_dir)/portproton-collection.desktop"
 desc_atajos() {
     section
     say "Atajos que llaman a este toolbox ($TOOLBOX_SELF):"
-    say "- Dolphin, botón derecho sobre un .exe: «Añadir a PortProton y Steam» ($SM_GAME);"
+    say "- Dolphin, botón derecho sobre un .exe: «Añadir a PortProton y Steam» y «Quitar…» ($SM_GAME);"
     say "- Dolphin, botón derecho sobre una carpeta: «Ver lo que ocupa cada carpeta» ($SM_SPACE);"
     say "- el comando «espacio [carpeta]» en cualquier terminal ($SPACE_BIN);"
     say "- en el escritorio, «Colección PortProton» ($COLL_DESKTOP): sincroniza la colección de Steam."
@@ -788,7 +830,8 @@ check_atajos() {
     # a missing file makes grep return 2, which here means "doesn't apply": anything missing is pending (1)
     grep -qs -F "$TOOLBOX_SELF" "$SM_GAME" && grep -qs -F "$TOOLBOX_SELF" "$SM_SPACE" &&
         grep -qs -F "$TOOLBOX_SELF" "$SPACE_BIN" && grep -qs -F "$TOOLBOX_SELF" "$COLL_DESKTOP" &&
-        grep -qs 'Se cierra en' "$SM_GAME" && grep -qs 'Se cierra en' "$COLL_DESKTOP" || return 1   # launchers that close by themselves
+        grep -qs 'Se cierra en' "$SM_GAME" && grep -qs 'Se cierra en' "$COLL_DESKTOP" &&
+        grep -qs -- '--remove-game' "$SM_GAME" || return 1   # launchers that close by themselves
 }
 apply_atajos() {
     mkdir -p "$SM_DIR" "$(desk_dir)" || return 1
@@ -796,13 +839,18 @@ apply_atajos() {
 [Desktop Entry]
 Type=Service
 MimeType=application/vnd.microsoft.portable-executable;application/x-ms-dos-executable;application/x-msdownload;
-Actions=addProtonGame;
+Actions=addProtonGame;removeProtonGame;
 X-KDE-Priority=TopLevel
 
 [Desktop Action addProtonGame]
 Name=Añadir a PortProton y Steam
 Icon=ru.linux_gaming.PortProton
 Exec=konsole -e bash -c '$(run_then_close 5 '--add-game "$1"')' _ %f
+
+[Desktop Action removeProtonGame]
+Name=Quitar de PortProton y Steam (pregunta cada paso)
+Icon=edit-delete
+Exec=konsole -e bash -c '$(run_then_close 5 '--remove-game "$1"')' _ %f
 EOF
     cat >"$SM_SPACE" <<EOF
 [Desktop Entry]
@@ -1049,7 +1097,7 @@ for b in $BLOCKS; do
         0) ok "$b: aplicado" ;;
         2) info "$b: no aplica en esta consola" ;;
         *) if [ "${!skipvar:-0}" = 1 ]; then info "$b: no aplicado (lo decidiste)"
-           else warn "$b: pendiente (menú 14, o --setup)"; fi ;;
+           else warn "$b: pendiente (menú 15, o --setup)"; fi ;;
     esac
 done
 if warm_on && ! check_hdmi; then warn "Reinicio en caliente sin ps5-hdmi-kick: la imagen puede salir en negro (bloque hdmi)"; fi
@@ -1072,7 +1120,7 @@ if [ "$NEED_BT" = 1 ] && [ -t 0 ]; then
     read -rp "El Bluetooth no tiene adaptador. ¿Recargar su driver ahora (btusb)? [S/n] " a
     if [[ $a != [nN]* ]]; then
         sudo modprobe -r btusb && sleep 2 && sudo modprobe btusb && sleep 5
-        if bt_present; then echo "Adaptador recuperado. Para que se haga solo en cada arranque: menú 15 → bt."
+        if bt_present; then echo "Adaptador recuperado. Para que se haga solo en cada arranque: menú 16 → bt."
         else echo "Sigue sin adaptador: apaga y arranca con el cargador (un arranque en frío reinicia el chip)."; fi
     fi
 fi
@@ -1100,7 +1148,7 @@ for b in ${ONLY:-$BLOCKS}; do
     case $st in
         0) printf '✔ %-10s aplicado\n' "$b" ;;
         2) printf '– %-10s no aplica en esta consola\n' "$b" ;;
-        3) printf '– %-10s no aplicado (lo decidiste; menú 15 o --only %s para volver a preguntar)\n' "$b" "$b" ;;
+        3) printf '– %-10s no aplicado (lo decidiste; menú 16 o --only %s para volver a preguntar)\n' "$b" "$b" ;;
         *) printf '✘ %-10s pendiente\n' "$b" ;;
     esac
     [ $STATUS_ONLY = 1 ] && continue
@@ -1225,10 +1273,10 @@ mem_watch() {
         echo "  → Van justas las dos (VRAM llena y Linux tirando de swap): moverlas no ayuda, la memoria total no da"
         echo "    para más con esta calidad. Baja texturas o calidad en el juego. Sin errores de la GPU, puede valer así."
     elif [ $ram_short = 1 ]; then
-        echo "  → Se acabó la RAM (no la VRAM): Linux tiró de swap. Baja la VRAM a su pico + 1 GB (menú 15 → vram)"
+        echo "  → Se acabó la RAM (no la VRAM): Linux tiró de swap. Baja la VRAM a su pico + 1 GB (menú 16 → vram)"
         echo "    para dar esa memoria a Linux, y la calidad de texturas del juego."
     elif [ $vram_full = 1 ]; then
-        echo "  → La VRAM se llenó y a Linux le sobra RAM: sube la VRAM (menú 15 → vram) o baja la resolución del juego."
+        echo "  → La VRAM se llenó y a Linux le sobra RAM: sube la VRAM (menú 16 → vram) o baja la resolución del juego."
     fi
     echo "  Registro completo: $csv"
 }
@@ -1840,7 +1888,208 @@ print("\nListo. Vuelve a abrir Steam (o Modo Juego) y mira en Biblioteca → Col
 PY
 __PP_COLLECTION__
 }
+pp_remove_game_script() { cat <<'__PP_REMOVE_GAME__'
+#!/usr/bin/env bash
+# Run by ps5-toolbox.sh (menu "Quitar un juego", --remove-game, or Dolphin's right-click action on the .exe).
+# Removes a Windows game added with PortProton, asking before each part (nothing is removed without a yes):
+#   1. Steam:      its non-Steam entry (shortcuts.vdf, backed up first) and its artwork; Steam must be closed.
+#   2. PortProton: its .desktop (PortProton's list, the Desktop, the app menu) and steam_scripts/<Name>.sh.
+#   3. Disk:       the game's folder (asks which one, shows the size, and wants the folder's name typed).
+#   4. Collection: the toolbox's "PortProton" collection sync (COLLECTION_SCRIPT), so the entry leaves it too.
+# Saved games inside PortProton's prefix (drive_c/users/...) are kept.
+# Usage: remove-game [Game.exe | "Name"]   (no argument: lists the games PortProton knows and asks)
+set -euo pipefail
+
+PP_ID=ru.linux_gaming.PortProton
+PP="${PORT_WINE_PATH:-$HOME/.var/app/$PP_ID}"
+STEAM_DIR="${STEAM_DIR:-$HOME/.local/share/Steam}"
+ARG=${1:-}
+
+say() { printf '%s\n' "$*"; }
+ask() {                                   # ask "question" [default S|N] -> 0 for yes
+    local def=${2:-N} ans
+    read -r -p "$1 [$([ "$def" = S ] && echo S/n || echo s/N)] " ans || ans=
+    ans=${ans:-$def}
+    [[ $ans =~ ^[sSyY] ]]
+}
+section() { printf '\n== %s\n' "$*"; }
+exe_of() { sed -n 's/^Exec=.*PortProton "\(.*\)"$/\1/p' "$1" | head -1; }
+
+# --- which game ---------------------------------------------------------------------------------------
+mapfile -t DESKS < <(find "$PP" -maxdepth 1 -name '*.desktop' ! -name 'PortProton.desktop' | sort)
+NAME= EXE= DESK=
+if [ -z "$ARG" ]; then
+    [ ${#DESKS[@]} -gt 0 ] || { say "PortProton no tiene juegos."; exit 0; }
+    say "Juegos de PortProton:"
+    for i in "${!DESKS[@]}"; do
+        e=$(exe_of "${DESKS[$i]}")
+        printf '  %2d) %-40s %s\n' $((i + 1)) "$(basename "${DESKS[$i]}" .desktop)" "$([ -f "$e" ] || echo '(el .exe ya no está)')"
+    done
+    read -r -p "¿Cuál quitas? (número, Intro = ninguno): " n || n=
+    [[ $n =~ ^[0-9]+$ ]] && [ "$n" -ge 1 ] && [ "$n" -le ${#DESKS[@]} ] || { say "Nada que hacer."; exit 0; }
+    DESK=${DESKS[$((n - 1))]}
+elif [ -f "$ARG" ]; then                  # an .exe (Dolphin): its PortProton shortcut, if any
+    EXE=$(realpath "$ARG")
+    for d in "${DESKS[@]}"; do [ "$(exe_of "$d")" = "$EXE" ] && { DESK=$d; break; }; done
+else                                      # a name
+    [ -f "$PP/$ARG.desktop" ] && DESK="$PP/$ARG.desktop" || { say "No encuentro «$ARG» en PortProton." >&2; exit 1; }
+fi
+if [ -n "$DESK" ]; then NAME=$(basename "$DESK" .desktop); EXE=${EXE:-$(exe_of "$DESK")}; fi
+NAME=${NAME:-$(basename "${EXE%.*}")}
+SH="$PP/steam_scripts/$NAME.sh"
+section "Juego: $NAME"
+say "Ejecutable: ${EXE:-?}"
+[ -n "$DESK" ] || say "(PortProton no tiene acceso directo para este .exe)"
+
+# --- 1. Steam -------------------------------------------------------------------------------------------
+section "1. Steam"
+# entries whose target is this game's steam_scripts .sh, or any .sh that launches this exe
+mapfile -t SHS < <({ [ -f "$SH" ] && echo "$SH"; [ -n "$EXE" ] && grep -l -F "\"$EXE\"" "$PP"/steam_scripts/*.sh 2>/dev/null; } | sort -u)
+if [ ${#SHS[@]} = 0 ]; then
+    say "No tiene script de Steam (steam_scripts): nada que quitar en Steam."
+else
+    say "Quita de Steam las entradas que lanzan: ${SHS[*]##*/} (con copia de shortcuts.vdf) y sus carátulas."
+    if ask "¿Quitarlo de Steam?" S; then
+        if pgrep -x steam >/dev/null 2>&1; then
+            if ask "  Steam está abierto y hay que cerrarlo (si no, al cerrarse vuelve a escribir el juego). ¿Cerrarlo?" S; then
+                steam -shutdown >/dev/null 2>&1 || true
+                for _ in $(seq 1 30); do pgrep -x steam >/dev/null 2>&1 || break; sleep 1; done
+            fi
+            pgrep -x steam >/dev/null 2>&1 && { say "  Steam sigue abierto: ciérralo y repite." >&2; exit 1; }
+        fi
+        STEAM_DIR="$STEAM_DIR" GAME_SHS="$(printf '%s\n' "${SHS[@]}")" python3 - <<'PY'
+# shortcuts.vdf is binary VDF: parsed into (type, key, value) lists and written back exactly as read
+# (checked byte for byte), without the game's entries; the rest are renumbered 0, 1, 2...
+import glob, os, shutil, struct, sys, time
+
+def parse(d, i):
+    items = []
+    while True:
+        t = d[i]; i += 1
+        if t == 0x08:
+            return items, i
+        e = d.index(b"\0", i); k = d[i:e]; i = e + 1
+        if t == 0x00:
+            v, i = parse(d, i)
+        elif t == 0x01:
+            e = d.index(b"\0", i); v = d[i:e]; i = e + 1
+        elif t == 0x02:
+            v = d[i:i + 4]; i += 4
+        elif t == 0x07:
+            v = d[i:i + 8]; i += 8
+        else:
+            raise ValueError(f"tipo VDF 0x{t:02x} desconocido en {i - 1}")
+        items.append((t, k, v))
+
+def dump(items):
+    out = bytearray()
+    for t, k, v in items:
+        out += bytes([t]) + k + b"\0"
+        out += dump(v) if t == 0 else (v + b"\0" if t == 1 else v)
+    return bytes(out + b"\x08")
+
+def field(entry, key):
+    for t, k, v in entry:
+        if k.lower() == key.lower():
+            return v
+    return None
+
+targets = {s for s in os.environ["GAME_SHS"].splitlines() if s}
+for path in glob.glob(os.path.join(os.environ["STEAM_DIR"], "userdata", "*", "config", "shortcuts.vdf")):
+    data = open(path, "rb").read()
+    root, _ = parse(data, 0)
+    if dump(root) != data:
+        print(f"  {path}: no lo leo de forma exacta; no lo toco."); continue
+    sc = field(root, b"shortcuts")
+    keep, gone = [], []
+    for t, k, e in sc:
+        exe = (field(e, b"exe") or b"").decode("utf-8", "replace").strip('"') if t == 0 else ""
+        (gone if exe in targets else keep).append((t, k, e))
+    if not gone:
+        print(f"  Usuario {path.split(os.sep)[-3]}: no estaba en Steam."); continue
+    sc[:] = [(t, str(n).encode(), e) for n, (t, k, e) in enumerate(keep)]
+    shutil.copy2(path, f"{path}.bak-{time.strftime('%Y%m%d-%H%M%S')}")
+    tmp = path + ".tmp"
+    open(tmp, "wb").write(dump(root)); os.replace(tmp, path)
+    grid = os.path.join(os.path.dirname(path), "grid")
+    for t, k, e in gone:
+        appid = struct.unpack("<I", field(e, b"appid"))[0] if field(e, b"appid") else None
+        name = (field(e, b"appname") or b"").decode("utf-8", "replace")
+        art = glob.glob(os.path.join(grid, f"{appid}*")) if appid else []
+        for f in art:
+            os.remove(f)
+        print(f"  Usuario {path.split(os.sep)[-3]}: quitado «{name}» (id {appid}; {len(art)} imágenes).")
+PY
+    fi
+fi
+
+# --- 2. PortProton ----------------------------------------------------------------------------------------
+section "2. PortProton"
+DESK_DIR=$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")
+mapfile -t PPF < <(for f in "$DESK" "$DESK_DIR/$NAME.desktop" "$HOME/.local/share/applications/$NAME.desktop" "${SHS[@]}"; do
+    [ -n "$f" ] && [ -f "$f" ] && echo "$f"; done | sort -u)
+if [ ${#PPF[@]} = 0 ]; then
+    say "No hay accesos directos ni scripts suyos."
+else
+    say "Borra sus accesos directos y su script de Steam:"; printf '  %s\n' "${PPF[@]}"
+    say "(sus ajustes, $( [ -n "$EXE" ] && echo "${EXE##*/}.ppdb" || echo '.ppdb'), van con la carpeta del juego; las partidas del prefijo de PortProton se quedan)"
+    if ask "¿Borrarlos?" S; then rm -f -- "${PPF[@]}" && say "  Borrados."; fi
+fi
+
+# --- 3. disk -------------------------------------------------------------------------------------------------
+section "3. Disco"
+if [ -z "$EXE" ] || [ ! -e "$EXE" ]; then
+    say "El juego ya no está en el disco."
+else
+    # proposal: the folder right under a games library (~/Games, PortProton's drive_c/Games...), else the
+    # exe's folder without engine subfolders (Binaries/Win64...)
+    d=$(dirname "$EXE") root=
+    while [ "$d" != / ] && [ "$d" != "$HOME" ]; do
+        case $(basename "$(dirname "$d")") in [Gg]ames|GAMES|[Jj]uegos) root=$d; break ;; esac
+        d=$(dirname "$d")
+    done
+    if [ -z "$root" ]; then
+        root=$(dirname "$EXE")
+        while [[ $(basename "$root") =~ ^([Bb]in(aries)?|[Ww]in(32|64)|x64|x86|[Gg]ame|[Rr]etail)$ ]]; do root=$(dirname "$root"); done
+    fi
+    # never a home, a library itself, or a folder holding another PortProton game
+    others=$(for f in "$PP"/*.desktop; do e=$(exe_of "$f"); [ "$e" != "$EXE" ] && [[ $e == "$root"/* ]] && basename "$f" .desktop; done || true)
+    case $root in "$HOME"|"$HOME/Games"|"$PP"*/drive_c|"$PP"*/drive_c/Games|/) root= ;; esac
+    if [ -z "$root" ] || [ -n "$others" ]; then
+        say "No sé qué carpeta borrar sin riesgo${others:+ (también tiene: $others)}: bórrala tú a mano si quieres."
+    else
+        say "Carpeta del juego: $root ($(du -sh "$root" 2>/dev/null | cut -f1))"
+        if ask "¿Borrarla del disco? (no se puede deshacer)" N; then
+            read -r -p "  Para confirmar, escribe el nombre de la carpeta ($(basename "$root")): " c || c=
+            if [ "$c" = "$(basename "$root")" ]; then rm -rf -- "$root" && say "  Borrada."
+            else say "  No coincide: no se borra."; fi
+        fi
+    fi
+fi
+
+# --- 4. collection -----------------------------------------------------------------------------------------
+section "4. Colección «PortProton» de Steam"
+if [ -n "${COLLECTION_SCRIPT:-}" ] && [ -f "$COLLECTION_SCRIPT" ]; then
+    if ask "¿Actualizar la colección (quita las entradas que ya no existen)?" S; then
+        bash "$COLLECTION_SCRIPT" --yes || say "  La colección no se actualizó (mira el mensaje de arriba)."
+    fi
+else
+    say "No encuentro el sincronizador de la colección: se salta."
+fi
+section "Listo"
+say "Terminado con «$NAME»."
+if ! pgrep -x steam >/dev/null 2>&1 && ask "¿Abrir Steam ahora?" N; then
+    setsid steam >/dev/null 2>&1 < /dev/null &
+fi
+__PP_REMOVE_GAME__
+}
 pp_collection() { bash <(pp_collection_script) "$@"; }
+pp_remove_game() {
+    local tmp rc
+    tmp=$(mktemp) && pp_collection_script >"$tmp"
+    COLLECTION_SCRIPT=$tmp bash <(pp_remove_game_script) "$@"; rc=$?
+    rm -f "$tmp"; return $rc
+}
 pp_add_game() {
     local exe=${1:-} tmp rc
     if [ -z "$exe" ]; then
@@ -1890,15 +2139,16 @@ menu() {
    9) Pasar al modo juego ahora y arrancar siempre en él (cierra lo abierto)
  PortProton y Steam
   10) Añadir un juego de Windows: probarlo con PortProton, accesos directos, Steam y colección
-  11) Sincronizar la colección «PortProton» de Steam (cierra Steam si está abierto)
+  11) Quitar un juego: de Steam, de PortProton y del disco (pregunta cada paso)
+  12) Sincronizar la colección «PortProton» de Steam (cierra Steam si está abierto)
  Utilidades
-  12) Ver lo que ocupa cada carpeta (también: comando «espacio», o botón derecho en Dolphin)
+  13) Ver lo que ocupa cada carpeta (también: comando «espacio», o botón derecho en Dolphin)
  Ajustes de la consola (cambian el sistema; cada uno explica y pregunta)
-  13) Ver qué ajustes están aplicados
-  14) Aplicar los ajustes pendientes, uno a uno
-  15) Revisar o cambiar ajustes concretos (VRAM, idioma, NAS…; también los que dijiste que no)
+  14) Ver qué ajustes están aplicados
+  15) Aplicar los ajustes pendientes, uno a uno
+  16) Revisar o cambiar ajustes concretos (VRAM, idioma, NAS…; también los que dijiste que no)
  Sistema
-  16) Actualizar la imagen desde GitHub (elige versión, descarga, comprueba e instala)
+  17) Actualizar la imagen desde GitHub (elige versión, descarga, comprueba e instala)
    0) Salir
 MENU
         read -rp "Elige: " c
@@ -1913,14 +2163,15 @@ MENU
                    [[ $a == [sS]* ]] || continue
                    case $c in 7) session restart ;; 8) session desktop ;; 9) session gamemode ;; esac ;;
             10) pp_add_game ;;
-            11) pp_collection ;;
-            12) read -e -rp "Carpeta (Intro = $HOME): " a; space_report "${a:-$HOME}" ;;
-            13) STATUS_ONLY=1 ALL=0 ONLY=''; setup_run; STATUS_ONLY=0 ;;
-            14) STATUS_ONLY=0 ALL=0 ONLY=''; setup_run ;;
-            15) echo "Ajustes: $BLOCKS"
+            11) pp_remove_game ;;
+            12) pp_collection ;;
+            13) read -e -rp "Carpeta (Intro = $HOME): " a; space_report "${a:-$HOME}" ;;
+            14) STATUS_ONLY=1 ALL=0 ONLY=''; setup_run; STATUS_ONLY=0 ;;
+            15) STATUS_ONLY=0 ALL=0 ONLY=''; setup_run ;;
+            16) echo "Ajustes: $BLOCKS"
                 read -rp "¿Cuáles? (separados por espacios o comas): " a
                 [ -n "$a" ] && { STATUS_ONLY=0 ALL=0 ONLY=${a//,/ }; setup_run; ONLY=''; } ;;
-            16) update_image ;;
+            17) update_image ;;
             0|q|'') return 0 ;;
             *) echo "Opción no válida" ;;
         esac
@@ -1929,6 +2180,7 @@ MENU
 
 case $MODE in                            # these need no root
     add-game) pp_add_game "${ARGS[@]}"; exit ;;
+    remove-game) pp_remove_game "${ARGS[@]}"; exit ;;
     pp-collection) pp_collection "${ARGS[@]}"; exit ;;
     space) space_report "${ARGS[@]}"; exit ;;
 esac
