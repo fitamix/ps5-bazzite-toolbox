@@ -69,6 +69,19 @@ U=$(id -un)
 if [ -t 1 ]; then G=$'\e[32m' Y=$'\e[33m' R=$'\e[31m' B=$'\e[1m' N=$'\e[0m'; else G='' Y='' R='' B='' N=''; fi
 VERSION=$(awk 'NR == 1 { sub(/^v/, "", $1); print $1 }' /etc/ps5-bazzite-deck-version 2>/dev/null)
 ver_ge() { [ -n "$VERSION" ] && printf '%s\n%s\n' "$1" "$VERSION" | sort -V -C; }   # image version >= $1
+# sudo is asked for only when an option needs it (the journal, /efi, polkit's rules, SDDM, systemd, /etc), once:
+# a background loop then keeps it valid until the toolbox closes (Fedora forgets it after 5 minutes).
+SUDO_KEEP=''
+need_sudo() {
+    [ -n "$SUDO_KEEP" ] && kill -0 "$SUDO_KEEP" 2>/dev/null && return 0
+    if ! sudo -n true 2>/dev/null; then
+        echo "Esto necesita permisos de administrador: te pido la contraseña de sudo una vez, hasta que cierres la caja de herramientas."
+        sudo -v || { echo "Sin sudo no puedo hacerlo." >&2; return 1; }
+    fi
+    ( trap '' INT; while kill -0 $$ 2>/dev/null && sudo -n -v 2>/dev/null; do sleep 60; done ) &   # Ctrl+C mustn't stop it
+    SUDO_KEEP=$!
+    trap '[ -z "$SUDO_KEEP" ] || kill "$SUDO_KEEP" 2>/dev/null' EXIT
+}
 
 CONF=$HOME/.config/ps5-bazzite-toolbox.conf
 OLD_CONF=$HOME/.config/ps5-bazzite-postinstall.conf      # its name before v1.0.0
@@ -1475,7 +1488,7 @@ install_self() {
     TOOLBOX_SELF=$TOOLBOX_BIN
     if atajos_used && ! check_atajos; then
         echo "Tus atajos (Dolphin, «espacio», «Colección PortProton») usan otra copia de la caja de herramientas."
-        yesno "¿Los cambio para que usen la instalada ($TOOLBOX_BIN)?" S && apply_atajos
+        yesno "¿Los cambio para que usen la instalada ($TOOLBOX_BIN)?" S && need_sudo && apply_atajos
     fi
     TOOLBOX_SELF=$src
     # The downloaded file is no longer needed; a copy inside a git checkout is someone's working copy: leave it
@@ -2434,6 +2447,7 @@ menu() {
    0) Salir
 MENU
         read -rp "Elige: " c
+        case $c in [1-9]|1[4-7]) need_sudo || continue ;; esac       # 10-13, 18 and 19 don't need it
         case $c in
             1) BOOT=0; run_checks ;;
             2) BOOT=-1; run_checks ;;
@@ -2469,7 +2483,7 @@ case $MODE in                            # these need no root
     space) space_report "${ARGS[@]}"; exit ;;
     self-update) self_update "$UPDATE_TAG"; exit ;;
 esac
-sudo -v || exit 1                        # the journal, /efi, polkit's rules and SDDM need root
+case $MODE in menu|install|uninstall) ;; *) need_sudo || exit 1 ;; esac   # the menu asks per option
 case $MODE in
     menu) menu ;;
     check) run_checks ;;

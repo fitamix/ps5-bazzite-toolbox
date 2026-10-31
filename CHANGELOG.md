@@ -14,6 +14,9 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 ### Cambiado
 - Al instalarla pregunta si borra el fichero descargado (salvo que esté dentro de un repositorio git).
 - Solo ofrece cambiar los atajos si de verdad apuntan a otra copia.
+- La contraseña de `sudo` se pide solo al elegir algo que la necesita (no al abrir el menú), una vez por sesión:
+  después se mantiene hasta cerrar la caja de herramientas. Añadir/quitar juegos, la colección, ver lo que ocupa
+  cada carpeta y actualizarla no la piden.
 
 ## [1.0.0] - 2026-10-31
 

@@ -37,7 +37,8 @@ ps5-bazzite-toolbox
 
 y el fichero descargado ya se puede borrar. Si prefieres no instalarla, sigue funcionando con `bash ps5-bazzite-toolbox.sh`.
 
-Sin opciones muestra un menú. Se ejecuta con tu usuario (no como root): pide `sudo` cuando lo necesita.
+Sin opciones muestra un menú. Se ejecuta con tu usuario (no como root). La contraseña de `sudo` la pide solo la
+primera vez que eliges algo que la necesita, y ya no vuelve a pedirla hasta que la cierras.
 
 ```
  Diagnóstico (solo mira, no cambia nada)
