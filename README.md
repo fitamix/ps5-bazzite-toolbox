@@ -128,6 +128,9 @@ depende de cada consola (disco, idioma, NAS…) lo detecta o lo pregunta. Las re
 «Añadir a PortProton y Steam» tras el bloque `atajos`). Pregunta en cada paso:
 
 1. Abre el juego con PortProton para probarlo; PortProton guarda sus ajustes en `<exe>.ppdb`.
+   - **Idioma:** si el juego lleva un emulador de Steam (`steam_emu.ini`, `steam_settings/…`, `SteamConfig.ini`,
+     `cream_api.ini`) con otro idioma que el del sistema, ofrece cambiarlo: muchos juegos solo muestran el idioma que
+     les dice "Steam" y no tienen selector propio. Si trae una carpeta de paquetes de idioma, ofrece copiar el tuyo.
 2. Crea el acceso directo como lo hace PortProton: en su lista de juegos y en el escritorio.
 3. Lo añade a Steam como juego no-Steam (con Steam cerrado: si no, Steam borra la entrada al cerrarse). Hace copia
    de `shortcuts.vdf` y lo reescribe idéntico salvo la entrada nueva.

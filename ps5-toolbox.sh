@@ -1506,6 +1506,65 @@ png=${PORTPROTON_NAME:-$(basename "${EXE%.*}")}; png=${png// /_}; png=$(printf '
 ICON="$PP/data/img/$png.png"
 [ -f "$ICON" ] || { say "(sin icono propio en data/img: se usa el de PortProton)"; ICON=$PP_ID; }
 
+# --- language ---------------------------------------------------------------------------------------
+# Many Steam builds take their language from Steam, i.e. from the Steam emulator's config next to the game,
+# often left in English (seen with Gears of War: E-Day, RUNE's steam_emu.ini "Language=english": no Spanish
+# option in the game until it said "spanish"). Steam's names for the system language:
+steam_lang() {
+    case ${LANG:-} in
+        es_ES*|es_AD*) echo spanish ;; es_*) echo latam ;; pt_BR*) echo brazilian ;; pt_*) echo portuguese ;;
+        fr_*) echo french ;; de_*) echo german ;; it_*) echo italian ;; ru_*) echo russian ;; pl_*) echo polish ;;
+        ja_*) echo japanese ;; ko_*) echo koreana ;; zh_TW*|zh_HK*) echo tchinese ;; zh_*) echo schinese ;;
+        nl_*) echo dutch ;; tr_*) echo turkish ;; uk_*) echo ukrainian ;; *) echo english ;;
+    esac
+}
+GROOT=$(dirname "$EXE")                     # the game's folder: up through engine folders (Binaries/Win64...)
+while [[ $(basename "$GROOT") =~ ^([Bb]in(aries)?|[Ww]in(32|64)|x64|x86|[Gg]ame|[Rr]etail)$ ]]; do GROOT=$(dirname "$GROOT"); done
+[ -d "$GROOT/../Engine" ] && GROOT=$(dirname "$GROOT")          # Unreal: Game/Binaries/Win64 next to Engine/
+WANT=$(steam_lang)
+# "file|how to read and set it": key=value lines (case-insensitive key), or a whole-file value
+mapfile -t LFILES < <(find "$GROOT" -maxdepth 7 \( -iname steam_emu.ini -o -iname SteamConfig.ini -o -iname cream_api.ini \
+    -o -ipath '*steam_settings/force_language.txt' -o -ipath '*steam_settings/configs.user.ini' \) -type f 2>/dev/null | head -10)
+LPACK=$(find "$GROOT" -maxdepth 2 -type d -iname '*language*' 2>/dev/null | head -1)
+if [ ${#LFILES[@]} -gt 0 ] || [ -n "$LPACK" ]; then
+    section "Idioma"
+    for f in "${LFILES[@]}"; do
+        rel=${f#"$GROOT"/}
+        if [[ $f == *force_language.txt ]]; then cur=$(tr -d '\r\n ' < "$f")
+        else cur=$(grep -a -i -m1 -E '^[[:space:]]*language[[:space:]]*=' "$f" | sed 's/^[^=]*=[[:space:]]*//' | tr -d '\r '); fi
+        if [ -z "$cur" ]; then say "$rel: no fija idioma."; continue; fi
+        if [ "$cur" = "$WANT" ]; then say "$rel: idioma $cur (bien)."; continue; fi
+        say "$rel: el emulador de Steam le dice al juego que el idioma es «$cur»; el del sistema es «$WANT»."
+        say "  Muchos juegos solo muestran ese idioma (no tienen selector propio). Copia en $(basename "$f").bak-<fecha>."
+        if ask "  ¿Cambiarlo a «$WANT»?" S; then
+            cp -p "$f" "$f.bak-$(date +%Y%m%d-%H%M%S)"
+            if [[ $f == *force_language.txt ]]; then printf '%s\n' "$WANT" > "$f"
+            else sed -i -E "0,/^[[:space:]]*[Ll][Aa][Nn][Gg][Uu][Aa][Gg][Ee][[:space:]]*=/s/^([[:space:]]*[Ll][Aa][Nn][Gg][Uu][Aa][Gg][Ee][[:space:]]*=[[:space:]]*)[^\r]*/\1$WANT/" "$f"; fi
+            say "  Hecho: $(grep -a -i -m1 -E '^[[:space:]]*language[[:space:]]*=|^[a-z]+$' "$f" | tr -d '\r')"
+        fi
+    done
+    if [ -n "$LPACK" ]; then
+        say "El juego trae paquetes de idioma en «${LPACK#"$GROOT"/}»: $(ls "$LPACK" | tr '\n' ',' | sed 's/,$//; s/,/, /g')."
+        # the pack for the system language: its folder name, as these packs name them ("Spanish - Spain"...)
+        case $WANT in
+            spanish) pat='^(spanish( - spain)?|español|espanol|es[-_]es)$' ;; latam) pat='latin|^es[-_](mx|419)$' ;;
+            brazilian) pat='brazil|^pt[-_]br$' ;; schinese) pat='simplified' ;; tchinese) pat='traditional' ;;
+            koreana) pat='^korean' ;; *) pat="^$WANT" ;;
+        esac
+        mine=$(ls "$LPACK" | grep -i -E -m1 "$pat" || true)
+        if [ -z "$mine" ]; then
+            say "  No veo el de «$WANT»: si está con otro nombre, copia su contenido encima de la carpeta del juego."
+        elif (cd "$LPACK/$mine" && find . -type f | while read -r f; do cmp -s "$f" "$GROOT/$f" || { echo x; break; }; done) | grep -q x; then
+            say "  El de tu idioma es «$mine» y no está copiado en el juego (su contenido va encima de la carpeta del juego)."
+            if ask "  ¿Copiarlo ahora ($(du -sh "$LPACK/$mine" | cut -f1))?" S; then
+                cp -r "$LPACK/$mine/." "$GROOT/" && say "  Copiado."
+            fi
+        else
+            say "  El de tu idioma («$mine») ya está copiado."
+        fi
+    fi
+fi
+
 # --- 2. shortcuts -----------------------------------------------------------------------------------
 DESKTOP_FILE="$PP/$NAME.desktop"
 DESK_DIR=$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")
