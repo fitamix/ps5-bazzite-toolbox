@@ -31,7 +31,7 @@
 # Setup blocks: locale cmdline wifi updates vram zram fans warmreboot hdmi bt disk brave nas bios media esde portproton atajos
 set -uo pipefail
 
-TOOLBOX_VERSION=1.0.2                    # bump on every release (see CHANGELOG.md and release.sh)
+TOOLBOX_VERSION=1.1.0                    # bump on every release (see CHANGELOG.md and release.sh)
 TOOLBOX_REPO=fitamix/ps5-bazzite-toolbox
 TOOLBOX_BIN=$HOME/.local/bin/ps5-bazzite-toolbox                      # where --install puts it
 TOOLBOX_DESKTOP=$HOME/.local/share/applications/ps5-bazzite-toolbox.desktop
@@ -69,6 +69,23 @@ U=$(id -un)
 if [ -t 1 ]; then G=$'\e[32m' Y=$'\e[33m' R=$'\e[31m' B=$'\e[1m' N=$'\e[0m'; else G='' Y='' R='' B='' N=''; fi
 VERSION=$(awk 'NR == 1 { sub(/^v/, "", $1); print $1 }' /etc/ps5-bazzite-deck-version 2>/dev/null)
 ver_ge() { [ -n "$VERSION" ] && printf '%s\n%s\n' "$1" "$VERSION" | sort -V -C; }   # image version >= $1
+# Reports, the monitor's CSV and the image update's log are written to a temporary file; at the end the toolbox
+# asks whether to keep it and where (Enter = the current folder). Nothing is left behind unasked.
+SAVED=''
+save_output() {                          # save_output TMPFILE NAME "what" -> 0 and SAVED=path if kept
+    local tmp=$1 name=$2 what=$3 dest=$PWD a
+    [ -w "$dest" ] || dest=$HOME
+    if [ -t 0 ]; then                    # no terminal (run from another script): keep it in the current folder
+        read -e -rp "¿Guardar $what? Intro = en $dest, escribe otra carpeta, o n = no: " a
+        case $a in
+            [nN]|[nN][oO]) rm -f "$tmp"; echo "No lo guardo."; return 1 ;;
+            '') ;;
+            *) dest=${a/#\~/$HOME} ;;
+        esac
+    fi
+    if mkdir -p "$dest" 2>/dev/null && mv "$tmp" "$dest/$name"; then SAVED=$dest/$name; echo "Guardado: $SAVED"
+    else echo "No puedo guardarlo en $dest; se queda en $tmp (se borra al apagar)." >&2; return 1; fi
+}
 # sudo is asked for only when an option needs it (the journal, /efi, polkit's rules, SDDM, systemd, /etc), once:
 # a background loop then keeps it valid until the toolbox closes (Fedora forgets it after 5 minutes).
 SUDO_KEEP=''
@@ -1032,8 +1049,7 @@ session() {
 
 run_checks() {
 NEED_SESSION=0 NEED_BT=0
-LOG=$HOME/ps5-diag-$(date +%Y%m%d-%H%M%S).txt
-: >"$LOG"
+LOG=$(mktemp "${TMPDIR:-/tmp}/ps5-diag.XXXXXX") REPORT=ps5-diag-$(date +%Y%m%d-%H%M%S).txt
 OK=0 WARN=0 BAD=0
 log() { printf '%s\n' "$@" >>"$LOG"; }
 head_() { printf '\n%s== %s ==%s\n' "$B" "$1" "$N"; log "" "== $1 =="; }
@@ -1179,8 +1195,10 @@ session_status 2>&1 | raw "estado de la sesión"
 
 # --- summary -------------------------------------------------------------------------------------------
 { echo; echo "== Resumen: $OK bien, $WARN avisos, $BAD mal =="; } | tee -a "$LOG"
-echo "Informe completo: $LOG"
-echo "Para pasarlo al Mac:  scp $(id -un)@$(hostname -I | awk '{print $1}'):$LOG ."
+echo
+if save_output "$LOG" "$REPORT" "el informe completo (sin contraseñas; sirve para pedir ayuda)"; then
+    echo "Para copiarlo a otro ordenador:  scp $(id -un)@$(hostname -I | awk '{print $1}'):$(printf %q "$SAVED") ."
+fi
 if [ "$NEED_BT" = 1 ] && [ -t 0 ]; then
     echo
     read -rp "El Bluetooth no tiene adaptador. ¿Recargar su driver ahora (btusb)? [S/n] " a
@@ -1257,7 +1275,7 @@ EOF
 # the most VRAM (amdgpu's per-client counters in /proc/PID/fdinfo) and new GPU memory errors in the kernel log.
 # RAM used = MemTotal - MemAvailable (what can't be freed: caches don't count). Bazzite's swap is zram, i.e.
 # compressed RAM: "swap 2.6/4.3 (en RAM 0.8)" means 2.6 GB swapped out taking 0.8 GB of RAM.
-# Ctrl+C stops it and prints the peaks; every sample also goes to ~/ps5-mem-FECHA.csv.
+# Ctrl+C stops it and prints the peaks; every sample also goes to a CSV it offers to keep (ps5-mem-FECHA.csv).
 P_GPUMEM='ENOMEM|Not enough memory|Failed to pin|ring [a-z_0-9.]+ (timeout|reset)|page fault'
 zram_mb() {                              # RAM taken by zram swap (mm_stat field 3: mem_used_total, bytes)
     cat /sys/block/zram*/mm_stat 2>/dev/null | awk '{ s += $3 } END { print int(s / 1048576) }'
@@ -1281,10 +1299,10 @@ gpu_top() {                              # top N programs by VRAM: "name size" l
         }' | sort -rn | head -"${1:-3}" | awk '{ printf "%s %.1fG  ", $2, $1 / 1024 }'
 }
 mem_watch() {
-    local stop=0 dev csv start t vu vt gu gt ra rt ru su st zr tc cc gp cpu0 cpu1 ca cm top ram ev peak_v=0 peak_g=0 min_ra=999999 peak_r=0 peak_s=0 peak_z=0 su0='' peak_t=0 events=0 n=0 ram_top=''
+    local stop=0 dev csv csv_name start t vu vt gu gt ra rt ru su st zr tc cc gp cpu0 cpu1 ca cm top ram ev peak_v=0 peak_g=0 min_ra=999999 peak_r=0 peak_s=0 peak_z=0 su0='' peak_t=0 events=0 n=0 ram_top=''
     local peak_ct=0 peak_ca=0 peak_gp=0 sum_ca=0 sum_gp=0 n_gpu=0 n_cpu=0
     dev=$(ls -d /sys/class/drm/card*/device 2>/dev/null | head -1)
-    csv=$HOME/ps5-mem-$(date +%Y%m%d-%H%M%S).csv
+    csv=$(mktemp "${TMPDIR:-/tmp}/ps5-mem.XXXXXX") csv_name=ps5-mem-$(date +%Y%m%d-%H%M%S).csv
     start=$(date '+%Y-%m-%d %H:%M:%S')
     echo "hora,vram_usada_mb,vram_total_mb,gtt_mb,gtt_total_mb,ram_usada_mb,ram_total_mb,ram_disponible_mb,swap_usada_mb,swap_total_mb,zram_en_ram_mb,temp_c,errores_gpu,top_vram,top_ram,cpu_pct,cpu_hilo_max_pct,gpu_pct,temp_cpu_c" >"$csv"
     vt=$(( $(cat "$dev/mem_info_vram_total" 2>/dev/null || echo 0) >> 20 ))
@@ -1292,7 +1310,7 @@ mem_watch() {
     rt=$(awk '/^MemTotal:/ { print int($2 / 1024) }' /proc/meminfo)
     st=$(awk '/^SwapTotal:/ { print int($2 / 1024) }' /proc/meminfo)
     echo "Memoria en directo: VRAM $((vt / 1024)) GB, RAM de Linux $(awk -v r="$rt" 'BEGIN { printf "%.1f", r / 1024 }') GB, swap $(awk -v s="$st" 'BEGIN { printf "%.1f", s / 1024 }') GB$(ls /sys/block/zram* >/dev/null 2>&1 && echo ' (zram: comprimida en la RAM)')."
-    echo "Ctrl+C para parar y ver los picos. Registro: $csv"
+    echo "Ctrl+C para parar y ver los picos (al final puedes guardar cada medida en un CSV)."
     echo "CPU: media de los $(nproc) hilos y, entre paréntesis, el hilo más cargado. temp: CPU/GPU."
     printf '%-8s %-10s %-5s %-15s %-13s %-14s %-21s %-8s %s\n' hora CPU GPU VRAM GTT RAM "swap (en RAM)" temp "más VRAM"
     cpu0=$(grep '^cpu' /proc/stat)
@@ -1374,7 +1392,9 @@ mem_watch() {
         echo "  → Un hilo de la CPU va lleno mientras la GPU espera: el límite es la CPU (un solo hilo). Bajar gráficos"
         echo "    apenas ayuda; baja lo que carga la CPU (distancia de visión, multitudes, físicas) o limita los FPS."
     fi
-    echo "  Registro completo: $csv"
+    echo
+    save_output "$csv" "$csv_name" "cada medida en un CSV (para una hoja de cálculo)"
+    return 0
 }
 
 # ======================================== image update ========================================
@@ -1602,7 +1622,7 @@ PY
     fi
     sudo df -h /efi | tail -1 | awk '{ print "Partición de arranque: " $4 " libres de " $2 }'
 
-    dir=$HOME/ps5-update-$tag; log=$HOME/update-$tag.log
+    dir=$HOME/ps5-update-$tag; log=$(mktemp "${TMPDIR:-/tmp}/ps5-update.XXXXXX")
     mkdir -p "$dir" || { rm -rf "$tmp"; return 1; }
     rm -rf "$tmp"
     local file="$dir/${url##*/}"
@@ -1621,16 +1641,18 @@ PY
     up=$(find "$dir" -maxdepth 2 -name "$script" | head -1)
     [ -n "$up" ] || { echo "No encuentro $script en el paquete." >&2; return 1; }
 
-    echo "==> Ejecutando el actualizador del autor (salida en $log)…"
+    echo "==> Ejecutando el actualizador del autor…"
     bash "$up" 2>&1 | tee "$log"; rc=${PIPESTATUS[0]}
     if [ "$rc" != 0 ] || { [ "$type" = full ] && ! grep -q '^DONE' "$log"; }; then
-        echo; echo "${R}La actualización NO terminó bien.${N} Revisa $log; los ficheros siguen en $dir." >&2
+        echo; echo "${R}La actualización NO terminó bien.${N} Los ficheros siguen en $dir." >&2
+        save_output "$log" "update-$tag.log" "la salida de la actualización (para revisarla o pedir ayuda)"
         return 1
     fi
     echo; echo "${G}Actualizado a $tag.${N} Para deshacerlo (con este comando, antes de apagar o tras arrancar):"
     grep -i 'undo' "$log" | sed 's/^/  /'
+    save_output "$log" "update-$tag.log" "la salida de la actualización (incluye ese comando para deshacerla)"
 
-    yesno "¿Borrar la descarga ($(du -sh "$dir" | cut -f1), en $dir)? El log se queda." S && rm -rf "$dir"
+    yesno "¿Borrar la descarga ($(du -sh "$dir" | cut -f1), en $dir)?" S && rm -rf "$dir"
     local olds; olds=$(sudo ls -1d /var/lib/ps5-update-backup/*/ 2>/dev/null | sort | head -n -1)
     if [ -n "$olds" ]; then
         echo "Copias de actualizaciones anteriores (la última, la de ahora, se queda):"

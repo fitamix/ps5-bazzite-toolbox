@@ -5,6 +5,13 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+## [1.1.0] - 2026-10-31
+
+### Cambiado
+- El informe del diagnóstico, las medidas del monitor (CSV) y la salida de las actualizaciones de la imagen ya no
+  se guardan solos en la carpeta personal: al terminar pregunta si guardarlos y dónde (Intro = la carpeta actual,
+  otra carpeta, o no). Sin terminal, los guarda en la carpeta actual.
+
 ## [1.0.2] - 2026-10-31
 
 ### Cambiado
@@ -49,7 +56,8 @@ Primera versión publicada.
 - Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
-[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.0.2...HEAD
+[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/fitamix/ps5-bazzite-toolbox/releases/tag/v1.0.0

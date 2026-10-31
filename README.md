@@ -94,7 +94,7 @@ ps5-bazzite-toolbox --version
 
 ## Diagnóstico
 
-Solo lee. Deja el informe en `~/ps5-diag-FECHA.txt` (sin contraseñas) y repasa lo que ha dado problemas en esta
+Solo lee. Al final ofrece guardar el informe (sin contraseñas) y repasa lo que ha dado problemas en esta
 consola:
 
 - **Disco USB:** atascos (`timing out command`), resets, errores de E/S y espacio libre.
@@ -107,7 +107,7 @@ consola:
 **Vigilar en directo** (opción 4): cada 2 s muestra la carga de CPU (media y el hilo más cargado) y de GPU, VRAM, GTT (RAM que la gráfica toma prestada), RAM y swap, todo
 como usado/total, la temperatura de CPU y GPU y los programas que más VRAM usan. La swap de Bazzite es zram (RAM comprimida):
 `2.5/4.3 GB (0.8)` son 2,5 GB en la swap que ocupan 0,8 GB de RAM. Al parar (Ctrl+C) resume los picos y dice si
-falta VRAM, RAM o las dos, si se llenó la swap y si el límite es la GPU o un hilo de la CPU. Cada medida queda en `~/ps5-mem-FECHA.csv`.
+falta VRAM, RAM o las dos, si se llenó la swap y si el límite es la GPU o un hilo de la CPU. Al pararlo ofrece guardar cada medida en `ps5-mem-FECHA.csv`.
 
 ## Pantalla y sesión gráfica
 
@@ -178,6 +178,14 @@ valor cuando el `.ppdb` del juego no dice nada.
 Lista las versiones publicadas (estables, preliminares y «rápidas» que solo cambian el kernel), muestra sus
 novedades, comprueba el espacio, descarga, verifica el SHA-256 y ejecuta el `update.sh` del autor. Después recuerda
 **apagar** y arrancar con el cargador, no reiniciar.
+
+## Dónde deja sus ficheros
+
+En ningún sitio sin preguntar. El informe del diagnóstico (`ps5-diag-FECHA.txt`), las medidas del monitor en
+directo (`ps5-mem-FECHA.csv`) y la salida de una actualización de la imagen (`update-vX.Y.Z.log`) se escriben en un
+fichero temporal y, al terminar, pregunta si guardarlo: **Intro** lo guarda en la carpeta desde la que la abriste
+(desde el menú de aplicaciones, tu carpeta personal), puedes escribir otra carpeta, o **n** para no guardarlo.
+Sin terminal (lanzada desde otro script) lo guarda en la carpeta actual sin preguntar.
 
 ## Versiones de la caja de herramientas
 
