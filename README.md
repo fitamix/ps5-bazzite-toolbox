@@ -21,11 +21,21 @@ disco USB. No es un proyecto oficial de la imagen ni de sus autores.
 En la PS5 (terminal o SSH):
 
 ```sh
-curl -LO https://github.com/fitamix/ps5-bazzite-toolbox/releases/latest/download/ps5-toolbox.sh
-bash ps5-toolbox.sh
+curl -LO https://github.com/fitamix/ps5-bazzite-toolbox/releases/latest/download/ps5-bazzite-toolbox.sh
+bash ps5-bazzite-toolbox.sh
 ```
 
 Ese enlace descarga siempre la **última versión publicada**. La rama `main` puede llevar cambios aún sin publicar.
+
+La primera vez se ofrece a **instalarse** como el comando `ps5-bazzite-toolbox` (en `~/.local/bin`, sin `sudo`; las
+actualizaciones de la imagen no lo borran) y como «Caja de herramientas PS5» en el menú de aplicaciones de KDE.
+A partir de ahí:
+
+```sh
+ps5-bazzite-toolbox
+```
+
+y el fichero descargado ya se puede borrar. Si prefieres no instalarla, sigue funcionando con `bash ps5-bazzite-toolbox.sh`.
 
 Sin opciones muestra un menú. Se ejecuta con tu usuario (no como root): pide `sudo` cuando lo necesita.
 
@@ -54,28 +64,32 @@ Sin opciones muestra un menú. Se ejecuta con tu usuario (no como root): pide `s
  Sistema
   17) Actualizar la imagen desde GitHub
   18) Actualizar esta caja de herramientas
+  19) Instalarla como comando y en el menú de aplicaciones, o desinstalarla
 ```
 
 Lo mismo sin menú:
 
 ```sh
-bash ps5-toolbox.sh --check [--boot -1]       # diagnóstico de este arranque (o del anterior) + informe
-bash ps5-toolbox.sh --watch                   # kernel en directo
-bash ps5-toolbox.sh --mem                     # CPU, GPU y memoria en directo
-bash ps5-toolbox.sh --screen                  # pantalla en negro: recuperar la imagen
-bash ps5-toolbox.sh --session status|restart|desktop|gamemode
-bash ps5-toolbox.sh --add-game "/ruta/Juego.exe"
-bash ps5-toolbox.sh --remove-game ["/ruta/Juego.exe" | "Nombre"]
-bash ps5-toolbox.sh --pp-collection [--dry-run|--yes]
-bash ps5-toolbox.sh --space [carpeta]
-bash ps5-toolbox.sh --setup                   # ajustes, bloque a bloque
-bash ps5-toolbox.sh --setup --status          # solo el estado de cada bloque
-bash ps5-toolbox.sh --setup --all             # la respuesta recomendada en todo, sin preguntar
-bash ps5-toolbox.sh --setup --only vram,nas   # solo esos bloques (vuelve a preguntar)
-bash ps5-toolbox.sh --update [v1.8.4]         # actualizar la imagen
-bash ps5-toolbox.sh --self-update [v1.1.0]    # actualizar esta caja de herramientas
-bash ps5-toolbox.sh --version
+ps5-bazzite-toolbox --check [--boot -1]       # diagnóstico de este arranque (o del anterior) + informe
+ps5-bazzite-toolbox --watch                   # kernel en directo
+ps5-bazzite-toolbox --mem                     # CPU, GPU y memoria en directo
+ps5-bazzite-toolbox --screen                  # pantalla en negro: recuperar la imagen
+ps5-bazzite-toolbox --session status|restart|desktop|gamemode
+ps5-bazzite-toolbox --add-game "/ruta/Juego.exe"
+ps5-bazzite-toolbox --remove-game ["/ruta/Juego.exe" | "Nombre"]
+ps5-bazzite-toolbox --pp-collection [--dry-run|--yes]
+ps5-bazzite-toolbox --space [carpeta]
+ps5-bazzite-toolbox --setup                   # ajustes, bloque a bloque
+ps5-bazzite-toolbox --setup --status          # solo el estado de cada bloque
+ps5-bazzite-toolbox --setup --all             # la respuesta recomendada en todo, sin preguntar
+ps5-bazzite-toolbox --setup --only vram,nas   # solo esos bloques (vuelve a preguntar)
+ps5-bazzite-toolbox --update [v1.8.4]         # actualizar la imagen
+ps5-bazzite-toolbox --self-update [v1.1.0]    # actualizar esta caja de herramientas
+ps5-bazzite-toolbox --install | --uninstall
+ps5-bazzite-toolbox --version
 ```
+
+(Sin instalar, lo mismo con `bash ps5-bazzite-toolbox.sh --check`, etc.)
 
 ## Diagnóstico
 
@@ -106,7 +120,7 @@ falta VRAM, RAM o las dos, si se llenó la swap y si el límite es la GPU o un h
 
 Cada bloque explica **qué cambia, por qué y cómo deshacerlo**, y pregunta con una respuesta recomendada. Lo que
 depende de cada consola (disco, idioma, NAS…) lo detecta o lo pregunta. Las respuestas quedan en
-`~/.config/ps5-bazzite-postinstall.conf`; al repetirlo solo ofrece lo pendiente.
+`~/.config/ps5-bazzite-toolbox.conf`; al repetirlo solo ofrece lo pendiente.
 
 | Bloque | Qué hace | Por qué |
 |---|---|---|
@@ -177,8 +191,8 @@ novedades, y el historial completo en [CHANGELOG.md](CHANGELOG.md). La numeraci�
 
 Al abrir el menú, la caja de herramientas mira (en 4 segundos como mucho, y sin decir nada si no hay red) si hay
 una versión más nueva y lo avisa. La opción 18 (`--self-update`) muestra las novedades, pregunta, descarga,
-comprueba el SHA-256, guarda la copia anterior como `ps5-toolbox.sh.vX.Y.Z` y la sustituye. Tus respuestas
-guardadas en `~/.config/ps5-bazzite-postinstall.conf` no se tocan.
+comprueba el SHA-256, guarda la copia anterior como `….vX.Y.Z` y sustituye la instalada (o, si no la instalaste, el fichero que ejecutas). Tus respuestas
+guardadas en `~/.config/ps5-bazzite-toolbox.conf` no se tocan.
 
 ## Cosas que se hacen a mano
 

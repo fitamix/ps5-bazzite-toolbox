@@ -28,6 +28,9 @@ Primera versión publicada.
 ### Sistema
 - Actualizar la imagen VivaLaVent/ps5-bazzite-deck desde GitHub con comprobación de SHA-256.
 - Versión propia (`--version`), aviso de versión nueva en el menú y autoactualización (opción 18, `--self-update`).
+- Instalación como comando `ps5-bazzite-toolbox` y en el menú de aplicaciones (opción 19, `--install`/`--uninstall`).
+- Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
+  pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
 [Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/fitamix/ps5-bazzite-toolbox/releases/tag/v1.0.0

@@ -9,28 +9,32 @@
 #    sync the collection; global PortProton defaults (setup block "portproton"). Tools: space taken by each folder.
 #  - Settings (setup): blocks that adapt the image (language, boot options, Wi-Fi, updates, VRAM, fans, warm
 #    reboot, HDMI fix, disk, Brave, NAS, zram swap size). Each explains what it changes, why and how to undo it, and asks.
-#    Answers are kept in ~/.config/ps5-bazzite-postinstall.conf; running it again only offers what is pending.
+#    Answers are kept in ~/.config/ps5-bazzite-toolbox.conf; running it again only offers what is pending.
 #
-#   bash ps5-toolbox.sh                         # menu
-#   bash ps5-toolbox.sh --check [--boot -1]     # diagnosis of this (or the previous) boot + report
-#   bash ps5-toolbox.sh --watch                 # live kernel problems (Ctrl+C to stop)
-#   bash ps5-toolbox.sh --mem                   # live CPU/GPU load, VRAM/GTT/RAM/swap (used/total), temperatures, top VRAM users
-#   bash ps5-toolbox.sh --session status|restart|desktop|gamemode
-#   bash ps5-toolbox.sh --setup                 # settings, block by block, asking
-#   bash ps5-toolbox.sh --setup --status | --all | --only vram,nas
-#   bash ps5-toolbox.sh --update [v1.7.2]       # update the image from GitHub (asks which version)
-#   bash ps5-toolbox.sh --screen                # black screen: switch to another console and back
-#   bash ps5-toolbox.sh --add-game [Juego.exe]  # add a Windows game to PortProton and Steam
-#   bash ps5-toolbox.sh --remove-game [Juego.exe|"Nombre"]   # remove it (Steam, PortProton, disk), asking each step
-#   bash ps5-toolbox.sh --pp-collection [--dry-run|--yes]   # sync Steam's "PortProton" collection
-#   bash ps5-toolbox.sh --space [DIR]           # space taken by each folder in DIR (also the "espacio" command)
-#   bash ps5-toolbox.sh --self-update [v1.1.0]  # update this toolbox from its GitHub releases
-#   bash ps5-toolbox.sh --version
+#   bash ps5-bazzite-toolbox.sh                         # menu (the first time it offers to install itself as the
+#                                               command "ps5-bazzite-toolbox" and in the applications menu)
+#   bash ps5-bazzite-toolbox.sh --check [--boot -1]     # diagnosis of this (or the previous) boot + report
+#   bash ps5-bazzite-toolbox.sh --watch                 # live kernel problems (Ctrl+C to stop)
+#   bash ps5-bazzite-toolbox.sh --mem                   # live CPU/GPU load, VRAM/GTT/RAM/swap (used/total), temperatures, top VRAM users
+#   bash ps5-bazzite-toolbox.sh --session status|restart|desktop|gamemode
+#   bash ps5-bazzite-toolbox.sh --setup                 # settings, block by block, asking
+#   bash ps5-bazzite-toolbox.sh --setup --status | --all | --only vram,nas
+#   bash ps5-bazzite-toolbox.sh --update [v1.7.2]       # update the image from GitHub (asks which version)
+#   bash ps5-bazzite-toolbox.sh --screen                # black screen: switch to another console and back
+#   bash ps5-bazzite-toolbox.sh --add-game [Juego.exe]  # add a Windows game to PortProton and Steam
+#   bash ps5-bazzite-toolbox.sh --remove-game [Juego.exe|"Nombre"]   # remove it (Steam, PortProton, disk), asking each step
+#   bash ps5-bazzite-toolbox.sh --pp-collection [--dry-run|--yes]   # sync Steam's "PortProton" collection
+#   bash ps5-bazzite-toolbox.sh --space [DIR]           # space taken by each folder in DIR (also the "espacio" command)
+#   bash ps5-bazzite-toolbox.sh --self-update [v1.1.0]  # update this toolbox from its GitHub releases
+#   bash ps5-bazzite-toolbox.sh --install | --uninstall # command ~/.local/bin/ps5-bazzite-toolbox + applications menu
+#   bash ps5-bazzite-toolbox.sh --version
 # Setup blocks: locale cmdline wifi updates vram zram fans warmreboot hdmi bt disk brave nas bios media esde portproton atajos
 set -uo pipefail
 
 TOOLBOX_VERSION=1.0.0                    # bump on every release (see CHANGELOG.md and release.sh)
 TOOLBOX_REPO=fitamix/ps5-bazzite-toolbox
+TOOLBOX_BIN=$HOME/.local/bin/ps5-bazzite-toolbox                      # where --install puts it
+TOOLBOX_DESKTOP=$HOME/.local/share/applications/ps5-bazzite-toolbox.desktop
 
 MODE='' BOOT=0 SESSION_CMD='' STATUS_ONLY=0 ALL=0 ONLY='' UPDATE_TAG='' ARGS=()
 while [ $# -gt 0 ]; do
@@ -49,7 +53,9 @@ while [ $# -gt 0 ]; do
         --screen) MODE=screen; shift ;;
         --self-update) MODE=self-update; UPDATE_TAG=''
                   if [ $# -gt 1 ] && [[ $2 != -* ]]; then UPDATE_TAG=$2; shift; fi; shift ;;
-        -V|--version) echo "ps5-toolbox $TOOLBOX_VERSION"; exit 0 ;;
+        --install) MODE=install; shift ;;
+        --uninstall) MODE=uninstall; shift ;;
+        -V|--version) echo "ps5-bazzite-toolbox $TOOLBOX_VERSION"; exit 0 ;;
         --add-game|--remove-game|--pp-collection|--space)       # the rest of the line goes to that tool
                   MODE=${1#--}; shift; ARGS=("$@"); break ;;
         -h|--help) awk 'NR > 1 { if (!/^#/) exit; sub(/^# ?/, ""); print }' "$0"; exit 0 ;;
@@ -64,7 +70,8 @@ if [ -t 1 ]; then G=$'\e[32m' Y=$'\e[33m' R=$'\e[31m' B=$'\e[1m' N=$'\e[0m'; els
 VERSION=$(awk 'NR == 1 { sub(/^v/, "", $1); print $1 }' /etc/ps5-bazzite-deck-version 2>/dev/null)
 ver_ge() { [ -n "$VERSION" ] && printf '%s\n%s\n' "$1" "$VERSION" | sort -V -C; }   # image version >= $1
 
-CONF=$HOME/.config/ps5-bazzite-postinstall.conf
+CONF=$HOME/.config/ps5-bazzite-toolbox.conf
+OLD_CONF=$HOME/.config/ps5-bazzite-postinstall.conf      # its name before v1.0.0
 CMDLINE=/efi/cmdline.txt
 VRAMTXT=/efi/vram.txt
 PERFCONF=/etc/ps5-bazzite-deck/perf.conf
@@ -76,7 +83,9 @@ BLOCKS="locale cmdline wifi updates vram zram fans warmreboot hdmi bt disk brave
 
 # ======================================== settings (setup) ========================================
 # --- saved answers -------------------------------------------------------------------------------
-mkdir -p "$(dirname "$CONF")"; touch "$CONF"
+mkdir -p "$(dirname "$CONF")"
+[ -e "$CONF" ] || [ ! -f "$OLD_CONF" ] || mv "$OLD_CONF" "$CONF"
+touch "$CONF"
 # shellcheck disable=SC1090
 . "$CONF"
 NAS_MNT=${NAS_MNT:-/var/mnt/nas}         # where the NAS share is mounted
@@ -307,12 +316,13 @@ apply_vram() {
 # --- zram ----------------------------------------------------------------------------------------
 # Bazzite's swap is zram (compressed RAM) of half the RAM; a game that fills it has nowhere left to go.
 # A drop-in overrides only the size and leaves Bazzite's own file alone.
-ZRAM_DROPIN=/etc/systemd/zram-generator.conf.d/90-ps5-toolbox.conf
+ZRAM_DROPIN=/etc/systemd/zram-generator.conf.d/90-ps5-bazzite-toolbox.conf
+ZRAM_OLD=/etc/systemd/zram-generator.conf.d/90-ps5-toolbox.conf          # its name before v1.0.0
 ZRAM_WANT=${ZRAM_SIZE:-ram}
 zram_now() { swapon --show=NAME,SIZE,USED --noheadings 2>/dev/null | awk '$1 ~ /zram/ { print $2 " (usada " $3 ")" }'; }
 desc_zram() {
     local now conf
-    now=$(zram_now) conf=$(sed -n 's/^zram-size *= *//p' /etc/systemd/zram-generator.conf "$ZRAM_DROPIN" 2>/dev/null | tail -1)
+    now=$(zram_now) conf=$(sed -n 's/^zram-size *= *//p' /etc/systemd/zram-generator.conf "$ZRAM_OLD" "$ZRAM_DROPIN" 2>/dev/null | tail -1)
     section
     say "Tamaño de la swap zram: memoria que se comprime dentro de la propia RAM cuando falta."
     say "Ahora: ${now:-sin zram}${conf:+, configurada como zram-size = $conf}."
@@ -326,14 +336,14 @@ desc_zram() {
 }
 check_zram() {
     [ -x /usr/lib/systemd/system-generators/zram-generator ] || return 2
-    grep -qs "^zram-size = $ZRAM_WANT\$" "$ZRAM_DROPIN" || return 1
+    grep -qs "^zram-size = $ZRAM_WANT\$" "$ZRAM_DROPIN" "$ZRAM_OLD" || return 1
 }
 apply_zram() {
     value ZRAM_SIZE "Tamaño (ram = toda la RAM; ram / 2 = lo de Bazzite; o en MB, p. ej. 6144)" "$ZRAM_WANT"
     ZRAM_WANT=${ZRAM_SIZE:-ram}
     sudo mkdir -p "$(dirname "$ZRAM_DROPIN")" &&
-        printf '# ps5-toolbox (bloque zram): overrides the size in /etc/systemd/zram-generator.conf\n[zram0]\nzram-size = %s\n' \
-            "$ZRAM_WANT" | sudo tee "$ZRAM_DROPIN" >/dev/null || return 1
+        printf '# ps5-bazzite-toolbox (bloque zram): overrides the size in /etc/systemd/zram-generator.conf\n[zram0]\nzram-size = %s\n' \
+            "$ZRAM_WANT" | sudo tee "$ZRAM_DROPIN" >/dev/null && sudo rm -f "$ZRAM_OLD" || return 1
     say "zram: $ZRAM_WANT tras el próximo reinicio."
     REBOOT=1
 }
@@ -505,7 +515,7 @@ apply_bt() {
     sudo tee /usr/local/sbin/ps5-bt-guard >/dev/null <<'EOF' || return 1
 #!/bin/bash
 # Make sure bluetoothd has an adapter; if the IW620 failed its reset at boot (or after sleep), reload btusb.
-# Installed by ps5-toolbox.sh (block bt). Log: journalctl -b -u ps5-bt-guard
+# Installed by ps5-bazzite-toolbox.sh (block bt). Log: journalctl -b -u ps5-bt-guard
 present() { timeout 5 bluetoothctl list 2>/dev/null | grep >/dev/null '^Controller'; }
 for _ in $(seq 6); do present && { echo "Bluetooth adapter present"; exit 0; }; sleep 5; done
 for try in 1 2; do
@@ -817,7 +827,7 @@ desc_portproton() {
     say "  Ojo: algún juego, al verlo, lo enciende en su calidad por defecto y va más lento: bájalo en sus opciones"
     say "  gráficas, o apágalo solo para él con export PW_USE_RAY_TRACING=\"0\" en su .ppdb."
     say "POR QUÉ: la máxima compatibilidad sin tocar nada juego a juego."
-    say "DESHACER: borra en ese fichero el bloque entre «# >>> ps5-toolbox» y «# <<< ps5-toolbox»."
+    say "DESHACER: borra en ese fichero el bloque entre «# >>> ps5-bazzite-toolbox» y «# <<< ps5-bazzite-toolbox»."
 }
 check_portproton() {
     flatpak info ru.linux_gaming.PortProton >/dev/null 2>&1 || return 2
@@ -827,15 +837,15 @@ check_portproton() {
 apply_portproton() {
     local bak; bak="$PP_USERCONF.bak-$(date +%Y%m%d-%H%M%S)"
     [ -e "$bak" ] || cp "$PP_USERCONF" "$bak" || return 1    # never over an earlier copy
-    sed -i '/^# >>> ps5-toolbox/,/^# <<< ps5-toolbox/d' "$PP_USERCONF"
+    sed -i -E '/^# >>> ps5-(bazzite-)?toolbox/,/^# <<< ps5-(bazzite-)?toolbox/d' "$PP_USERCONF"
     cat >>"$PP_USERCONF" <<EOF
-# >>> ps5-toolbox (bloque portproton) PP_DEFAULTS: $PP_DEFAULTS
+# >>> ps5-bazzite-toolbox (bloque portproton) PP_DEFAULTS: $PP_DEFAULTS
 # Defaults for every game unless its .ppdb sets the variable (this file is read after the .ppdb).
 for _pp_kv in $PP_DEFAULTS; do
     grep -qs "^export \${_pp_kv%%=*}=" "\${PORTWINE_DB_FILE:-/nonexistent}" || export "\${_pp_kv%%=*}=\${_pp_kv#*=}"
 done
 unset _pp_kv
-# <<< ps5-toolbox
+# <<< ps5-bazzite-toolbox
 EOF
     bash -n "$PP_USERCONF" || { say "El fichero no ha quedado bien: restaura la copia .bak."; return 1; }
     say "Ajustes globales de PortProton: $PP_DEFAULTS (los juegos abiertos los cogen al volver a abrirlos)."
@@ -845,8 +855,8 @@ EOF
 # Desktop shortcuts that call this toolbox, so they follow it when it is updated.
 TOOLBOX_SELF=$(realpath "$0" 2>/dev/null)
 SM_DIR=$HOME/.local/share/kio/servicemenus
-SM_GAME=$SM_DIR/ps5-toolbox-add-game.desktop
-SM_SPACE=$SM_DIR/ps5-toolbox-space.desktop
+SM_GAME=$SM_DIR/ps5-bazzite-toolbox-add-game.desktop
+SM_SPACE=$SM_DIR/ps5-bazzite-toolbox-space.desktop
 SPACE_BIN=/usr/local/bin/espacio
 desk_dir() { xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop"; }
 # run_then_close SECONDS ARGS... -> the shell command a launcher runs: the toolbox with ARGS, then the window
@@ -906,7 +916,7 @@ Icon=filelight
 Exec=konsole --hold -e bash "$TOOLBOX_SELF" --space %f
 EOF
     chmod +x "$SM_GAME" "$SM_SPACE"      # Plasma 6 ignores service menus that aren't executable
-    printf '#!/bin/sh\n# espacio [CARPETA]: lo que ocupa cada carpeta de CARPETA (ps5-toolbox.sh --space)\nexec bash "%s" --space "$@"\n' \
+    printf '#!/bin/sh\n# espacio [CARPETA]: lo que ocupa cada carpeta de CARPETA (ps5-bazzite-toolbox.sh --space)\nexec bash "%s" --space "$@"\n' \
         "$TOOLBOX_SELF" | sudo tee "$SPACE_BIN" >/dev/null && sudo chmod 755 "$SPACE_BIN" || return 1
     cat >"$COLL_DESKTOP" <<EOF
 [Desktop Entry]
@@ -919,7 +929,8 @@ Exec=bash -c '$(run_then_close 3 --pp-collection --yes)'
 EOF
     chmod +x "$COLL_DESKTOP"
     # the stand-alone versions this replaces (made by hand or by add-proton-game.sh --install)
-    rm -f "$SM_DIR/add-proton-game.desktop" "$HOME/.local/bin/add-proton-game.sh"
+    rm -f "$SM_DIR/add-proton-game.desktop" "$HOME/.local/bin/add-proton-game.sh" \
+        "$SM_DIR/ps5-toolbox-add-game.desktop" "$SM_DIR/ps5-toolbox-space.desktop"    # names before v1.0.0
     local old; old=$(cd ~ && ls portproton-collection.sh verEspacioCadaDirectorio.sh parpadeoVideo.sh 2>/dev/null | tr '\n' ' ')
     [ -n "$old" ] && say "Ya no hacen falta (bórralos si quieres): ~/${old// / ~/}"
     say "Si Dolphin estaba abierto, ciérralo y ábrelo para ver las acciones nuevas."
@@ -1362,7 +1373,7 @@ yesno() {                                # yesno "question" S|N -> 0 = yes
     if [ "$d" = S ]; then read -rp "$1 [S/n] " a; [[ $a != [nN]* ]]; else read -rp "$1 [s/N] " a; [[ $a == [sS]* ]]; fi
 }
 # --- this toolbox's own releases ----------------------------------------------------------------------------
-# Each release on GitHub carries ps5-toolbox.sh and ps5-toolbox.sh.sha256 (made by release.sh).
+# Each release on GitHub carries ps5-bazzite-toolbox.sh and ps5-bazzite-toolbox.sh.sha256 (made by release.sh).
 toolbox_release() {                      # toolbox_release TAG|'' DIR [TIMEOUT] -> DIR/{tag,notes,url,sha} of that (or the latest) release
     local api="https://api.github.com/repos/$TOOLBOX_REPO/releases"
     if [ -n "$1" ]; then api="$api/tags/$1"; else api="$api/latest"; fi
@@ -1372,7 +1383,7 @@ import json, sys
 r = json.load(open(sys.argv[1])); d = sys.argv[2]
 a = {x["name"]: x["browser_download_url"] for x in r.get("assets", [])}
 for name, value in (("tag", r["tag_name"]), ("notes", r.get("body") or ""),
-                    ("url", a.get("ps5-toolbox.sh", "")), ("sha", a.get("ps5-toolbox.sh.sha256", ""))):
+                    ("url", a.get("ps5-bazzite-toolbox.sh", "")), ("sha", a.get("ps5-bazzite-toolbox.sh.sha256", ""))):
     open(f"{d}/{name}", "w").write(value + "\n")
 PY
 }
@@ -1402,24 +1413,92 @@ self_update() {                          # self_update [TAG] -> download, check 
     printf '\nTienes v%s. %s: %s\n' "$TOOLBOX_VERSION" "$([ -n "$want" ] && echo Elegida || echo Última)" "$tag"
     if [ -z "$want" ] && ! toolbox_newer "$tag"; then echo "Ya tienes la última versión."; rm -rf "$tmp"; return 1; fi
     toolbox_newer "$tag" || [ "${tag#v}" = "$TOOLBOX_VERSION" ] || echo "${Y}Ojo: $tag es más antigua que la tuya.$N"
-    [ -n "$url" ] && [ -n "$sha" ] || { echo "Esa versión no trae ps5-toolbox.sh y su .sha256." >&2; rm -rf "$tmp"; return 1; }
+    [ -n "$url" ] && [ -n "$sha" ] || { echo "Esa versión no trae ps5-bazzite-toolbox.sh y su .sha256." >&2; rm -rf "$tmp"; return 1; }
     printf '\n%sNovedades de %s:%s\n' "$B" "$tag" "$N"; sed 's/^/  /' "$tmp/notes"
-    # Where to write: this file when it is a real file we can replace, else ~/ps5-toolbox.sh (e.g. run as bash <(curl …))
-    target=$(readlink -f "$0" 2>/dev/null)
-    if [ ! -f "$target" ] || [ ! -w "$(dirname "$target")" ]; then target=$HOME/ps5-toolbox.sh; fi
+    # Where to write: the installed command if there is one, else this file when it can be replaced, else install it
+    target=$TOOLBOX_SELF
+    if [ -f "$TOOLBOX_BIN" ] || [ ! -f "$target" ] || [ ! -w "$(dirname "$target")" ]; then target=$TOOLBOX_BIN; fi
     section
-    say "Descarga ps5-toolbox.sh de $tag, comprueba su SHA-256 y que bash lo lee bien, y sustituye $target." \
+    say "Descarga ps5-bazzite-toolbox.sh de $tag, comprueba su SHA-256 y que bash lo lee bien, y sustituye $target." \
         "Tus respuestas guardadas ($CONF) se conservan." \
         "DESHACER: la copia anterior queda en $target.v$TOOLBOX_VERSION (cp $target.v$TOOLBOX_VERSION $target)."
     yesno "¿Actualizar a $tag?" S || { rm -rf "$tmp"; return 1; }
-    curl -fsSL --retry 3 -o "$tmp/ps5-toolbox.sh" "$url" && curl -fsSL --retry 3 -o "$tmp/ps5-toolbox.sh.sha256" "$sha" ||
+    curl -fsSL --retry 3 -o "$tmp/ps5-bazzite-toolbox.sh" "$url" && curl -fsSL --retry 3 -o "$tmp/ps5-bazzite-toolbox.sh.sha256" "$sha" ||
         { echo "Falló la descarga." >&2; rm -rf "$tmp"; return 1; }
-    (cd "$tmp" && sha256sum -c ps5-toolbox.sh.sha256) || { echo "${R}El SHA-256 no coincide: no cambio nada.$N" >&2; rm -rf "$tmp"; return 1; }
-    bash -n "$tmp/ps5-toolbox.sh" || { echo "${R}El fichero descargado no es válido: no cambio nada.$N" >&2; rm -rf "$tmp"; return 1; }
+    (cd "$tmp" && sha256sum -c ps5-bazzite-toolbox.sh.sha256) || { echo "${R}El SHA-256 no coincide: no cambio nada.$N" >&2; rm -rf "$tmp"; return 1; }
+    bash -n "$tmp/ps5-bazzite-toolbox.sh" || { echo "${R}El fichero descargado no es válido: no cambio nada.$N" >&2; rm -rf "$tmp"; return 1; }
     [ -f "$target" ] && cp -p "$target" "$target.v$TOOLBOX_VERSION"
-    install -m 755 "$tmp/ps5-toolbox.sh" "$target" || { echo "No puedo escribir $target." >&2; rm -rf "$tmp"; return 1; }
+    mkdir -p "$(dirname "$target")"
+    install -m 755 "$tmp/ps5-bazzite-toolbox.sh" "$target" || { echo "No puedo escribir $target." >&2; rm -rf "$tmp"; return 1; }
     rm -rf "$tmp"
-    echo "${G}Hecho:$N $target es ahora $tag. Ábrelo de nuevo para usarla: bash $target"
+    [ "$target" = "$TOOLBOX_BIN" ] && desktop_entry
+    echo "${G}Hecho:$N $target es ahora $tag. Ábrela de nuevo para usarla: $([ "$target" = "$TOOLBOX_BIN" ] && echo ps5-bazzite-toolbox || echo "bash $target")"
+}
+
+# --- installed as a command ------------------------------------------------------------------------------------
+# ~/.local/bin is the user's own (no sudo), is in Bazzite's PATH and survives image updates (/home is kept).
+desktop_entry() {                        # the applications menu entry (KDE opens it in Konsole)
+    mkdir -p "$(dirname "$TOOLBOX_DESKTOP")"
+    cat >"$TOOLBOX_DESKTOP" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Caja de herramientas PS5
+GenericName=ps5-bazzite-toolbox
+Comment=Diagnóstico, ajustes y utilidades para Bazzite en la PS5
+Icon=utilities-terminal
+Terminal=true
+Exec="$TOOLBOX_BIN"
+Categories=System;Utility;
+EOF
+}
+atajos_used() { [ -e "$SM_GAME" ] || [ -e "$SM_SPACE" ] || [ -e "$SPACE_BIN" ] || [ -e "$COLL_DESKTOP" ] ||
+                [ -e "$SM_DIR/ps5-toolbox-add-game.desktop" ]; }
+install_self() {
+    [ -n "$TOOLBOX_SELF" ] && [ -f "$TOOLBOX_SELF" ] || {
+        echo "Ejecutada desde una tubería: descárgala primero (curl -LO …/ps5-bazzite-toolbox.sh) y ejecuta ese fichero." >&2
+        return 1; }
+    if [ "$TOOLBOX_SELF" = "$TOOLBOX_BIN" ]; then echo "Ya está instalada en $TOOLBOX_BIN."; desktop_entry; return 0; fi
+    section
+    say "Copia este fichero ($TOOLBOX_SELF, v$TOOLBOX_VERSION) a $TOOLBOX_BIN y añade «Caja de herramientas PS5»"
+    say "al menú de aplicaciones de KDE ($TOOLBOX_DESKTOP)."
+    [ -f "$TOOLBOX_BIN" ] && say "Sustituye la que ya hay instalada ($("$TOOLBOX_BIN" --version 2>/dev/null))."
+    say "POR QUÉ: abrirla desde cualquier terminal con «ps5-bazzite-toolbox» o desde el menú, sin acordarte de la"
+    say "ruta. Las actualizaciones (opción 18) y los atajos del bloque atajos usan siempre esa copia."
+    say "DESHACER: ps5-bazzite-toolbox --uninstall (o rm $TOOLBOX_BIN $TOOLBOX_DESKTOP)."
+    yesno "¿Instalarla?" S || return 1
+    mkdir -p "$(dirname "$TOOLBOX_BIN")" && install -m 755 "$TOOLBOX_SELF" "$TOOLBOX_BIN" || return 1
+    desktop_entry
+    remember INSTALL_ASKED yes
+    echo "${G}Instalada.$N Ábrela con: ps5-bazzite-toolbox (o desde el menú de aplicaciones)."
+    case :$PATH: in *":$HOME/.local/bin:"*) ;; *) echo "  ($HOME/.local/bin no está en tu PATH: usa $TOOLBOX_BIN)" ;; esac
+    if atajos_used; then
+        echo "Tus atajos (Dolphin, «espacio», «Colección PortProton») apuntan a $TOOLBOX_SELF."
+        if yesno "¿Los cambio para que usen la copia instalada?" S; then TOOLBOX_SELF=$TOOLBOX_BIN; apply_atajos; fi
+    fi
+    echo "Puedes borrar $TOOLBOX_SELF si quieres: ya no hace falta."
+}
+uninstall_self() {
+    [ -f "$TOOLBOX_BIN" ] || [ -f "$TOOLBOX_DESKTOP" ] || { echo "No está instalada."; return 0; }
+    section
+    say "Borra $TOOLBOX_BIN y la entrada del menú ($TOOLBOX_DESKTOP)."
+    say "Tus respuestas guardadas ($CONF) y los ajustes aplicados se quedan como están."
+    say "DESHACER: vuelve a descargarla e instálala (ver el README)."
+    yesno "¿Desinstalarla?" N || return 1
+    rm -f "$TOOLBOX_BIN" "$TOOLBOX_DESKTOP" "$TOOLBOX_BIN".v*
+    echo "Desinstalada."
+    grep -qs -F "$TOOLBOX_BIN" "$SM_GAME" "$SPACE_BIN" "$COLL_DESKTOP" &&
+        echo "Los atajos (Dolphin, «espacio», «Colección PortProton») la usaban: quítalos con rm '$SM_GAME' '$SM_SPACE' '$COLL_DESKTOP'; sudo rm $SPACE_BIN"
+    return 0
+}
+offer_install() {                        # once, from the menu: run from a downloaded file and not installed yet
+    [ -n "$TOOLBOX_SELF" ] && [ -f "$TOOLBOX_SELF" ] && [ "$TOOLBOX_SELF" != "$TOOLBOX_BIN" ] || return 0
+    if [ -f "$TOOLBOX_BIN" ]; then
+        printf '%s  Estás usando %s; la instalada es %s («ps5-bazzite-toolbox»). Opción 19 para sustituirla por esta.%s\n' \
+            "$Y" "$TOOLBOX_SELF" "$("$TOOLBOX_BIN" --version 2>/dev/null)" "$N"
+        return 0
+    fi
+    [ "${INSTALL_ASKED:-}" = no ] && return 0
+    install_self || remember INSTALL_ASKED no
 }
 
 update_image() {
@@ -1552,7 +1631,7 @@ PY
 # The two PortProton helpers are whole scripts kept here as text and run with bash, so the toolbox stays one file.
 pp_add_game_script() { cat <<'__PP_ADD_GAME__'
 #!/usr/bin/env bash
-# Run by ps5-toolbox.sh (menu "Añadir un juego de Windows", --add-game, or Dolphin's right-click action).
+# Run by ps5-bazzite-toolbox.sh (menu "Añadir un juego de Windows", --add-game, or Dolphin's right-click action).
 # Adds a Windows game to PortProton and Steam, asking before each step (--yes takes every default):
 #   1. Test:      opens the .exe with PortProton (flatpak ru.linux_gaming.PortProton). You try it and close it;
 #                 PortProton leaves its settings next to the exe (<exe>.ppdb) and the game icon in data/img/.
@@ -1848,7 +1927,7 @@ __PP_ADD_GAME__
 }
 pp_collection_script() { cat <<'__PP_COLLECTION__'
 #!/usr/bin/env bash
-# Run by ps5-toolbox.sh (menu "Colección PortProton", --pp-collection). Was ~/portproton-collection.sh.
+# Run by ps5-bazzite-toolbox.sh (menu "Colección PortProton", --pp-collection). Was ~/portproton-collection.sh.
 # Sincroniza una colección de Steam ("PortProton") con todos los accesos
 # directos no-Steam cuyo ejecutable termina en ".sh".
 #
@@ -2082,7 +2161,7 @@ __PP_COLLECTION__
 }
 pp_remove_game_script() { cat <<'__PP_REMOVE_GAME__'
 #!/usr/bin/env bash
-# Run by ps5-toolbox.sh (menu "Quitar un juego", --remove-game, or Dolphin's right-click action on the .exe).
+# Run by ps5-bazzite-toolbox.sh (menu "Quitar un juego", --remove-game, or Dolphin's right-click action on the .exe).
 # Removes a Windows game added with PortProton, asking before each part (nothing is removed without a yes):
 #   1. Steam:      its non-Steam entry (shortcuts.vdf, backed up first) and its artwork; Steam must be closed.
 #   2. PortProton: its .desktop (PortProton's list, the Desktop, the app menu) and steam_scripts/<Name>.sh.
@@ -2318,7 +2397,7 @@ menu() {
     while :; do
         printf '\n%sPS5 Bazzite Deck — caja de herramientas v%s%s (imagen %s, kernel %s)\n' \
             "$B" "$TOOLBOX_VERSION" "$N" "${VERSION:+v$VERSION}" "$(uname -r)"
-        [ -n "$notice_done" ] || { toolbox_notice; notice_done=1; }
+        [ -n "$notice_done" ] || { offer_install; toolbox_notice; notice_done=1; }
         cat <<'MENU'
  Diagnóstico (solo mira, no cambia nada)
    1) Revisión completa de este arranque (y guarda el informe)
@@ -2344,6 +2423,7 @@ menu() {
  Sistema
   17) Actualizar la imagen desde GitHub (elige versión, descarga, comprueba e instala)
   18) Actualizar esta caja de herramientas (muestra las novedades y pregunta)
+  19) Instalarla como comando «ps5-bazzite-toolbox» y en el menú de aplicaciones, o desinstalarla
    0) Salir
 MENU
         read -rp "Elige: " c
@@ -2368,6 +2448,7 @@ MENU
                 [ -n "$a" ] && { STATUS_ONLY=0 ALL=0 ONLY=${a//,/ }; setup_run; ONLY=''; } ;;
             17) update_image ;;
             18) self_update && { echo "Saliendo para que abras la versión nueva."; return 0; } ;;
+            19) if [ "$TOOLBOX_SELF" = "$TOOLBOX_BIN" ]; then uninstall_self && return 0; else install_self; fi ;;
             0|q|'') return 0 ;;
             *) echo "Opción no válida" ;;
         esac
@@ -2391,4 +2472,6 @@ case $MODE in
     setup) setup_run ;;
     update) update_image "$UPDATE_TAG" ;;
     screen) screen_kick ;;
+    install) install_self ;;
+    uninstall) uninstall_self ;;
 esac
