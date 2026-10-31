@@ -32,7 +32,7 @@ Sin opciones muestra un menú. Se ejecuta con tu usuario (no como root): pide `s
    1) Revisión completa de este arranque (y guarda el informe)
    2) Revisar el arranque anterior (tras un cuelgue o un apagado forzado)
    3) Vigilar el kernel en directo
-   4) Vigilar la memoria en directo: VRAM, RAM, swap, temperatura y qué gasta más
+   4) Vigilar en directo: CPU, GPU, VRAM, RAM, swap, temperatura y qué gasta más
  Pantalla y sesión gráfica
    5) Ver en qué modo arranca la consola y qué sesión hay ahora
    6) Pantalla en negro: recuperar la imagen (cambia de consola y vuelve; no cierra nada)
@@ -58,7 +58,7 @@ Lo mismo sin menú:
 ```sh
 bash ps5-toolbox.sh --check [--boot -1]       # diagnóstico de este arranque (o del anterior) + informe
 bash ps5-toolbox.sh --watch                   # kernel en directo
-bash ps5-toolbox.sh --mem                     # memoria en directo
+bash ps5-toolbox.sh --mem                     # CPU, GPU y memoria en directo
 bash ps5-toolbox.sh --screen                  # pantalla en negro: recuperar la imagen
 bash ps5-toolbox.sh --session status|restart|desktop|gamemode
 bash ps5-toolbox.sh --add-game "/ruta/Juego.exe"
@@ -84,10 +84,10 @@ consola:
 - **Temperatura y ventilador**, **red** (router, DNS, Wi-Fi, Bluetooth, NAS), **sesión gráfica** y el estado de cada
   bloque de ajustes.
 
-**Memoria en directo** (opción 4): cada 2 s muestra VRAM, GTT (RAM que la gráfica toma prestada), RAM y swap, todo
-como usado/total, la temperatura y los programas que más VRAM usan. La swap de Bazzite es zram (RAM comprimida):
+**Vigilar en directo** (opción 4): cada 2 s muestra la carga de CPU (media y el hilo más cargado) y de GPU, VRAM, GTT (RAM que la gráfica toma prestada), RAM y swap, todo
+como usado/total, la temperatura de CPU y GPU y los programas que más VRAM usan. La swap de Bazzite es zram (RAM comprimida):
 `2.5/4.3 GB (0.8)` son 2,5 GB en la swap que ocupan 0,8 GB de RAM. Al parar (Ctrl+C) resume los picos y dice si
-falta VRAM, RAM o las dos. Cada medida queda en `~/ps5-mem-FECHA.csv`.
+falta VRAM, RAM o las dos, si se llenó la swap y si el límite es la GPU o un hilo de la CPU. Cada medida queda en `~/ps5-mem-FECHA.csv`.
 
 ## Pantalla y sesión gráfica
 
@@ -110,6 +110,7 @@ depende de cada consola (disco, idioma, NAS…) lo detecta o lo pregunta. Las re
 | `wifi` | Apaga o vuelve a encender el Wi-Fi según la versión de la imagen | El driver del IW620 se colgaba con el Wi-Fi activo antes de la v1.5.0 |
 | `updates` | Bloquea las actualizaciones automáticas de kernel, Mesa, firmware y gamescope | Esos paquetes llevan parches de la PS5: actualizarlos rompe la imagen |
 | `vram` | VRAM reservada para la gráfica (`/efi/vram.txt`, de 512 MB a 8 GB) | Con 512 MB, los juegos DX12/UE5 se caen con *Not enough memory* |
+| `zram` | Swap zram del tamaño de toda la RAM (Bazzite pone la mitad), con un fichero aparte en `/etc/systemd/zram-generator.conf.d/` | Juegos grandes la llenan y, sin swap libre, el sistema los cierra |
 | `fans` | Control del ventilador y temperatura objetivo (60–85 °C) | El objetivo de fábrica (80 °C) es silencioso pero caliente |
 | `warmreboot` | Reinicio en caliente (sin pasar por el cargador) | Comodidad; experimental |
 | `hdmi` | Recupera la imagen tras un reinicio en caliente | A veces el HDMI sale en negro |

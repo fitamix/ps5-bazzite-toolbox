@@ -8,13 +8,13 @@
 #  - PortProton and Steam: add or remove a Windows game (PortProton + Desktop + Steam + "PortProton" collection),
 #    sync the collection; global PortProton defaults (setup block "portproton"). Tools: space taken by each folder.
 #  - Settings (setup): blocks that adapt the image (language, boot options, Wi-Fi, updates, VRAM, fans, warm
-#    reboot, HDMI fix, disk, Brave, NAS). Each explains what it changes, why and how to undo it, and asks.
+#    reboot, HDMI fix, disk, Brave, NAS, zram swap size). Each explains what it changes, why and how to undo it, and asks.
 #    Answers are kept in ~/.config/ps5-bazzite-postinstall.conf; running it again only offers what is pending.
 #
 #   bash ps5-toolbox.sh                         # menu
 #   bash ps5-toolbox.sh --check [--boot -1]     # diagnosis of this (or the previous) boot + report
 #   bash ps5-toolbox.sh --watch                 # live kernel problems (Ctrl+C to stop)
-#   bash ps5-toolbox.sh --mem                   # live VRAM/GTT/RAM/swap (used/total) + temperature + top VRAM users
+#   bash ps5-toolbox.sh --mem                   # live CPU/GPU load, VRAM/GTT/RAM/swap (used/total), temperatures, top VRAM users
 #   bash ps5-toolbox.sh --session status|restart|desktop|gamemode
 #   bash ps5-toolbox.sh --setup                 # settings, block by block, asking
 #   bash ps5-toolbox.sh --setup --status | --all | --only vram,nas
@@ -24,7 +24,7 @@
 #   bash ps5-toolbox.sh --remove-game [Juego.exe|"Nombre"]   # remove it (Steam, PortProton, disk), asking each step
 #   bash ps5-toolbox.sh --pp-collection [--dry-run|--yes]   # sync Steam's "PortProton" collection
 #   bash ps5-toolbox.sh --space [DIR]           # space taken by each folder in DIR (also the "espacio" command)
-# Setup blocks: locale cmdline wifi updates vram fans warmreboot hdmi bt disk brave nas bios media esde portproton atajos
+# Setup blocks: locale cmdline wifi updates vram zram fans warmreboot hdmi bt disk brave nas bios media esde portproton atajos
 set -uo pipefail
 
 MODE='' BOOT=0 SESSION_CMD='' STATUS_ONLY=0 ALL=0 ONLY='' UPDATE_TAG='' ARGS=()
@@ -64,7 +64,7 @@ TOOLS_REPO=https://github.com/ps5-linux/ps5-linux-tools
 TOOLS_COMMIT=f1fa98a                     # the revision reviewed on 2026-10-27
 POLKIT_RULE=/etc/polkit-1/rules.d/50-ps5-no-kde-smart.rules
 BRAVE_FLAGS=$HOME/.var/app/com.brave.Browser/config/brave-flags.conf
-BLOCKS="locale cmdline wifi updates vram fans warmreboot hdmi bt disk brave nas bios media esde portproton atajos"
+BLOCKS="locale cmdline wifi updates vram zram fans warmreboot hdmi bt disk brave nas bios media esde portproton atajos"
 
 # ======================================== settings (setup) ========================================
 # --- saved answers -------------------------------------------------------------------------------
@@ -294,6 +294,40 @@ apply_vram() {
     echo "$VRAM_WANT" | sudo tee "$VRAMTXT" >/dev/null || return 1
     say "VRAM: $(vram_gb "$VRAM_WANT") ($VRAM_WANT); Linux tendrá $(vram_left "$VRAM_WANT") de RAM tras el próximo arranque en frío."
     COLD=1
+}
+
+# --- zram ----------------------------------------------------------------------------------------
+# Bazzite's swap is zram (compressed RAM) of half the RAM; a game that fills it has nowhere left to go.
+# A drop-in overrides only the size and leaves Bazzite's own file alone.
+ZRAM_DROPIN=/etc/systemd/zram-generator.conf.d/90-ps5-toolbox.conf
+ZRAM_WANT=${ZRAM_SIZE:-ram}
+zram_now() { swapon --show=NAME,SIZE,USED --noheadings 2>/dev/null | awk '$1 ~ /zram/ { print $2 " (usada " $3 ")" }'; }
+desc_zram() {
+    local now conf
+    now=$(zram_now) conf=$(sed -n 's/^zram-size *= *//p' /etc/systemd/zram-generator.conf "$ZRAM_DROPIN" 2>/dev/null | tail -1)
+    section
+    say "Tamaño de la swap zram: memoria que se comprime dentro de la propia RAM cuando falta."
+    say "Ahora: ${now:-sin zram}${conf:+, configurada como zram-size = $conf}."
+    say "Propuesta: zram-size = $ZRAM_WANT (toda la RAM de Linux, como SteamOS) en $ZRAM_DROPIN."
+    say "POR QUÉ: Bazzite pone la mitad de la RAM. Un juego grande (p. ej. un Unreal Engine 5 con 6 GB de VRAM)"
+    say "la llena y a partir de ahí, sin swap libre, el sistema cierra el juego si pide más. Con zstd se comprime"
+    say "~2:1: llena del todo ocupa la mitad de su tamaño en RAM y guarda el doble. No reserva nada: solo gasta"
+    say "RAM cuando se usa. No se añade swap en el disco USB (los atascos del USB colgarían el sistema)."
+    say "DESHACER: sudo rm $ZRAM_DROPIN y reinicia."
+    say "Cuenta tras reiniciar (cambiarla en marcha obliga a vaciar la swap en la RAM)."
+}
+check_zram() {
+    [ -x /usr/lib/systemd/system-generators/zram-generator ] || return 2
+    grep -qs "^zram-size = $ZRAM_WANT\$" "$ZRAM_DROPIN" || return 1
+}
+apply_zram() {
+    value ZRAM_SIZE "Tamaño (ram = toda la RAM; ram / 2 = lo de Bazzite; o en MB, p. ej. 6144)" "$ZRAM_WANT"
+    ZRAM_WANT=${ZRAM_SIZE:-ram}
+    sudo mkdir -p "$(dirname "$ZRAM_DROPIN")" &&
+        printf '# ps5-toolbox (bloque zram): overrides the size in /etc/systemd/zram-generator.conf\n[zram0]\nzram-size = %s\n' \
+            "$ZRAM_WANT" | sudo tee "$ZRAM_DROPIN" >/dev/null || return 1
+    say "zram: $ZRAM_WANT tras el próximo reinicio."
+    REBOOT=1
 }
 
 # --- fans ----------------------------------------------------------------------------------------
@@ -1173,7 +1207,7 @@ done
 
 echo "Resumen — aplicados:${DONE:- ninguno} | omitidos:${SKIPPED:- ninguno} | fallidos:${FAILED:- ninguno}"
 [ $COLD = 1 ] && echo "APAGA (sudo poweroff) y arranca con el cargador: la VRAM solo cambia en un arranque en frío."
-[ $COLD = 0 ] && [ $REBOOT = 1 ] && echo "Reinicia para que cuenten los parámetros de arranque."
+[ $COLD = 0 ] && [ $REBOOT = 1 ] && echo "Reinicia para que cuenten los cambios (parámetros de arranque, zram)."
 [ -z "$ONLY" ] && cat <<'EOF'
 A mano (no se puede automatizar desde aquí):
   - passwd, si es una instalación nueva: la contraseña por defecto es ps5 y SSH está abierto en la red.
@@ -1196,6 +1230,13 @@ P_GPUMEM='ENOMEM|Not enough memory|Failed to pin|ring [a-z_0-9.]+ (timeout|reset
 zram_mb() {                              # RAM taken by zram swap (mm_stat field 3: mem_used_total, bytes)
     cat /sys/block/zram*/mm_stat 2>/dev/null | awk '{ s += $3 } END { print int(s / 1048576) }'
 }
+cpu_load() {                             # cpu_load PREV CUR (/proc/stat "cpu" lines) -> "average busiest" in %
+    # busy = everything but idle and iowait; the average alone hides a game held back by one full thread
+    awk 'NR == FNR { for (i = 2; i <= 9; i++) t[$1] += $i; id[$1] = $5 + $6; next }
+         { T = 0; for (i = 2; i <= 9; i++) T += $i; dt = T - t[$1]; p = dt > 0 ? 100 * (dt - ($5 + $6 - id[$1])) / dt : 0
+           if ($1 == "cpu") avg = p; else if (p > max) max = p }
+         END { printf "%d %d\n", avg, max }' <(printf '%s\n' "$1") <(printf '%s\n' "$2")
+}
 gpu_top() {                              # top N programs by VRAM: "name size" lines (MiB)
     grep -s -E '^drm-(client-id|memory-vram):' /proc/[0-9]*/fdinfo/* 2>/dev/null | awk -v n="${1:-3}" '
         { split($1, f, "/"); pid = f[3] }
@@ -1208,18 +1249,20 @@ gpu_top() {                              # top N programs by VRAM: "name size" l
         }' | sort -rn | head -"${1:-3}" | awk '{ printf "%s %.1fG  ", $2, $1 / 1024 }'
 }
 mem_watch() {
-    local stop=0 dev csv start t vu vt gu gt ra rt ru su st zr tc top ram ev peak_v=0 peak_g=0 min_ra=999999 peak_r=0 peak_s=0 peak_z=0 su0='' peak_t=0 events=0 n=0 ram_top=''
-    dev=$(ls -d /sys/class/drm/card*/device 2>/dev/null | head -1)
+    local stop=0 dev csv start t vu vt gu gt ra rt ru su st zr tc cc gp cpu0 cpu1 ca cm top ram ev peak_v=0 peak_g=0 min_ra=999999 peak_r=0 peak_s=0 peak_z=0 su0='' peak_t=0 events=0 n=0 ram_top=''
+    local peak_ct=0 peak_ca=0 peak_gp=0 sum_ca=0 sum_gp=0 n_gpu=0 n_cpu=0    dev=$(ls -d /sys/class/drm/card*/device 2>/dev/null | head -1)
     csv=$HOME/ps5-mem-$(date +%Y%m%d-%H%M%S).csv
     start=$(date '+%Y-%m-%d %H:%M:%S')
-    echo "hora,vram_usada_mb,vram_total_mb,gtt_mb,gtt_total_mb,ram_usada_mb,ram_total_mb,ram_disponible_mb,swap_usada_mb,swap_total_mb,zram_en_ram_mb,temp_c,errores_gpu,top_vram,top_ram" >"$csv"
+    echo "hora,vram_usada_mb,vram_total_mb,gtt_mb,gtt_total_mb,ram_usada_mb,ram_total_mb,ram_disponible_mb,swap_usada_mb,swap_total_mb,zram_en_ram_mb,temp_c,errores_gpu,top_vram,top_ram,cpu_pct,cpu_hilo_max_pct,gpu_pct,temp_cpu_c" >"$csv"
     vt=$(( $(cat "$dev/mem_info_vram_total" 2>/dev/null || echo 0) >> 20 ))
     gt=$(( $(cat "$dev/mem_info_gtt_total" 2>/dev/null || echo 0) >> 20 ))
     rt=$(awk '/^MemTotal:/ { print int($2 / 1024) }' /proc/meminfo)
     st=$(awk '/^SwapTotal:/ { print int($2 / 1024) }' /proc/meminfo)
     echo "Memoria en directo: VRAM $((vt / 1024)) GB, RAM de Linux $(awk -v r="$rt" 'BEGIN { printf "%.1f", r / 1024 }') GB, swap $(awk -v s="$st" 'BEGIN { printf "%.1f", s / 1024 }') GB$(ls /sys/block/zram* >/dev/null 2>&1 && echo ' (zram: comprimida en la RAM)')."
     echo "Ctrl+C para parar y ver los picos. Registro: $csv"
-    printf '%-8s %-15s %-13s %-14s %-21s %-6s %s\n' hora VRAM GTT RAM "swap (en RAM)" temp "más VRAM"
+    echo "CPU: media de los $(nproc) hilos y, entre paréntesis, el hilo más cargado. temp: CPU/GPU."
+    printf '%-8s %-10s %-5s %-15s %-13s %-14s %-21s %-8s %s\n' hora CPU GPU VRAM GTT RAM "swap (en RAM)" temp "más VRAM"
+    cpu0=$(grep '^cpu' /proc/stat)
     trap 'stop=1' INT                    # Ctrl+C: finish this sample, then show the peaks
     while [ $stop = 0 ]; do
         t=$(date +%T)
@@ -1229,7 +1272,10 @@ mem_watch() {
         ru=$((rt - ra))
         zr=$(zram_mb)
         su=$(awk '/^SwapTotal:/ { t = $2 } /^SwapFree:/ { f = $2 } END { print int((t - f) / 1024) }' /proc/meminfo)
-        tc=$(sensors 2>/dev/null | awk '/^Tctl:|^edge:/ { gsub(/[+°C]/, "", $2); print int($2); exit }')
+        tc=$(sensors 2>/dev/null | awk '/^edge:/ { gsub(/[+°C]/, "", $2); print int($2); exit }')    # GPU
+        cc=$(sensors 2>/dev/null | awk '/^Tctl:/ { gsub(/[+°C]/, "", $2); print int($2); exit }')    # CPU
+        gp=$(cat "$dev/gpu_busy_percent" 2>/dev/null || echo 0)
+        cpu1=$(grep '^cpu' /proc/stat); read -r ca cm < <(cpu_load "$cpu0" "$cpu1"); cpu0=$cpu1
         top=$(gpu_top 3)
         ram=$(ps -eo rss=,comm= --sort=-rss | head -1 | awk '{ printf "%s %.1fG", $2, $1 / 2^20 }')
         [ -n "$su0" ] || su0=$su
@@ -1244,14 +1290,20 @@ mem_watch() {
         [ "$su" -gt "$peak_s" ] && peak_s=$su
         [ "$zr" -gt "$peak_z" ] && peak_z=$zr
         [ "${tc:-0}" -gt "$peak_t" ] && peak_t=${tc:-0}
+        [ "${cc:-0}" -gt "$peak_ct" ] && peak_ct=${cc:-0}
+        [ "$ca" -gt "$peak_ca" ] && peak_ca=$ca
+        [ "$gp" -gt "$peak_gp" ] && peak_gp=$gp
+        sum_ca=$((sum_ca + ca)) sum_gp=$((sum_gp + gp))
+        [ "$gp" -ge 95 ] && n_gpu=$((n_gpu + 1))                    # GPU flat out: it sets the frame rate
+        [ "$cm" -ge 95 ] && [ "$gp" -lt 85 ] && n_cpu=$((n_cpu + 1))  # one thread full and the GPU waiting
         ev=''; [ "$events" -gt 0 ] && ev="  ${R}errores GPU: $events${N}"
         local col=$G rcol=$G; [ "$vt" -gt 0 ] && [ $((vu * 100 / vt)) -ge 90 ] && col=$R
         [ "$ra" -lt 512 ] && rcol=$R                # under 512 MB available: Linux is about to swap hard
-        printf '%-8s %s%-15s%s %-13s %s%-14s%s %-21s %-6s %s%s\n' "$t" "$col" "$(awk -v u="$vu" -v t="$vt" 'BEGIN { printf "%.2f/%.1f GB", u / 1024, t / 1024 }')" "$N" \
+        printf '%-8s %-10s %-5s %s%-15s%s %-13s %s%-14s%s %-21s %-8s %s%s\n' "$t" "$ca% ($cm)" "$gp%" "$col" "$(awk -v u="$vu" -v t="$vt" 'BEGIN { printf "%.2f/%.1f GB", u / 1024, t / 1024 }')" "$N" \
             "$(awk -v g="$gu" -v t="$gt" 'BEGIN { printf "%.2f/%.1f GB", g / 1024, t / 1024 }')" \
             "$rcol" "$(awk -v u="$ru" -v t="$rt" 'BEGIN { printf "%.1f/%.1f GB", u / 1024, t / 1024 }')" "$N" \
-            "$(awk -v s="$su" -v t="$st" -v z="$zr" 'BEGIN { printf "%.1f/%.1f GB (%.1f)", s / 1024, t / 1024, z / 1024 }')" "${tc:-?}°C" "$top" "$ev"
-        echo "$t,$vu,$vt,$gu,$gt,$ru,$rt,$ra,$su,$st,$zr,${tc:-},$events,\"$top\",\"$ram\"" >>"$csv"
+            "$(awk -v s="$su" -v t="$st" -v z="$zr" 'BEGIN { printf "%.1f/%.1f GB (%.1f)", s / 1024, t / 1024, z / 1024 }')" "${cc:-?}/${tc:-?}°C" "$top" "$ev"
+        echo "$t,$vu,$vt,$gu,$gt,$ru,$rt,$ra,$su,$st,$zr,${tc:-},$events,\"$top\",\"$ram\",$ca,$cm,$gp,${cc:-}" >>"$csv"
         sleep 2 || true
     done
     trap - INT
@@ -1261,7 +1313,9 @@ mem_watch() {
     echo "  GTT:          $(awk -v g="$peak_g" -v t="$gt" 'BEGIN { printf "%.2f de %.1f GB (RAM que la gráfica toma prestada)", g / 1024, t / 1024 }')"
     echo "  RAM usada:    $(awk -v u="$peak_r" -v t="$rt" -v r="$min_ra" 'BEGIN { printf "%.1f de %.1f GB (%d %%; libre como mínimo %.1f GB)", u / 1024, t / 1024, t ? u * 100 / t : 0, r / 1024 }') (entonces gastaba más: $ram_top)"
     echo "  Swap:         $(awk -v a="${su0:-0}" -v b="$peak_s" -v t="$st" -v z="$peak_z" 'BEGIN { printf "%.1f de %.1f GB como máximo (al empezar %.1f); ocupaba %.1f GB de RAM (zram)", b / 1024, t / 1024, a / 1024, z / 1024 }')"
-    echo "  Temperatura:  ${peak_t} °C como máximo"
+    echo "  CPU:          $((sum_ca / (n > 0 ? n : 1))) % de media, ${peak_ca} % como máximo (de los $(nproc) hilos)"
+    echo "  GPU:          $((sum_gp / (n > 0 ? n : 1))) % de media, ${peak_gp} % como máximo"
+    echo "  Temperatura:  CPU ${peak_ct} °C, GPU ${peak_t} °C como máximo"
     if [ "$events" -gt 0 ]; then
         echo "  ${R}Errores de memoria de la GPU: $events${N}"
         sudo journalctl -k --since "$start" --no-pager 2>/dev/null | grep -iE "$P_GPUMEM" | tail -5 | sed 's/^/    /'
@@ -1269,6 +1323,8 @@ mem_watch() {
     local ram_short=0 vram_full=0
     { [ "$min_ra" -lt 512 ] || [ "$peak_s" -gt $(( ${su0:-0} + 512 )) ]; } && ram_short=1
     [ "$vt" -gt 0 ] && [ $((peak_v * 100 / vt)) -ge 90 ] && vram_full=1
+    [ "$st" -gt 0 ] && [ "$peak_s" -ge $((st - 64)) ] &&
+        echo "  → La swap se llenó: si el juego pide más memoria, el sistema lo cierra. Agrándala (menú 16 → zram)."
     if [ $ram_short = 1 ] && [ $vram_full = 1 ]; then
         echo "  → Van justas las dos (VRAM llena y Linux tirando de swap): moverlas no ayuda, la memoria total no da"
         echo "    para más con esta calidad. Baja texturas o calidad en el juego. Sin errores de la GPU, puede valer así."
@@ -1277,6 +1333,13 @@ mem_watch() {
         echo "    para dar esa memoria a Linux, y la calidad de texturas del juego."
     elif [ $vram_full = 1 ]; then
         echo "  → La VRAM se llenó y a Linux le sobra RAM: sube la VRAM (menú 16 → vram) o baja la resolución del juego."
+    fi
+    if [ $n -gt 0 ] && [ $((n_gpu * 100 / n)) -ge 50 ]; then
+        echo "  → La GPU va al máximo la mayor parte del tiempo: ella marca los FPS. Para ganar, baja resolución o"
+        echo "    calidad gráfica (o usa reescalado: TSR, FSR); la CPU no es el límite."
+    elif [ $n -gt 0 ] && [ $((n_cpu * 100 / n)) -ge 30 ]; then
+        echo "  → Un hilo de la CPU va lleno mientras la GPU espera: el límite es la CPU (un solo hilo). Bajar gráficos"
+        echo "    apenas ayuda; baja lo que carga la CPU (distancia de visión, multitudes, físicas) o limita los FPS."
     fi
     echo "  Registro completo: $csv"
 }
@@ -2189,7 +2252,7 @@ menu() {
    1) Revisión completa de este arranque (y guarda el informe)
    2) Revisar el arranque anterior (tras un cuelgue o un apagado forzado)
    3) Vigilar el kernel en directo (mientras juegas o copias ficheros; Ctrl+C vuelve aquí)
-   4) Vigilar la memoria en directo: VRAM, RAM, swap, temperatura y qué gasta más (Ctrl+C vuelve aquí)
+   4) Vigilar en directo: CPU, GPU, VRAM, RAM, swap, temperatura y qué gasta más (Ctrl+C vuelve aquí)
  Pantalla y sesión gráfica
    5) Ver en qué modo arranca la consola y qué sesión hay ahora
    6) Pantalla en negro: recuperar la imagen (cambia de consola y vuelve; no cierra nada)
