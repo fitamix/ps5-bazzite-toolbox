@@ -5,6 +5,13 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+## [1.0.2] - 2026-10-31
+
+### Cambiado
+- La contraseña de `sudo` se pide solo al elegir algo que la necesita (no al abrir el menú), una vez por sesión:
+  después se mantiene hasta cerrar la caja de herramientas. Añadir/quitar juegos, la colección, ver lo que ocupa
+  cada carpeta y actualizarla no la piden.
+
 ## [1.0.1] - 2026-10-31
 
 ### Corregido
@@ -14,9 +21,6 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 ### Cambiado
 - Al instalarla pregunta si borra el fichero descargado (salvo que esté dentro de un repositorio git).
 - Solo ofrece cambiar los atajos si de verdad apuntan a otra copia.
-- La contraseña de `sudo` se pide solo al elegir algo que la necesita (no al abrir el menú), una vez por sesión:
-  después se mantiene hasta cerrar la caja de herramientas. Añadir/quitar juegos, la colección, ver lo que ocupa
-  cada carpeta y actualizarla no la piden.
 
 ## [1.0.0] - 2026-10-31
 
@@ -45,6 +49,7 @@ Primera versión publicada.
 - Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
-[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.0.1...HEAD
+[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/fitamix/ps5-bazzite-toolbox/releases/tag/v1.0.0
