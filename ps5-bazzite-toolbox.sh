@@ -31,7 +31,7 @@
 # Setup blocks: locale cmdline wifi updates vram zram fans warmreboot hdmi bt disk brave nas bios media esde portproton atajos
 set -uo pipefail
 
-TOOLBOX_VERSION=1.0.0                    # bump on every release (see CHANGELOG.md and release.sh)
+TOOLBOX_VERSION=1.0.1                    # bump on every release (see CHANGELOG.md and release.sh)
 TOOLBOX_REPO=fitamix/ps5-bazzite-toolbox
 TOOLBOX_BIN=$HOME/.local/bin/ps5-bazzite-toolbox                      # where --install puts it
 TOOLBOX_DESKTOP=$HOME/.local/share/applications/ps5-bazzite-toolbox.desktop
@@ -1471,11 +1471,18 @@ install_self() {
     remember INSTALL_ASKED yes
     echo "${G}Instalada.$N Ábrela con: ps5-bazzite-toolbox (o desde el menú de aplicaciones)."
     case :$PATH: in *":$HOME/.local/bin:"*) ;; *) echo "  ($HOME/.local/bin no está en tu PATH: usa $TOOLBOX_BIN)" ;; esac
-    if atajos_used; then
-        echo "Tus atajos (Dolphin, «espacio», «Colección PortProton») apuntan a $TOOLBOX_SELF."
-        if yesno "¿Los cambio para que usen la copia instalada?" S; then TOOLBOX_SELF=$TOOLBOX_BIN; apply_atajos; fi
+    local src=$TOOLBOX_SELF               # the downloaded file (TOOLBOX_SELF changes below, for the shortcuts)
+    TOOLBOX_SELF=$TOOLBOX_BIN
+    if atajos_used && ! check_atajos; then
+        echo "Tus atajos (Dolphin, «espacio», «Colección PortProton») usan otra copia de la caja de herramientas."
+        yesno "¿Los cambio para que usen la instalada ($TOOLBOX_BIN)?" S && apply_atajos
     fi
-    echo "Puedes borrar $TOOLBOX_SELF si quieres: ya no hace falta."
+    TOOLBOX_SELF=$src
+    # The downloaded file is no longer needed; a copy inside a git checkout is someone's working copy: leave it
+    if ! git -C "$(dirname "$src")" rev-parse --is-inside-work-tree >/dev/null 2>&1 &&
+        yesno "¿Borro el fichero descargado ($src)? Ya no hace falta." S; then
+        rm -f "$src" && echo "Borrado."
+    fi
 }
 uninstall_self() {
     [ -f "$TOOLBOX_BIN" ] || [ -f "$TOOLBOX_DESKTOP" ] || { echo "No está instalada."; return 0; }

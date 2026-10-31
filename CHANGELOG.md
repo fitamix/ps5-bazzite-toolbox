@@ -5,6 +5,16 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+## [1.0.1] - 2026-10-31
+
+### Corregido
+- Al instalarla (`--install`, opción 19) y cambiar los atajos, decía que se podía borrar
+  `~/.local/bin/ps5-bazzite-toolbox`, que es la copia instalada. **No la borres**; si lo hiciste, vuelve a instalarla.
+
+### Cambiado
+- Al instalarla pregunta si borra el fichero descargado (salvo que esté dentro de un repositorio git).
+- Solo ofrece cambiar los atajos si de verdad apuntan a otra copia.
+
 ## [1.0.0] - 2026-10-31
 
 Primera versión publicada.
@@ -32,5 +42,6 @@ Primera versión publicada.
 - Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
-[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.0.0...HEAD
+[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/fitamix/ps5-bazzite-toolbox/releases/tag/v1.0.0
