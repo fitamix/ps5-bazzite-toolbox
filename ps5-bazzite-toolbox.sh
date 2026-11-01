@@ -1763,6 +1763,7 @@ NAME=$(printf '%s' "$NAME" | tr -d '`"'"'"'!/')
 PPDB="$EXE.ppdb"
 SH="$PP/steam_scripts/$NAME.sh"
 iso_cur() { awk -F'\t' -v e="$EXE" '$2 == e { l = $1 } END { print (l ? l : "normal") }' "$ISO_LIST" 2>/dev/null || echo normal; }
+new_pfx() { printf '%s' "$NAME" | tr ' ' '_' | tr -cd 'A-Za-z0-9_-' | tr '[:lower:]' '[:upper:]' | cut -c1-40; }   # PortProton upper-cases them
 pfx_of() { sed -n 's/^export PW_PREFIX_NAME="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$PPDB" 2>/dev/null | tail -1 || true; }
 CUR=normal LEVEL=normal UNDO=()
 if [ -n "$TOOLBOX_CMD" ] && [ -n "$ISO_LIST" ] && [ -n "$ISO_SB" ]; then
@@ -1802,7 +1803,7 @@ if [ "$LEVEL" != "$CUR" ] && { [ "$LEVEL" = normal ] || [ "$CUR" = normal ]; }; 
             mv "$PP/data/prefixes/$PFX" "$ISO_SB/data/prefixes/" && UNDO+=("mv '$ISO_SB/data/prefixes/$PFX' '$PP/data/prefixes/'")
         else
             [ -n "$PFX" ] && say "Estaba en el prefijo $PFX, que se queda en tu PortProton con sus partidas (cópialas a mano si las quieres)."
-            PFX=$(printf '%s' "$NAME" | tr ' ' '_' | tr -cd 'A-Za-z0-9_-' | cut -c1-40)
+            PFX=$(new_pfx)
             say "Prefijo aislado nuevo: $PFX."
         fi
     elif [ -n "$PFX" ] && [ -d "$ISO_SB/data/prefixes/$PFX" ]; then
@@ -1815,7 +1816,7 @@ if [ "$LEVEL" != "$CUR" ] && { [ "$LEVEL" = normal ] || [ "$CUR" = normal ]; }; 
 fi
 PPDB_NEW=1; [ ! -f "$PPDB" ] || PPDB_NEW=0       # a new game's .ppdb goes too if it is not added after all
 if [ "$LEVEL" != normal ]; then
-    [ -n "$PFX" ] || PFX=$(printf '%s' "$NAME" | tr ' ' '_' | tr -cd 'A-Za-z0-9_-' | cut -c1-40)
+    [ -n "$PFX" ] || PFX=$(new_pfx)
     if grep -qs '^export PW_PREFIX_NAME=' "$PPDB"; then sed -i "s|^export PW_PREFIX_NAME=.*|export PW_PREFIX_NAME=\"$PFX\"|" "$PPDB"
     else printf 'export PW_PREFIX_NAME="%s"\n' "$PFX" >>"$PPDB"; fi
 fi
@@ -1868,6 +1869,7 @@ if [ "$LEVEL" != normal ]; then
     say "probarlo (un programa de X11 puede leer lo que se teclea en otras ventanas X11), y no le des tu contraseña."
 fi
 if [ $TEST = 1 ] && ask "¿Abrirlo ahora?" "$([ -f "$PPDB" ] && [ "$LEVEL" = "$CUR" ] && echo N || echo S)"; then
+  while :; do
     PPLS=$(ls -A "$PP")
     if [ "$LEVEL" = normal ]; then flatpak run "$PP_ID" "$EXE" >/dev/null 2>&1 || true
     else bash "$TOOLBOX_CMD" --run "$EXE" --gui --level "$LEVEL" || true; fi
@@ -1880,18 +1882,21 @@ if [ $TEST = 1 ] && ask "¿Abrirlo ahora?" "$([ -f "$PPDB" ] && [ "$LEVEL" = "$C
             fi
         fi
     fi
-    if ! ask "¿Ha arrancado bien y quieres seguir?" S; then
-        undo_level
-        if [ $NEW_PFX = 1 ] && [ -d "$ISO_SB/data/prefixes/$PFX" ] && ask "¿Borro el prefijo aislado que ha creado la prueba ($PFX)?" S; then
-            rm -rf "${ISO_SB:?}/data/prefixes/$PFX"
-        fi
-        if [ "$CUR" = normal ] && [ -z "$existing" ] && [ ! -f "$SH" ] && ask "¿No te convence? ¿Borro la carpeta del juego ($GTOP, $(du -sh "$GTOP" 2>/dev/null | cut -f1))?" N; then
-            read -r -p "  Para confirmar, escribe el nombre de la carpeta ($(basename "$GTOP")): " c || c=
-            if [ "$c" = "$(basename "$GTOP")" ]; then rm -rf -- "$GTOP" && say "  Borrada."; else say "  No coincide: no borro nada."; fi
-        fi
-        [ $PPDB_NEW = 0 ] || rm -f "$PPDB"
-        say "Parado. $([ $CHANGE = 1 ] && echo "No se ha cambiado nada." || echo "No se ha añadido nada.")"; exit 0
+    # PortProton closes after preparing a new prefix (recommended libraries...): "r" opens it again
+    ans=s
+    [ $YES = 1 ] || { read -r -p "¿Ha arrancado bien? (s = sí, sigue · r = vuelve a abrirlo · n = no, para) [S/r/n] " ans || ans=; }
+    case ${ans:-s} in [rR]*) continue ;; [nN]*) ;; *) break ;; esac              # n: stop and undo
+    undo_level
+    if [ $NEW_PFX = 1 ] && [ -d "$ISO_SB/data/prefixes/$PFX" ] && ask "¿Borro el prefijo aislado que ha creado la prueba ($PFX)?" S; then
+        rm -rf "${ISO_SB:?}/data/prefixes/$PFX"
     fi
+    if [ "$CUR" = normal ] && [ -z "$existing" ] && [ ! -f "$SH" ] && ask "¿No te convence? ¿Borro la carpeta del juego ($GTOP, $(du -sh "$GTOP" 2>/dev/null | cut -f1))?" N; then
+        read -r -p "  Para confirmar, escribe el nombre de la carpeta ($(basename "$GTOP")): " c || c=
+        if [ "$c" = "$(basename "$GTOP")" ]; then rm -rf -- "$GTOP" && say "  Borrada."; else say "  No coincide: no borro nada."; fi
+    fi
+    [ $PPDB_NEW = 0 ] || rm -f "$PPDB"
+    say "Parado. $([ $CHANGE = 1 ] && echo "No se ha cambiado nada." || echo "No se ha añadido nada.")"; exit 0
+  done
 fi
 [ -z "$ISO_LIST" ] || {                    # keep the game and its level ("Mis juegos" lists them)
     tmp=$(mktemp); awk -F'\t' -v e="$EXE" '$2 != e' "$ISO_LIST" 2>/dev/null >"$tmp" || true

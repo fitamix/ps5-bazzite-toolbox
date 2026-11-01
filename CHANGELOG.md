@@ -13,6 +13,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
   (y la red en el nivel 3); tu PortProton queda en solo lectura y el juego corre en una copia aparte con su propio
   prefijo. Se prueba igual que siempre (abre, pruebas, «¿ha ido bien?») y Steam y el escritorio lo lanzan con `--run`,
   que no pregunta nada: en Steam es un juego más. Antes de probarlo da el enlace de VirusTotal con su huella.
+- Tras la prueba, «¿Ha arrancado bien?» admite `r` para volver a abrirlo (PortProton se cierra después de preparar
+  un prefijo nuevo).
 - **Mis juegos** (opción 11, `--games`): una sola lista, por nombre, de tus juegos de PortProton con su nivel (también
   los de antes), para cambiar su aislamiento o desinstalarlos.
 - **Cambiar aislamiento** (`--change-level`): mueve su prefijo, lo prueba y reescribe sus accesos y su script de

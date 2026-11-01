@@ -160,7 +160,8 @@ En Dolphin (tras el bloque `atajos`), botón derecho sobre un `.exe`: **«Instal
 
 Luego lo abre con PortProton en el escritorio, con ese aislamiento, para que lo configures y lo pruebes, y pregunta si
 ha ido bien: si sí, sigue (accesos, Steam, colección); si no, para y deja todo como estaba (borra lo que creó la
-prueba y, si quieres, la carpeta del juego).
+prueba y, si quieres, la carpeta del juego). Con `r` lo vuelve a abrir: PortProton se cierra tras preparar un prefijo
+nuevo (las bibliotecas recomendadas, que copia de su prefijo base, sin red), y hay que darle a iniciar otra vez.
 
 Por qué: el Flatpak de PortProton puede ver **todo el sistema** (permiso `host`), así que un programa de Windows
 lanzado con él podría borrar o cifrar tu carpeta personal, el NAS o las partidas de otros juegos. Un juego aislado se
