@@ -218,7 +218,7 @@ novedades, y el historial completo en [CHANGELOG.md](CHANGELOG.md). La numeraci�
 
 Al abrir el menú, la caja de herramientas mira (en 4 segundos como mucho, y sin decir nada si no hay red) si hay
 una versión más nueva y lo avisa. La opción 19 (`--self-update`) muestra las novedades, pregunta, descarga,
-comprueba el SHA-256, guarda la copia anterior como `….vX.Y.Z` y sustituye la instalada (o, si no la instalaste, el fichero que ejecutas). Tus respuestas
+comprueba el SHA-256, guarda la copia anterior como `….vX.Y.Z` (solo la última) y sustituye la instalada (o, si no la instalaste, el fichero que ejecutas). Tus respuestas
 guardadas en `~/.config/ps5-bazzite-toolbox.conf` no se tocan.
 
 ## Cosas que se hacen a mano

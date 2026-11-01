@@ -15,6 +15,7 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 ### Cambiado
 - El menú se renumera desde la 13: ver lo que ocupa cada carpeta es la 14, los ajustes la 15–17, actualizar la
   imagen la 18, actualizar la caja de herramientas la 19 e instalarla la 20.
+- Al actualizarla (opción 19) guarda solo la copia de la versión anterior (`….vX.Y.Z`), no todas.
 
 ## [1.1.0] - 2026-10-31
 

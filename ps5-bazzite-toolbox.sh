@@ -1461,6 +1461,7 @@ self_update() {                          # self_update [TAG] -> download, check 
         { echo "Falló la descarga." >&2; rm -rf "$tmp"; return 1; }
     (cd "$tmp" && sha256sum -c ps5-bazzite-toolbox.sh.sha256) || { echo "${R}El SHA-256 no coincide: no cambio nada.$N" >&2; rm -rf "$tmp"; return 1; }
     bash -n "$tmp/ps5-bazzite-toolbox.sh" || { echo "${R}El fichero descargado no es válido: no cambio nada.$N" >&2; rm -rf "$tmp"; return 1; }
+    rm -f "$target".v*                   # keep only the copy of the version being replaced
     [ -f "$target" ] && cp -p "$target" "$target.v$TOOLBOX_VERSION"
     mkdir -p "$(dirname "$target")"
     install -m 755 "$tmp/ps5-bazzite-toolbox.sh" "$target" || { echo "No puedo escribir $target." >&2; rm -rf "$tmp"; return 1; }
