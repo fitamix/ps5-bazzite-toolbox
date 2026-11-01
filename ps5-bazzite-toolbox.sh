@@ -23,6 +23,7 @@
 #   bash ps5-bazzite-toolbox.sh --screen                # black screen: switch to another console and back
 #   bash ps5-bazzite-toolbox.sh --add-game [Juego.exe]  # add a Windows game to PortProton and Steam
 #   bash ps5-bazzite-toolbox.sh --remove-game [Juego.exe|"Nombre"]   # remove it (Steam, PortProton, disk), asking each step
+#   bash ps5-bazzite-toolbox.sh --run Juego.exe          # start a game as --add-game left it (isolated or not); asks nothing
 #   bash ps5-bazzite-toolbox.sh --test-game [Juego.exe]  # try a doubtful game isolated (no home, NAS or network)
 #   bash ps5-bazzite-toolbox.sh --pp-collection [--dry-run|--yes]   # sync Steam's "PortProton" collection
 #   bash ps5-bazzite-toolbox.sh --space [DIR]           # space taken by each folder in DIR (also the "espacio" command)
@@ -32,7 +33,7 @@
 # Setup blocks: locale cmdline wifi updates vram zram fans warmreboot hdmi bt disk brave nas bios media esde portproton atajos
 set -uo pipefail
 
-TOOLBOX_VERSION=1.2.0                    # bump on every release (see CHANGELOG.md and release.sh)
+TOOLBOX_VERSION=1.3.0                    # bump on every release (see CHANGELOG.md and release.sh)
 TOOLBOX_REPO=fitamix/ps5-bazzite-toolbox
 TOOLBOX_BIN=$HOME/.local/bin/ps5-bazzite-toolbox                      # where --install puts it
 TOOLBOX_DESKTOP=$HOME/.local/share/applications/ps5-bazzite-toolbox.desktop
@@ -57,7 +58,7 @@ while [ $# -gt 0 ]; do
         --install) MODE=install; shift ;;
         --uninstall) MODE=uninstall; shift ;;
         -V|--version) echo "ps5-bazzite-toolbox $TOOLBOX_VERSION"; exit 0 ;;
-        --add-game|--remove-game|--test-game|--pp-collection|--space)       # the rest of the line goes to that tool
+        --add-game|--remove-game|--test-game|--run|--pp-collection|--space)       # the rest of the line goes to that tool
                   MODE=${1#--}; shift; ARGS=("$@"); break ;;
         -h|--help) awk 'NR > 1 { if (!/^#/) exit; sub(/^# ?/, ""); print }' "$0"; exit 0 ;;
         *) echo "Opción desconocida: $1" >&2; exit 2 ;;
@@ -1688,6 +1689,9 @@ pp_add_game_script() { cat <<'__PP_ADD_GAME__'
 #   3. Steam:     the same steam_scripts/<Name>.sh PortProton makes, added to Steam as a non-Steam game
 #                 (shortcuts.vdf; Steam must be closed or it overwrites the file when it quits).
 #   4. Collection: the toolbox's "PortProton" collection sync (COLLECTION_SCRIPT).
+# Isolation (asked first): normal, or isolated with/without network (the toolbox's --run, TOOLBOX_CMD). An isolated
+# game has its own prefix in the toolbox's copy of PortProton (ISO_SB), no entry in PortProton's own list (it would
+# start it unisolated) and its Steam script calls TOOLBOX_CMD --run. Changing the level moves its prefix (asking).
 # Nothing is overwritten without asking; shortcuts.vdf is backed up first. Undo: delete the .desktop files and
 # the .sh, and in Steam remove the game (or restore shortcuts.vdf.bak-<date>).
 set -euo pipefail
@@ -1696,6 +1700,7 @@ PP_ID=ru.linux_gaming.PortProton
 PP="${PORT_WINE_PATH:-$HOME/.var/app/$PP_ID}"
 STEAM_DIR="${STEAM_DIR:-$HOME/.local/share/Steam}"
 COLLECTION_SCRIPT="${COLLECTION_SCRIPT:-$HOME/portproton-collection.sh}"
+TOOLBOX_CMD=${TOOLBOX_CMD:-} ISO_LIST=${ISO_LIST:-} ISO_SB=${ISO_SB:-}
 EXE= NAME= TEST=1 YES=0
 
 say() { printf '%s\n' "$*"; }
@@ -1747,15 +1752,85 @@ NAME=$(printf '%s' "$NAME" | tr -d '`"'"'"'!/')
 [ -n "$NAME" ] || { say "Nombre vacío." >&2; exit 1; }
 [ -n "$existing" ] && say "PortProton ya tiene un acceso para este exe: $(basename "$existing")"
 
-# --- 1. test ----------------------------------------------------------------------------------------
+# --- isolation --------------------------------------------------------------------------------------
 PPDB="$EXE.ppdb"
+SH="$PP/steam_scripts/$NAME.sh"
+iso_cur() { awk -F'\t' -v e="$EXE" '$2 == e { l = $1 } END { print (l ? l : "normal") }' "$ISO_LIST" 2>/dev/null || echo normal; }
+pfx_of() { sed -n 's/^export PW_PREFIX_NAME="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$PPDB" 2>/dev/null | tail -1 || true; }
+CUR=normal LEVEL=normal UNDO=()
+if [ -n "$TOOLBOX_CMD" ] && [ -n "$ISO_LIST" ] && [ -n "$ISO_SB" ]; then
+    CUR=$(iso_cur)
+    section "Cómo se ejecuta"
+    say "1) Normal: con acceso a todo (tu carpeta personal, el NAS, tus otros juegos). Para juegos de tiendas fiables."
+    say "2) Aislado con red: sin tu carpeta personal, el NAS ni tus otros juegos; tu PortProton en solo lectura,"
+    say "   con un prefijo propio. Con red (juegos online, launchers)."
+    say "3) Aislado sin red: lo mismo, sin red. Lo más seguro para un juego de origen dudoso."
+    say "Los aislados no van en la lista de juegos de PortProton (desde ahí se abrirían sin aislar): escritorio y Steam."
+    case $CUR in red) def=2 ;; sin-red) def=3 ;; *) if [ -n "$existing" ] || [ -f "$SH" ]; then def=1; else def=2; fi ;; esac
+    [ "$CUR" != normal ] || [ -z "$existing" ] || say "Ahora mismo es normal."
+    [ "$CUR" = normal ] || say "Ahora mismo: aislado $([ "$CUR" = red ] && echo con red || echo sin red)."
+    c=$def
+    [ $YES = 1 ] || { read -r -p "¿Cuál? [1-3, Intro = $def] " c || true; c=${c:-$def}; }
+    case $c in 1) LEVEL=normal ;; 3) LEVEL=sin-red ;; *) LEVEL=red ;; esac
+fi
+GTOP=$(dirname "$EXE")
+while [[ $(basename "$GTOP") =~ ^([Bb]in(aries)?|[Ww]in(32|64)|x64|x86|[Gg]ame|[Rr]etail)$ ]]; do GTOP=$(dirname "$GTOP"); done
+[ -d "$GTOP/../Engine" ] && GTOP=$(dirname "$GTOP")
+if [ "$LEVEL" != normal ]; then
+    case $HOME/ in "$GTOP"/*) say "El juego está directamente en $GTOP: muévelo a su propia carpeta (p. ej. ~/Juegos/Juego/) para aislarlo." >&2; exit 1 ;; esac
+    case $GTOP/ in "$PP"/*|/var/mnt/*|/mnt/*|/run/media/*)
+        say "Para aislarlo, la carpeta del juego ($GTOP) tiene que ser una carpeta local propia (p. ej. ~/Juegos/Juego/)," >&2
+        say "no PortProton, el NAS ni un disco externo: queda escribible para él. Cópialo allí y añádelo desde la copia." >&2; exit 1 ;;
+    esac
+fi
+# The prefix follows the level: normal ones live in PortProton, isolated ones in ISO_SB (moved, asking).
+PFX=$(pfx_of)
+if [ "$LEVEL" != "$CUR" ] && { [ "$LEVEL" = normal ] || [ "$CUR" = normal ]; }; then
+    [ -f "$PPDB" ] && cp -p "$PPDB" "$PPDB.bak-iso" && UNDO+=("mv -f '$PPDB.bak-iso' '$PPDB'")
+    mkdir -p "$ISO_SB/data/prefixes"
+    if [ "$LEVEL" != normal ]; then
+        if [ -n "$PFX" ] && [ "$PFX" != DEFAULT ] && [ "$PFX" != DOTNET ] && [ -d "$PP/data/prefixes/$PFX" ] &&
+            ask "Su prefijo $PFX (con sus partidas) está en tu PortProton. ¿Lo paso a la copia aislada? (si otro juego lo usa, dejará de encontrarlo)" S; then
+            mv "$PP/data/prefixes/$PFX" "$ISO_SB/data/prefixes/" && UNDO+=("mv '$ISO_SB/data/prefixes/$PFX' '$PP/data/prefixes/'")
+        else
+            [ -n "$PFX" ] && say "Estaba en el prefijo $PFX, que se queda en tu PortProton con sus partidas (cópialas a mano si las quieres)."
+            PFX=$(printf '%s' "$NAME" | tr ' ' '_' | tr -cd 'A-Za-z0-9_-' | cut -c1-40)
+            say "Prefijo aislado nuevo: $PFX."
+        fi
+    elif [ -n "$PFX" ] && [ -d "$ISO_SB/data/prefixes/$PFX" ]; then
+        if [ -d "$PP/data/prefixes/$PFX" ]; then
+            say "Tu PortProton ya tiene un prefijo $PFX: el aislado se queda en $ISO_SB/data/prefixes/$PFX."
+        elif ask "Su prefijo aislado $PFX (con sus partidas) ¿pasa a tu PortProton? Lo que el juego haya dejado en él dejará de estar aislado" S; then
+            mv "$ISO_SB/data/prefixes/$PFX" "$PP/data/prefixes/" && UNDO+=("mv '$PP/data/prefixes/$PFX' '$ISO_SB/data/prefixes/'")
+        fi
+    fi
+fi
+if [ "$LEVEL" != normal ]; then
+    [ -n "$PFX" ] || PFX=$(printf '%s' "$NAME" | tr ' ' '_' | tr -cd 'A-Za-z0-9_-' | cut -c1-40)
+    if grep -qs '^export PW_PREFIX_NAME=' "$PPDB"; then sed -i "s|^export PW_PREFIX_NAME=.*|export PW_PREFIX_NAME=\"$PFX\"|" "$PPDB"
+    else printf 'export PW_PREFIX_NAME="%s"\n' "$PFX" >>"$PPDB"; fi
+fi
+undo_level() {                            # stopped after changing the level: put the prefix and .ppdb back
+    local i
+    for ((i = ${#UNDO[@]} - 1; i >= 0; i--)); do eval "${UNDO[$i]}"; done
+    [ ${#UNDO[@]} = 0 ] || say "Deshecho el cambio de aislamiento (prefijo y .ppdb como estaban)."
+}
+
+# --- 1. test ----------------------------------------------------------------------------------------
 section "1. Probar el juego con PortProton"
 say "Se abre PortProton con este exe: elige la versión de Proton si hace falta, pulsa Iniciar, prueba el juego"
 say "y ciérralo (el juego y la ventana de PortProton). PortProton guarda sus ajustes en $(basename "$PPDB")."
-if [ $TEST = 1 ] && ask "¿Abrirlo ahora?" "$([ -f "$PPDB" ] && echo N || echo S)"; then
-    flatpak run "$PP_ID" "$EXE" >/dev/null 2>&1 || true
-    ask "¿Ha arrancado bien y quieres seguir?" S || { say "Parado. No se ha creado nada."; exit 0; }
+[ "$LEVEL" = normal ] || say "Se abre aislado ($([ "$LEVEL" = red ] && echo con red || echo sin red)), con el prefijo $PFX: elígelo si te pregunta."
+if [ $TEST = 1 ] && ask "¿Abrirlo ahora?" "$([ -f "$PPDB" ] && [ "$LEVEL" = "$CUR" ] && echo N || echo S)"; then
+    if [ "$LEVEL" = normal ]; then flatpak run "$PP_ID" "$EXE" >/dev/null 2>&1 || true
+    else bash "$TOOLBOX_CMD" --run "$EXE" --gui --level "$LEVEL" || true; fi
+    ask "¿Ha arrancado bien y quieres seguir?" S || { undo_level; say "Parado. No se ha creado nada."; exit 0; }
 fi
+[ -z "$ISO_LIST" ] || {                    # keep the level (normal = not listed)
+    tmp=$(mktemp); awk -F'\t' -v e="$EXE" '$2 != e' "$ISO_LIST" 2>/dev/null >"$tmp" || true
+    [ "$LEVEL" = normal ] || printf '%s\t%s\n' "$LEVEL" "$EXE" >>"$tmp"
+    mkdir -p "$(dirname "$ISO_LIST")"; mv "$tmp" "$ISO_LIST"; rm -f "$PPDB.bak-iso"
+}
 [ -f "$PPDB" ] || { say "No hay $PPDB: abre el juego una vez con PortProton antes (sin --no-test)." >&2; exit 1; }
 # shellcheck disable=SC1090
 PORTPROTON_NAME=$(. "$PPDB" >/dev/null 2>&1; echo "${PORTPROTON_NAME:-}")
@@ -1765,6 +1840,8 @@ say "Ajustes de PortProton: Proton ${PW_WINE_USE:-por defecto}, nombre interno $
 # icon: PortProton names it after PORTPROTON_NAME, spaces -> _, without ! % $ & <
 png=${PORTPROTON_NAME:-$(basename "${EXE%.*}")}; png=${png// /_}; png=$(printf '%s' "$png" | tr -d '!%$&<')
 ICON="$PP/data/img/$png.png"
+# an isolated run leaves the icon in the copy, which the next sync clears: keep it next to the others
+[ -f "$ICON" ] || [ ! -f "$ISO_SB/data/img/$png.png" ] || cp "$ISO_SB/data/img/$png.png" "$ICON"
 [ -f "$ICON" ] || { say "(sin icono propio en data/img: se usa el de PortProton)"; ICON=$PP_ID; }
 
 # --- language ---------------------------------------------------------------------------------------
@@ -1830,9 +1907,21 @@ fi
 DESKTOP_FILE="$PP/$NAME.desktop"
 DESK_DIR=$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")
 section "2. Accesos directos"
-say "Crea «$NAME.desktop» en la carpeta de PortProton (su lista de juegos) y en el escritorio ($DESK_DIR),"
-say "igual que los que hace PortProton. Deshacer: borra los dos ficheros."
-if ask "¿Crearlos?" S; then
+if [ "$LEVEL" != normal ]; then
+    say "Aislado: va solo en el escritorio ($DESK_DIR/$NAME.desktop), que lo abre aislado. Deshacer: borra ese fichero."
+    if [ -n "$existing" ] && ask "  Está en la lista de juegos de PortProton, que lo abriría SIN aislar. ¿Lo quito de ahí?" S; then
+        rm -f "$existing"; say "  Quitado: $(basename "$existing")"
+    fi
+    if ask "¿Crear el acceso del escritorio?" S; then
+        mkdir -p "$DESK_DIR"
+        printf '[Desktop Entry]\nName=%s\nComment=Aislado (ps5-bazzite-toolbox)\nExec=bash "%s" --run "%s"\nType=Application\nCategories=Game\nIcon=%s\n' \
+            "$NAME" "$TOOLBOX_CMD" "$EXE" "$ICON" >"$DESK_DIR/$NAME.desktop"
+        chmod +x "$DESK_DIR/$NAME.desktop"
+        say "  $DESK_DIR/$NAME.desktop"
+    fi
+elif say "Crea «$NAME.desktop» en la carpeta de PortProton (su lista de juegos) y en el escritorio ($DESK_DIR),"
+    say "igual que los que hace PortProton. Deshacer: borra los dos ficheros."
+    ask "¿Crearlos?" S; then
     {
         echo "[Desktop Entry]"
         echo "Name=$NAME"
@@ -1855,21 +1944,36 @@ if ask "¿Crearlos?" S; then
 fi
 
 # --- 3. Steam ---------------------------------------------------------------------------------------
-SH="$PP/steam_scripts/$NAME.sh"
 section "3. Steam"
-say "Crea $SH (lo que lanza Steam, igual que el de PortProton) y lo añade a Steam como juego no-Steam"
-say "«$NAME». Steam tiene que estar cerrado: al cerrarse reescribe su lista y borraría el juego nuevo."
-say "Deshacer: quitar el juego en Steam (o restaurar shortcuts.vdf.bak-<fecha>) y borrar el .sh."
-if ask "¿Añadirlo a Steam?" S; then
+write_sh() {                               # what Steam runs: PortProton's own way, or the toolbox's isolated --run
     mkdir -p "$PP/steam_scripts"
-    cat > "$SH" <<EOF
+    if [ "$LEVEL" = normal ]; then
+        cat > "$SH" <<EOF
 #!/usr/bin/env bash
 export LD_PRELOAD=
 export START_FROM_STEAM=1
 export START_FROM_FLATPAK=1
 "$PP/data/scripts/start.sh" "$EXE" "\$@"
 EOF
+    else
+        cat > "$SH" <<EOF
+#!/usr/bin/env bash
+# Aislado ($LEVEL) por ps5-bazzite-toolbox: lo lanza en el Flatpak de PortProton con menos permisos.
+exec bash "$TOOLBOX_CMD" --run "$EXE"
+EOF
+    fi
     chmod u+x "$SH"
+}
+if [ -f "$SH" ] && [ "$LEVEL" != "$CUR" ]; then
+    write_sh; say "Ya estaba en Steam: $SH lo lanza ahora $([ "$LEVEL" = normal ] && echo normal || echo aislado). Steam no cambia."
+fi
+say "Crea $SH (lo que lanza Steam$([ "$LEVEL" = normal ] && echo ", igual que el de PortProton" || echo ": la caja de herramientas, aislado")) y lo añade a Steam como juego no-Steam"
+say "«$NAME». Steam tiene que estar cerrado: al cerrarse reescribe su lista y borraría el juego nuevo."
+say "Deshacer: quitar el juego en Steam (o restaurar shortcuts.vdf.bak-<fecha>) y borrar el .sh."
+[ "$LEVEL" = normal ] || [ "$TOOLBOX_CMD" = "$HOME/.local/bin/ps5-bazzite-toolbox" ] ||
+    say "Ojo: Steam llamará a $TOOLBOX_CMD; si lo mueves o lo borras, el juego no arranca (instálala: opción 20)."
+if ask "¿Añadirlo a Steam?" S; then
+    write_sh
     if pgrep -x steam >/dev/null 2>&1; then
         if ask "  Steam está abierto. ¿Cerrarlo ahora?" S; then
             steam -shutdown >/dev/null 2>&1 || true
@@ -2216,7 +2320,8 @@ pp_remove_game_script() { cat <<'__PP_REMOVE_GAME__'
 #   2. PortProton: its .desktop (PortProton's list, the Desktop, the app menu) and steam_scripts/<Name>.sh.
 #   3. Disk:       the game's folder (asks which one, shows the size, and wants the folder's name typed).
 #   4. Collection: the toolbox's "PortProton" collection sync (COLLECTION_SCRIPT), so the entry leaves it too.
-# Saved games inside PortProton's prefix (drive_c/users/...) are kept.
+# Saved games inside PortProton's prefix (drive_c/users/...) are kept. An isolated game (ISO_LIST) is listed too;
+# its own prefix in the toolbox's copy (ISO_SB) is offered for deletion at the end, "no" by default.
 # Usage: remove-game [Game.exe | "Name"]   (no argument: lists the games PortProton knows and asks)
 set -euo pipefail
 
@@ -2224,6 +2329,7 @@ PP_ID=ru.linux_gaming.PortProton
 PP="${PORT_WINE_PATH:-$HOME/.var/app/$PP_ID}"
 STEAM_DIR="${STEAM_DIR:-$HOME/.local/share/Steam}"
 ARG=${1:-}
+ISO_LIST=${ISO_LIST:-} ISO_SB=${ISO_SB:-}
 
 say() { printf '%s\n' "$*"; }
 ask() {                                   # ask "question" [default S|N] -> 0 for yes
@@ -2237,17 +2343,24 @@ exe_of() { sed -n 's/^Exec=.*PortProton "\(.*\)"$/\1/p' "$1" | head -1; }
 
 # --- which game ---------------------------------------------------------------------------------------
 mapfile -t DESKS < <(find "$PP" -maxdepth 1 -name '*.desktop' ! -name 'PortProton.desktop' | sort)
+# isolated games have no entry in PortProton's list: their exes come from ISO_LIST
+mapfile -t ISOS < <(cut -f2 "$ISO_LIST" 2>/dev/null)
+sh_name() { { grep -l -F "\"$1\"" "$PP"/steam_scripts/*.sh 2>/dev/null | head -1 | xargs -r -d '\n' basename -s .sh; } || true; }
 NAME= EXE= DESK=
 if [ -z "$ARG" ]; then
-    [ ${#DESKS[@]} -gt 0 ] || { say "PortProton no tiene juegos."; exit 0; }
+    [ ${#DESKS[@]} -gt 0 ] || [ ${#ISOS[@]} -gt 0 ] || { say "PortProton no tiene juegos."; exit 0; }
     say "Juegos de PortProton:"
     for i in "${!DESKS[@]}"; do
         e=$(exe_of "${DESKS[$i]}")
         printf '  %2d) %-40s %s\n' $((i + 1)) "$(basename "${DESKS[$i]}" .desktop)" "$([ -f "$e" ] || echo '(el .exe ya no está)')"
     done
+    for i in "${!ISOS[@]}"; do
+        e=${ISOS[$i]} nm=$(sh_name "${ISOS[$i]}")
+        printf '  %2d) %-40s %s\n' $((${#DESKS[@]} + i + 1)) "${nm:-$(basename "${e%.*}")}" "(aislado)$([ -f "$e" ] || echo ' (el .exe ya no está)')"
+    done
     read -r -p "¿Cuál quitas? (número, Intro = ninguno): " n || n=
-    [[ $n =~ ^[0-9]+$ ]] && [ "$n" -ge 1 ] && [ "$n" -le ${#DESKS[@]} ] || { say "Nada que hacer."; exit 0; }
-    DESK=${DESKS[$((n - 1))]}
+    [[ $n =~ ^[0-9]+$ ]] && [ "$n" -ge 1 ] && [ "$n" -le $((${#DESKS[@]} + ${#ISOS[@]})) ] || { say "Nada que hacer."; exit 0; }
+    if [ "$n" -le ${#DESKS[@]} ]; then DESK=${DESKS[$((n - 1))]}; else EXE=${ISOS[$((n - ${#DESKS[@]} - 1))]}; fi
 elif [ -f "$ARG" ]; then                  # an .exe (Dolphin): its PortProton shortcut, if any
     EXE=$(realpath "$ARG")
     for d in "${DESKS[@]}"; do [ "$(exe_of "$d")" = "$EXE" ] && { DESK=$d; break; }; done
@@ -2255,8 +2368,14 @@ else                                      # a name
     [ -f "$PP/$ARG.desktop" ] && DESK="$PP/$ARG.desktop" || { say "No encuentro «$ARG» en PortProton." >&2; exit 1; }
 fi
 if [ -n "$DESK" ]; then NAME=$(basename "$DESK" .desktop); EXE=${EXE:-$(exe_of "$DESK")}; fi
+[ -n "$NAME" ] || [ -z "$EXE" ] || NAME=$(sh_name "$EXE")
 NAME=${NAME:-$(basename "${EXE%.*}")}
 SH="$PP/steam_scripts/$NAME.sh"
+# an isolated game's prefix name is in its .ppdb, inside the folder step 3 may delete: read it now
+ISO_PFX=
+if [ -n "$EXE" ] && [ -n "$ISO_LIST" ] && cut -f2 "$ISO_LIST" 2>/dev/null | grep -qxF -- "$EXE"; then
+    ISO_PFX=$(sed -n 's/^export PW_PREFIX_NAME="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$EXE.ppdb" 2>/dev/null | tail -1 || true)
+fi
 section "Juego: $NAME"
 say "Ejecutable: ${EXE:-?}"
 [ -n "$DESK" ] || say "(PortProton no tiene acceso directo para este .exe)"
@@ -2346,8 +2465,9 @@ fi
 # --- 2. PortProton ----------------------------------------------------------------------------------------
 section "2. PortProton"
 DESK_DIR=$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")
-mapfile -t PPF < <(for f in "$DESK" "$DESK_DIR/$NAME.desktop" "$HOME/.local/share/applications/$NAME.desktop" "${SHS[@]}"; do
-    [ -n "$f" ] && [ -f "$f" ] && echo "$f"; done | sort -u)
+mapfile -t PPF < <({ for f in "$DESK" "$DESK_DIR/$NAME.desktop" "$HOME/.local/share/applications/$NAME.desktop" "${SHS[@]}"; do
+    [ -n "$f" ] && [ -f "$f" ] && echo "$f"; done
+    [ -z "$EXE" ] || grep -l -F -- "--run \"$EXE\"" "$DESK_DIR"/*.desktop 2>/dev/null; } | sort -u)
 if [ ${#PPF[@]} = 0 ]; then
     say "No hay accesos directos ni scripts suyos."
 else
@@ -2387,6 +2507,18 @@ else
     fi
 fi
 
+# --- isolated: forget it, and its prefix if wanted -----------------------------------------------------------
+if [ -n "$EXE" ] && [ -n "$ISO_LIST" ] && cut -f2 "$ISO_LIST" 2>/dev/null | grep -qxF -- "$EXE"; then
+    section "Aislado"
+    pfx=$ISO_PFX
+    tmp=$(mktemp); awk -F'\t' -v e="$EXE" '$2 != e' "$ISO_LIST" >"$tmp" && mv "$tmp" "$ISO_LIST"
+    say "Ya no consta como aislado."
+    if [ -n "$pfx" ] && [ -d "$ISO_SB/data/prefixes/$pfx" ]; then
+        say "Su prefijo aislado, con sus partidas, está en $ISO_SB/data/prefixes/$pfx ($(du -sh "$ISO_SB/data/prefixes/$pfx" | cut -f1))."
+        if ask "¿Borrarlo? (no se puede deshacer)" N; then rm -rf -- "${ISO_SB:?}/data/prefixes/$pfx" && say "  Borrado."; fi
+    fi
+fi
+
 # --- 4. collection -----------------------------------------------------------------------------------------
 section "4. Colección «PortProton» de Steam"
 if [ -n "${COLLECTION_SCRIPT:-}" ] && [ -f "$COLLECTION_SCRIPT" ]; then
@@ -2407,8 +2539,12 @@ pp_collection() { bash <(pp_collection_script) "$@"; }
 pp_remove_game() {
     local tmp rc
     tmp=$(mktemp) && pp_collection_script >"$tmp"
-    COLLECTION_SCRIPT=$tmp bash <(pp_remove_game_script) "$@"; rc=$?
+    COLLECTION_SCRIPT=$tmp ISO_LIST=$ISO_LIST ISO_SB=$ISO_SB bash <(pp_remove_game_script) "$@"; rc=$?
     rm -f "$tmp"; return $rc
+}
+toolbox_cmd() {                          # what Steam scripts and shortcuts call: the installed copy if it is this version
+    if [ "$("$TOOLBOX_BIN" --version 2>/dev/null)" = "ps5-bazzite-toolbox $TOOLBOX_VERSION" ]; then echo "$TOOLBOX_BIN"
+    else echo "$TOOLBOX_SELF"; fi
 }
 pp_add_game() {
     local exe=${1:-} tmp rc
@@ -2419,109 +2555,168 @@ pp_add_game() {
         set -- "$exe"
     fi
     tmp=$(mktemp) && pp_collection_script >"$tmp"
-    COLLECTION_SCRIPT=$tmp bash <(pp_add_game_script) "$@"; rc=$?
+    COLLECTION_SCRIPT=$tmp TOOLBOX_CMD=$(toolbox_cmd) ISO_LIST=$ISO_LIST ISO_SB=$ISO_SB \
+        bash <(pp_add_game_script) "$@"; rc=$?
     rm -f "$tmp"; return $rc
 }
 
-# --- try a doubtful game, isolated ------------------------------------------------------------------------------
+# --- isolated games -----------------------------------------------------------------------------------------------
 # PortProton's Flatpak has filesystems=host: a Windows program run through it can read, change or delete anything
-# the user can (home, NAS, other games' prefixes). Here one run gets fewer rights from Flatpak itself:
-#  - no host/home/NAS (every extra filesystem the app has is taken away), no network, no UDisks2/NetworkManager;
-#  - the real PortProton (~/.var/app/<id>) read-only; it runs from a COPY (TEST_SB, kept in sync with rsync, its
+# the user can (home, NAS, other games' prefixes). An isolated run gets fewer rights from Flatpak itself:
+#  - no host/home/NAS (every extra filesystem the app has is taken away), no UDisks2/NetworkManager, and with
+#    level "sin-red" no network either;
+#  - the real PortProton (~/.var/app/<id>) read-only; it runs from a COPY (ISO_SB, kept in sync with rsync, its
 #    own prefixes excluded) by pointing XDG_DATA_HOME there: the wrapper then takes PORT_WINE_PATH from it;
-#  - only the game's folder and that copy are writable. Anything new in the app folder is shown afterwards.
+#  - only the game's folder and that copy are writable.
 # Not a VM: screen (X11), sound and controllers stay shared, and a kernel or Flatpak escape is not covered.
-TEST_SB=$HOME/.local/share/ps5-bazzite-toolbox/pruebas
+# Levels: normal (not listed), red, sin-red; kept in ISO_LIST as "level<TAB>exe". Each isolated game has its own
+# prefix in the copy; the test (menu 13) uses PRUEBAS there.
+ISO_SB=$HOME/.local/share/ps5-bazzite-toolbox/aislado
+ISO_LIST=$HOME/.config/ps5-bazzite-toolbox-juegos.conf
+ISO_RUNLOG=$HOME/.cache/ps5-bazzite-toolbox-run.log
 TEST_PREFIX=PRUEBAS
+PP_APP=$HOME/.var/app/ru.linux_gaming.PortProton
+[ -d "$ISO_SB" ] || [ ! -d "$HOME/.local/share/ps5-bazzite-toolbox/pruebas" ] ||
+    mv "$HOME/.local/share/ps5-bazzite-toolbox/pruebas" "$ISO_SB"      # its name in 1.2.0
+iso_level() {                            # iso_level EXE -> normal | red | sin-red
+    awk -F'\t' -v e="$1" '$2 == e { l = $1 } END { print (l ? l : "normal") }' "$ISO_LIST" 2>/dev/null || echo normal
+}
+iso_set() {                              # iso_set EXE LEVEL (normal removes it)
+    local tmp; tmp=$(mktemp)
+    awk -F'\t' -v e="$1" '$2 != e' "$ISO_LIST" 2>/dev/null >"$tmp"
+    [ "$2" = normal ] || printf '%s\t%s\n' "$2" "$1" >>"$tmp"
+    mkdir -p "$(dirname "$ISO_LIST")" && mv "$tmp" "$ISO_LIST"
+}
+game_root() {                            # the game's folder: up through engine folders (Binaries/Win64...), as --add-game
+    local d; d=$(dirname "$1")
+    while [[ $(basename "$d") =~ ^([Bb]in(aries)?|[Ww]in(32|64)|x64|x86|[Gg]ame|[Rr]etail)$ ]]; do d=$(dirname "$d"); done
+    [ -d "$d/../Engine" ] && d=$(dirname "$d")                     # Unreal: Game/Binaries/Win64 next to Engine/
+    echo "$d"
+}
+iso_root_ok() {                          # the game's folder is shared writable: refuse home, PortProton, NAS, disks
+    case $HOME/ in "$1"/*) echo "El juego está directamente en $1: muévelo a su propia carpeta (p. ej. ~/Juegos/Juego/)." >&2; return 1 ;; esac
+    case $1/ in "$PP_APP"/*|/var/mnt/*|/mnt/*|/run/media/*)
+        echo "La carpeta del juego ($1) queda escribible para él: tiene que ser una carpeta local propia" >&2
+        echo "(p. ej. ~/Juegos/Juego/), no PortProton, el NAS ni un disco externo. Cópialo allí antes." >&2; return 1 ;;
+    esac
+}
+iso_sync() {                             # the copy of PortProton: everything but its prefixes; rsync undoes any change
+    [ -d "$ISO_SB/data/scripts" ] ||
+        echo "Primera vez: copio PortProton sin los prefijos ($(du -sh --exclude=prefixes "$PP_APP/data" 2>/dev/null | cut -f1)) a $ISO_SB, tarda un poco…"
+    mkdir -p "$ISO_SB/data" "$ISO_SB/cache" "$ISO_SB/config" &&
+        rsync -a --delete --exclude=/prefixes/ "$PP_APP/data/" "$ISO_SB/data/" &&
+        rsync -a --delete "$PP_APP/config/" "$ISO_SB/config/" || { echo "No pude preparar la copia en $ISO_SB." >&2; return 1; }
+}
+iso_launch() {                           # iso_launch EXE ROOT red|sin-red gui|steam -> runs it in the sandbox
+    local exe=$1 root=$2 level=$3 how=$4 f d
+    local -a flags=(--nofilesystem=host --nofilesystem=home
+                    --system-no-talk-name=org.freedesktop.UDisks2 --system-no-talk-name=org.freedesktop.NetworkManager)
+    [ "$level" = sin-red ] && flags+=(--unshare=network)
+    # extra folders the app was given (e.g. the NAS by the "nas" block)
+    while IFS= read -r f; do
+        case $f in /*|'~'/*) flags+=("--nofilesystem=${f%%:*}") ;; esac
+    done < <(flatpak info --show-permissions ru.linux_gaming.PortProton 2>/dev/null | sed -n 's/^filesystems=//p' | tr ';' '\n')
+    for d in "$PP_APP"/*/ "$PP_APP"/.[!.]*/; do               # the real PortProton, read-only (its folder itself can't be)
+        [ -d "$d" ] && [ ! -L "${d%/}" ] && flags+=("--filesystem=${d%/}:ro")
+    done
+    flags+=("--filesystem=$ISO_SB" "--filesystem=$root")
+    # START_FROM_STEAM=1: PortProton starts the game straight away with its .ppdb, without its window
+    flatpak run "${flags[@]}" --command=bash ru.linux_gaming.PortProton -c \
+        'export XDG_DATA_HOME=$1 XDG_CACHE_HOME=$2 XDG_CONFIG_HOME=$3; [ "$5" = steam ] && export START_FROM_STEAM=1; /app/bin/portproton "$4"' \
+        _ "$ISO_SB/data" "$ISO_SB/cache" "$ISO_SB/config" "$exe" "$how"
+}
+iso_prefix_name() {                      # a prefix name for a game: letters, digits, - and _
+    printf '%s' "$1" | tr ' ' '_' | tr -cd 'A-Za-z0-9_-' | cut -c1-40
+}
+ppdb_prefix() { sed -n 's/^export PW_PREFIX_NAME="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$1" 2>/dev/null | tail -1; }
+ppdb_set_prefix() {                      # ppdb_set_prefix PPDB NAME -> PW_PREFIX_NAME in the game's .ppdb (made if missing)
+    if grep -qs '^export PW_PREFIX_NAME=' "$1"; then sed -i "s|^export PW_PREFIX_NAME=.*|export PW_PREFIX_NAME=\"$2\"|" "$1"
+    else printf 'export PW_PREFIX_NAME="%s"\n' "$2" >>"$1"; fi
+}
+
+# --run EXE [--gui] [--level red|sin-red]: what Steam and the desktop shortcut of an isolated game call. Asks nothing
+# (Game Mode has no one to answer); its output goes to ISO_RUNLOG when there is no terminal.
+pp_run_game() {
+    local exe='' how=steam level='' root
+    while [ $# -gt 0 ]; do
+        case $1 in --gui) how=gui; shift ;; --level) level=$2; shift 2 ;; *) exe=$1; shift ;; esac
+    done
+    [ -t 1 ] || { mkdir -p "$(dirname "$ISO_RUNLOG")"; exec >"$ISO_RUNLOG" 2>&1; echo "$(date '+%F %T') --run $exe"; }
+    [ -f "$exe" ] || { echo "No existe: $exe" >&2; return 1; }
+    exe=$(realpath "$exe") root=$(game_root "$exe")
+    level=${level:-$(iso_level "$exe")}
+    if [ "$level" = normal ]; then                 # not isolated: as PortProton's own Steam script
+        START_FROM_STEAM=$([ $how = steam ] && echo 1) flatpak run ru.linux_gaming.PortProton "$exe"; return
+    fi
+    iso_root_ok "$root" && iso_sync || return 1
+    iso_launch "$exe" "$root" "$level" "$how"
+}
+
+# --- try a doubtful game, isolated (menu 13) --------------------------------------------------------------------
 pp_test_game() {
-    local exe=${1:-} gdir app=$HOME/.var/app/ru.linux_gaming.PortProton sb=$TEST_SB d f ppdb had_ppdb=0 before after new
-    local -a flags
+    local exe=${1:-} root sb=$ISO_SB f ppdb had_ppdb=0 before after new name c others
     flatpak info ru.linux_gaming.PortProton >/dev/null 2>&1 || { echo "PortProton (Flatpak) no está instalado." >&2; return 1; }
-    [ -f "$app/data/scripts/start.sh" ] || { echo "Abre PortProton una vez antes (aún no ha creado $app/data)." >&2; return 1; }
+    [ -f "$PP_APP/data/scripts/start.sh" ] || { echo "Abre PortProton una vez antes (aún no ha creado $PP_APP/data)." >&2; return 1; }
     if [ -z "$exe" ]; then
         read -e -rp "Ruta del .exe que quieres probar (puedes arrastrarlo aquí desde Dolphin): " exe
         exe=${exe%\'}; exe=${exe#\'}     # Dolphin drops paths quoted
     fi
     [ -f "$exe" ] || { echo "No existe: $exe" >&2; return 1; }
-    exe=$(realpath "$exe") gdir=$(dirname "$exe")
-    case $HOME/ in "$gdir"/*)            # its folder is shared with the game: never home itself or above it
-        echo "El juego está directamente en $gdir: muévelo a su propia carpeta (p. ej. ~/Descargas/Juego/)." >&2; return 1 ;;
-    esac
-    case $gdir/ in "$app"/*|/var/mnt/*|/mnt/*|/run/media/*)
-        echo "Copia antes el juego a una carpeta local propia (p. ej. ~/Descargas/Juego/): la carpeta del juego" >&2
-        echo "queda escribible para él, y no debe ser PortProton, el NAS ni un disco externo." >&2; return 1 ;;
-    esac
+    exe=$(realpath "$exe") root=$(game_root "$exe")
+    iso_root_ok "$root" || return 1
     section
     say "Ejecuta ${exe##*/} con PortProton AISLADO, solo esta vez:"
     say "- NO ve tu carpeta personal, el NAS, otros discos ni tus otros juegos; tu PortProton queda en solo lectura;"
     say "- NO tiene red (no puede descargar nada ni enviar tus datos);"
-    say "- SÍ puede escribir en la carpeta del juego ($gdir) y en una copia de PortProton para pruebas"
-    say "  ($sb), con su propio prefijo $TEST_PREFIX."
+    say "- SÍ puede escribir en la carpeta del juego ($root) y en la copia de PortProton para juegos"
+    say "  aislados ($sb), con el prefijo $TEST_PREFIX."
     say "POR QUÉ: el Flatpak de PortProton puede ver todo el sistema (permiso «host»); un programa dañino lanzado"
     say "con él normalmente podría borrar o cifrar tus ficheros y el NAS."
     say "LÍMITES: no es una máquina virtual. Comparte pantalla, sonido y mandos: cierra Steam y el navegador antes"
     say "(un programa de X11 puede leer lo que se teclea en otras ventanas X11). Si algo te pide la contraseña, no la des."
     say "ANTES: busca su huella en VirusTotal (sin subir nada):"
     say "  https://www.virustotal.com/gui/file/$(sha256sum "$exe" | cut -d' ' -f1)"
-    say "DESHACER: al terminar te ofrezco borrar el prefijo y la copia (rm -rf $sb)."
+    say "DESHACER: al terminar te ofrezco borrar el prefijo $TEST_PREFIX y la carpeta del juego."
     pgrep -u "$U" -x 'steam|brave|firefox|chrome|chromium' >/dev/null &&
         echo "${Y}Steam o un navegador siguen abiertos.$N"
     yesno "¿Probarlo así?" S || return 1
-
-    # The copy of PortProton: everything but its prefixes; rsync puts back whatever an earlier test changed
-    if [ ! -d "$sb/data/scripts" ]; then
-        echo "Primera vez: copio PortProton sin los prefijos ($(du -sh --exclude=prefixes "$app/data" 2>/dev/null | cut -f1)), tarda un poco…"
-    fi
-    mkdir -p "$sb/data" "$sb/cache" "$sb/config" &&
-        rsync -a --delete --exclude=/prefixes/ "$app/data/" "$sb/data/" &&
-        rsync -a --delete "$app/config/" "$sb/config/" || { echo "No pude preparar la copia en $sb." >&2; return 1; }
+    iso_sync || return 1
     if [ -d "$sb/data/prefixes/$TEST_PREFIX" ] && yesno "¿Empezar con el prefijo $TEST_PREFIX limpio (borra lo de la prueba anterior)?" S; then
         rm -rf "${sb:?}/data/prefixes/$TEST_PREFIX"
     fi
     ppdb=$exe.ppdb
     if [ -f "$ppdb" ]; then had_ppdb=1; else printf 'export PW_PREFIX_NAME="%s"\n' "$TEST_PREFIX" >"$ppdb"; fi
-
-    flags=(--nofilesystem=host --nofilesystem=home --unshare=network
-           --system-no-talk-name=org.freedesktop.UDisks2 --system-no-talk-name=org.freedesktop.NetworkManager)
-    # extra folders the app was given (e.g. the NAS by the "nas" block)
-    while IFS= read -r f; do
-        case $f in /*|'~'/*) flags+=("--nofilesystem=${f%%:*}") ;; esac
-    done < <(flatpak info --show-permissions ru.linux_gaming.PortProton 2>/dev/null |
-             sed -n 's/^filesystems=//p' | tr ';' '\n')
-    for d in "$app"/*/ "$app"/.[!.]*/; do                 # the real PortProton, read-only (its folder itself can't be)
-        [ -d "$d" ] && [ ! -L "${d%/}" ] && flags+=("--filesystem=${d%/}:ro")
-    done
-    flags+=("--filesystem=$sb" "--filesystem=$gdir")
-    before=$(ls -A "$app")
+    before=$(ls -A "$PP_APP")
     echo "==> Abriendo PortProton aislado. Elige el prefijo $TEST_PREFIX si te pregunta, y cierra el juego para volver aquí."
-    flatpak run "${flags[@]}" --command=bash ru.linux_gaming.PortProton -c \
-        'export XDG_DATA_HOME=$1 XDG_CACHE_HOME=$2 XDG_CONFIG_HOME=$3; /app/bin/portproton "$4"' \
-        _ "$sb/data" "$sb/cache" "$sb/config" "$exe"
+    iso_launch "$exe" "$root" sin-red gui
     echo
 
-    after=$(ls -A "$app")
+    after=$(ls -A "$PP_APP")
     new=$(comm -13 <(sort <<<"$before") <(sort <<<"$after"))
     if [ -n "$new" ]; then
-        echo "${Y}Ojo: han aparecido ficheros nuevos en tu PortProton real ($app):$N"
+        echo "${Y}Ojo: han aparecido ficheros nuevos en tu PortProton real ($PP_APP):$N"
         sed 's/^/  /' <<<"$new"
         yesno "¿Los borro? (un .desktop nuevo ahí saldría en la lista de juegos de PortProton)" S &&
-            while IFS= read -r f; do rm -rf "${app:?}/$f"; done <<<"$new"
+            while IFS= read -r f; do rm -rf "${PP_APP:?}/$f"; done <<<"$new"
     fi
-    local name c
-    name=$(basename "$gdir")
-    if yesno "¿No te convence? ¿Borro la carpeta del juego ($gdir, $(du -sh "$gdir" 2>/dev/null | cut -f1))?" N; then
+    name=$(basename "$root")
+    if yesno "¿No te convence? ¿Borro la carpeta del juego ($root, $(du -sh "$root" 2>/dev/null | cut -f1))?" N; then
         read -r -p "  Para confirmar, escribe el nombre de la carpeta ($name): " c || c=
-        if [ "$c" = "$name" ]; then rm -rf -- "$gdir" && say "  Borrada."; else say "  No coincide: no borro nada."; fi
+        if [ "$c" = "$name" ]; then rm -rf -- "$root" && say "  Borrada."; else say "  No coincide: no borro nada."; fi
     fi
-    if [ -d "$gdir" ]; then
+    if [ -d "$root" ]; then
         [ $had_ppdb = 0 ] && [ -f "$ppdb" ] && yesno "¿Borro ${ppdb##*/} (los ajustes de la prueba, junto al .exe)?" S && rm -f "$ppdb"
-        say "Si te fías del juego, añádelo normal con la opción 10 (irá a tu PortProton, ya sin aislar)."
+        say "Si te convence, añádelo con la opción 10: puedes dejarlo aislado (con o sin red) también desde Steam."
     fi
     if yesno "¿Borrar el prefijo de pruebas $TEST_PREFIX ($(du -sh "$sb/data/prefixes/$TEST_PREFIX" 2>/dev/null | cut -f1))?" S; then
         rm -rf "${sb:?}/data/prefixes/$TEST_PREFIX"
     fi
-    yesno "¿Borrar también la copia de PortProton para pruebas ($(du -sh "$sb" 2>/dev/null | cut -f1))? Si no, la próxima prueba empieza antes." N &&
-        rm -rf "${sb:?}"
+    # the copy also holds the isolated games' prefixes: only offered while it has none
+    others=$(find "$sb/data/prefixes" -mindepth 1 -maxdepth 1 ! -name "$TEST_PREFIX" ! -name DEFAULT ! -name DOTNET 2>/dev/null | head -1)
+    if [ -z "$others" ]; then
+        yesno "¿Borrar también la copia de PortProton para juegos aislados ($(du -sh "$sb" 2>/dev/null | cut -f1))? Si no, la próxima vez empieza antes." N &&
+            rm -rf "${sb:?}"
+    fi
     return 0
 }
 
@@ -2562,7 +2757,7 @@ menu() {
    8) Pasar al escritorio KDE ahora y arrancar siempre en él (cierra lo abierto)
    9) Pasar al modo juego ahora y arrancar siempre en él (cierra lo abierto)
  PortProton y Steam
-  10) Añadir un juego de Windows: probarlo con PortProton, accesos directos, Steam y colección
+  10) Añadir un juego de Windows (o cambiar su aislamiento): probarlo, accesos directos, Steam y colección
   11) Quitar un juego: de Steam, de PortProton y del disco (pregunta cada paso)
   12) Sincronizar la colección «PortProton» de Steam (cierra Steam si está abierto)
   13) Probar un juego dudoso AISLADO: sin tu carpeta personal, sin NAS y sin red
@@ -2613,6 +2808,7 @@ case $MODE in                            # these need no root
     add-game) pp_add_game "${ARGS[@]}"; exit ;;
     remove-game) pp_remove_game "${ARGS[@]}"; exit ;;
     test-game) pp_test_game "${ARGS[@]}"; exit ;;
+    run) pp_run_game "${ARGS[@]}"; exit ;;
     pp-collection) pp_collection "${ARGS[@]}"; exit ;;
     space) space_report "${ARGS[@]}"; exit ;;
     self-update) self_update "$UPDATE_TAG"; exit ;;

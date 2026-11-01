@@ -53,7 +53,7 @@ primera vez que eliges algo que la necesita, y ya no vuelve a pedirla hasta que 
    8) Pasar al escritorio KDE ahora y arrancar siempre en él
    9) Pasar al modo juego ahora y arrancar siempre en él
  PortProton y Steam
-  10) Añadir un juego de Windows: probarlo con PortProton, accesos directos, Steam y colección
+  10) Añadir un juego de Windows (o cambiar su aislamiento): probarlo, accesos directos, Steam y colección
   11) Quitar un juego: de Steam, de PortProton y del disco (pregunta cada paso)
   12) Sincronizar la colección «PortProton» de Steam
   13) Probar un juego dudoso aislado (sin tu carpeta personal, sin NAS y sin red)
@@ -80,6 +80,7 @@ ps5-bazzite-toolbox --session status|restart|desktop|gamemode
 ps5-bazzite-toolbox --add-game "/ruta/Juego.exe"
 ps5-bazzite-toolbox --remove-game ["/ruta/Juego.exe" | "Nombre"]
 ps5-bazzite-toolbox --test-game ["/ruta/Juego.exe"]   # probar un juego dudoso, aislado
+ps5-bazzite-toolbox --run "/ruta/Juego.exe"           # lanzarlo como lo dejó --add-game (lo usa Steam)
 ps5-bazzite-toolbox --pp-collection [--dry-run|--yes]
 ps5-bazzite-toolbox --space [carpeta]
 ps5-bazzite-toolbox --setup                   # ajustes, bloque a bloque
@@ -148,7 +149,22 @@ depende de cada consola (disco, idioma, NAS…) lo detecta o lo pregunta. Las re
 ## PortProton y Steam
 
 **Añadir un juego de Windows** (opción 10, `--add-game`, o en Dolphin botón derecho sobre el `.exe` →
-«Añadir a PortProton y Steam» tras el bloque `atajos`). Pregunta en cada paso:
+«Añadir a PortProton y Steam» tras el bloque `atajos`). Primero pregunta **cómo se ejecuta**:
+
+- **1) Normal:** con acceso a todo, como siempre. Para juegos de tiendas fiables.
+- **2) Aislado con red** (lo que se elige con Intro): sin tu carpeta personal, el NAS ni tus otros juegos, con tu
+  PortProton en solo lectura y un prefijo propio en la copia para juegos aislados
+  (`~/.local/share/ps5-bazzite-toolbox/aislado`). Con red, para juegos online o con launcher.
+- **3) Aislado sin red:** lo mismo, sin red. Para juegos de origen dudoso.
+
+Un juego aislado no va en la lista de juegos de PortProton (desde ahí se abriría sin aislar): solo en el escritorio y
+en Steam, que lo lanzan con `ps5-bazzite-toolbox --run`. Para cambiarlo de nivel, vuelve a añadirlo: su prefijo, con
+las partidas, se mueve entre tu PortProton y la copia aislada (preguntando). Si estaba en el prefijo compartido
+`DEFAULT`, empieza con uno nuevo y sus partidas se quedan en `DEFAULT`. Lo aislado es el mismo sandbox que «Probar un
+juego dudoso», con sus límites (ver abajo). Si mueves o borras la caja de herramientas, los juegos aislados no
+arrancan desde Steam: instálala (opción 20).
+
+Después, pregunta en cada paso:
 
 1. Abre el juego con PortProton para probarlo; PortProton guarda sus ajustes en `<exe>.ppdb`.
    - **Idioma:** si el juego lleva un emulador de Steam (`steam_emu.ini`, `steam_settings/…`, `SteamConfig.ini`,
@@ -160,9 +176,10 @@ depende de cada consola (disco, idioma, NAS…) lo detecta o lo pregunta. Las re
 4. Lo mete en la colección «PortProton» de Steam.
 
 **Quitar un juego** (opción 11, `--remove-game`, o botón derecho sobre el `.exe` → «Quitar de PortProton y Steam»).
-Sin argumento lista los juegos de PortProton. Pregunta por separado: quitarlo de Steam (con copia de `shortcuts.vdf`
+Sin argumento lista los juegos de PortProton, también los aislados. Pregunta por separado: quitarlo de Steam (con copia de `shortcuts.vdf`
 y sus carátulas), borrar sus accesos directos y su script, y borrar su carpeta del disco, que muestra con su tamaño y
-pide escribir su nombre para confirmar. Las partidas guardadas en el prefijo de PortProton se conservan.
+pide escribir su nombre para confirmar. Las partidas guardadas en el prefijo de PortProton se conservan; el prefijo
+propio de un juego aislado lo ofrece borrar al final («no» por defecto).
 
 **Probar un juego dudoso** (opción 13, `--test-game`, o en Dolphin botón derecho sobre el `.exe` → «Probar aislado»
 tras el bloque `atajos`). El Flatpak de PortProton puede ver **todo el sistema**
