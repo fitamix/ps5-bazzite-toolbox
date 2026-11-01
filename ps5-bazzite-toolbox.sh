@@ -2507,8 +2507,16 @@ pp_test_game() {
         yesno "¿Los borro? (un .desktop nuevo ahí saldría en la lista de juegos de PortProton)" S &&
             while IFS= read -r f; do rm -rf "${app:?}/$f"; done <<<"$new"
     fi
-    [ $had_ppdb = 0 ] && [ -f "$ppdb" ] && yesno "¿Borro ${ppdb##*/} (los ajustes de la prueba, junto al .exe)?" S && rm -f "$ppdb"
-    say "Si te fías del juego, añádelo normal con la opción 10 (irá a tu PortProton, ya sin aislar)."
+    local name c
+    name=$(basename "$gdir")
+    if yesno "¿No te convence? ¿Borro la carpeta del juego ($gdir, $(du -sh "$gdir" 2>/dev/null | cut -f1))?" N; then
+        read -r -p "  Para confirmar, escribe el nombre de la carpeta ($name): " c || c=
+        if [ "$c" = "$name" ]; then rm -rf -- "$gdir" && say "  Borrada."; else say "  No coincide: no borro nada."; fi
+    fi
+    if [ -d "$gdir" ]; then
+        [ $had_ppdb = 0 ] && [ -f "$ppdb" ] && yesno "¿Borro ${ppdb##*/} (los ajustes de la prueba, junto al .exe)?" S && rm -f "$ppdb"
+        say "Si te fías del juego, añádelo normal con la opción 10 (irá a tu PortProton, ya sin aislar)."
+    fi
     if yesno "¿Borrar el prefijo de pruebas $TEST_PREFIX ($(du -sh "$sb/data/prefixes/$TEST_PREFIX" 2>/dev/null | cut -f1))?" S; then
         rm -rf "${sb:?}/data/prefixes/$TEST_PREFIX"
     fi
