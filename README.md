@@ -170,8 +170,9 @@ lanza con menos permisos, quitados por el propio Flatpak:
 - sin tu carpeta personal, el NAS ni otros discos, sin poder montar discos, y en el nivel 3 sin red;
 - tu PortProton de verdad queda en **solo lectura**: corre en una copia para juegos aislados (sin tus prefijos, en
   `~/.local/share/ps5-bazzite-toolbox/aislado`, sincronizada en cada arranque), con un prefijo propio para el juego;
-- solo puede escribir en la carpeta raíz del juego, que tiene que ser una carpeta local propia (no la carpeta
-  personal, el NAS ni un disco externo).
+- solo puede ver y escribir la carpeta del juego, que tiene que ser una carpeta local propia (no la carpeta
+  personal, el NAS ni un disco externo). Al instalarlo te la enseña y puedes cambiarla: si el `.exe` está en una
+  subcarpeta (`sp26/`, `bin/`…) y los datos más arriba, pon la de arriba. Se guarda para cuando lo lanza Steam.
 
 **No es una máquina virtual:** comparte pantalla, sonido y mandos (un programa de X11 puede leer lo que se teclea en
 otras ventanas X11; cierra Steam y el navegador al probarlo). Antes de probarlo da el enlace de VirusTotal con la

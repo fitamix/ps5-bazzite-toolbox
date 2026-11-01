@@ -1693,7 +1693,7 @@ pp_add_game_script() { cat <<'__PP_ADD_GAME__'
 # Isolation (asked first): normal, or isolated with/without network (the toolbox's --run, TOOLBOX_CMD). An isolated
 # game has its own prefix in the toolbox's copy of PortProton (ISO_SB), no entry in PortProton's own list (it would
 # start it unisolated) and its Steam script calls TOOLBOX_CMD --run. Every game it installs is kept in ISO_LIST
-# ("level<TAB>exe<TAB>name"). --change: only the level of an installed game (moves its prefix, tries it, rewrites
+# ("level<TAB>exe<TAB>name<TAB>folder it sees"). --change: only the level of an installed game (moves its prefix, tries it, rewrites
 # its shortcuts and Steam script; the Steam entry itself stays, with its playtime and artwork).
 # Nothing is overwritten without asking; shortcuts.vdf is backed up first. Undo: delete the .desktop files and
 # the .sh, and in Steam remove the game (or restore shortcuts.vdf.bak-<date>).
@@ -1785,7 +1785,16 @@ fi
 GTOP=$(dirname "$EXE")
 while [[ $(basename "$GTOP") =~ ^([Bb]in(aries)?|[Ww]in(32|64)|x64|x86|[Gg]ame|[Rr]etail)$ ]]; do GTOP=$(dirname "$GTOP"); done
 [ -d "$GTOP/../Engine" ] && GTOP=$(dirname "$GTOP")
+# the folder kept for it earlier wins over the guess
+ROOT_SAVED=$(awk -F'\t' -v e="$EXE" '$2 == e && $4 != "" { r = $4 } END { print r }' "$ISO_LIST" 2>/dev/null || true)
+[ -z "$ROOT_SAVED" ] || GTOP=$ROOT_SAVED
 if [ "$LEVEL" != normal ]; then
+    say "Carpeta del juego que podrá ver (y escribir) aislado: $GTOP"
+    say "  Si sus datos están más arriba (p. ej. el .exe va en una subcarpeta como sp26/ o bin/), pon la de arriba."
+    if [ $YES = 0 ] && [ -t 0 ]; then read -r -e -i "$GTOP" -p "Carpeta del juego: " ans || true
+    elif [ $YES = 0 ]; then read -r -p "Carpeta del juego [$GTOP]: " ans || true; fi
+    GTOP=$(realpath -m "${ans:-$GTOP}"); ans=
+    case $EXE in "$GTOP"/*) ;; *) say "El .exe no está dentro de $GTOP." >&2; exit 1 ;; esac
     case $HOME/ in "$GTOP"/*) say "El juego está directamente en $GTOP: muévelo a su propia carpeta (p. ej. ~/Juegos/Juego/) para aislarlo." >&2; exit 1 ;; esac
     case $GTOP/ in "$PP"/*|/var/mnt/*|/mnt/*|/run/media/*)
         say "Para aislarlo, la carpeta del juego ($GTOP) tiene que ser una carpeta local propia (p. ej. ~/Juegos/Juego/)," >&2
@@ -1872,7 +1881,7 @@ if [ $TEST = 1 ] && ask "¿Abrirlo ahora?" "$([ -f "$PPDB" ] && [ "$LEVEL" = "$C
   while :; do
     PPLS=$(ls -A "$PP")
     if [ "$LEVEL" = normal ]; then flatpak run "$PP_ID" "$EXE" >/dev/null 2>&1 || true
-    else bash "$TOOLBOX_CMD" --run "$EXE" --gui --level "$LEVEL" || true; fi
+    else bash "$TOOLBOX_CMD" --run "$EXE" --gui --level "$LEVEL" --root "$GTOP" || true; fi
     if [ "$LEVEL" != normal ]; then            # only the top of PortProton's folder stays writable in the sandbox
         NEWF=$(comm -13 <(sort <<<"$PPLS") <(ls -A "$PP" | sort) || true)
         if [ -n "$NEWF" ]; then
@@ -1900,7 +1909,7 @@ if [ $TEST = 1 ] && ask "¿Abrirlo ahora?" "$([ -f "$PPDB" ] && [ "$LEVEL" = "$C
 fi
 [ -z "$ISO_LIST" ] || {                    # keep the game and its level ("Mis juegos" lists them)
     tmp=$(mktemp); awk -F'\t' -v e="$EXE" '$2 != e' "$ISO_LIST" 2>/dev/null >"$tmp" || true
-    printf '%s\t%s\t%s\n' "$LEVEL" "$EXE" "$NAME" >>"$tmp"
+    printf '%s\t%s\t%s\t%s\n' "$LEVEL" "$EXE" "$NAME" "$([ "$LEVEL" = normal ] || echo "$GTOP")" >>"$tmp"
     mkdir -p "$(dirname "$ISO_LIST")"; mv "$tmp" "$ISO_LIST"; rm -f "$PPDB.bak-iso"
 }
 [ -f "$PPDB" ] || { say "No hay $PPDB: abre el juego una vez con PortProton antes (sin --no-test)." >&2; exit 1; }
@@ -2622,7 +2631,7 @@ pp_my_games() {
     local list e d nm lv a c i
     local -a rows
     list=$(mktemp)
-    while IFS=$'\t' read -r lv e nm; do
+    while IFS=$'\t' read -r lv e nm _; do
         [ -n "$e" ] && printf '%s\t%s\t%s\n' "${nm:-$(basename "${e%.*}")}" "$lv" "$e"
     done < <(cat "$ISO_LIST" 2>/dev/null) >"$list"
     for d in "$PP_APP"/*.desktop; do
@@ -2677,7 +2686,7 @@ pp_add_game() {
 #    own prefixes excluded) by pointing XDG_DATA_HOME there: the wrapper then takes PORT_WINE_PATH from it;
 #  - only the game's folder and that copy are writable.
 # Not a VM: screen (X11), sound and controllers stay shared, and a kernel or Flatpak escape is not covered.
-# Levels: normal (not listed), red, sin-red; kept in ISO_LIST as "level<TAB>exe". Each isolated game has its own
+# Levels: normal, red, sin-red; kept in ISO_LIST as "level<TAB>exe<TAB>name<TAB>folder it sees" (isolated). Each isolated game has its own
 # prefix in the copy (PortProton also makes empty DEFAULT and DOTNET there).
 ISO_SB=$HOME/.local/share/ps5-bazzite-toolbox/aislado
 ISO_LIST=$HOME/.config/ps5-bazzite-toolbox-juegos.conf
@@ -2685,12 +2694,6 @@ ISO_RUNLOG=$HOME/.cache/ps5-bazzite-toolbox-run.log
 PP_APP=$HOME/.var/app/ru.linux_gaming.PortProton
 iso_level() {                            # iso_level EXE -> normal | red | sin-red
     awk -F'\t' -v e="$1" '$2 == e { l = $1 } END { print (l ? l : "normal") }' "$ISO_LIST" 2>/dev/null || echo normal
-}
-iso_set() {                              # iso_set EXE LEVEL (normal removes it)
-    local tmp; tmp=$(mktemp)
-    awk -F'\t' -v e="$1" '$2 != e' "$ISO_LIST" 2>/dev/null >"$tmp"
-    [ "$2" = normal ] || printf '%s\t%s\n' "$2" "$1" >>"$tmp"
-    mkdir -p "$(dirname "$ISO_LIST")" && mv "$tmp" "$ISO_LIST"
 }
 game_root() {                            # the game's folder: up through engine folders (Binaries/Win64...), as --add-game
     local d; d=$(dirname "$1")
@@ -2730,25 +2733,19 @@ iso_launch() {                           # iso_launch EXE ROOT red|sin-red gui|s
         'export XDG_DATA_HOME=$1 XDG_CACHE_HOME=$2 XDG_CONFIG_HOME=$3; [ "$5" = steam ] && export START_FROM_STEAM=1; /app/bin/portproton "$4"' \
         _ "$ISO_SB/data" "$ISO_SB/cache" "$ISO_SB/config" "$exe" "$how"
 }
-iso_prefix_name() {                      # a prefix name for a game: letters, digits, - and _
-    printf '%s' "$1" | tr ' ' '_' | tr -cd 'A-Za-z0-9_-' | cut -c1-40
-}
-ppdb_prefix() { sed -n 's/^export PW_PREFIX_NAME="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$1" 2>/dev/null | tail -1; }
-ppdb_set_prefix() {                      # ppdb_set_prefix PPDB NAME -> PW_PREFIX_NAME in the game's .ppdb (made if missing)
-    if grep -qs '^export PW_PREFIX_NAME=' "$1"; then sed -i "s|^export PW_PREFIX_NAME=.*|export PW_PREFIX_NAME=\"$2\"|" "$1"
-    else printf 'export PW_PREFIX_NAME="%s"\n' "$2" >>"$1"; fi
-}
 
-# --run EXE [--gui] [--level red|sin-red]: what Steam and the desktop shortcut of an isolated game call. Asks nothing
+# --run EXE [--gui] [--level red|sin-red] [--root DIR]: what Steam and the desktop shortcut of an isolated game call. Asks nothing
 # (Game Mode has no one to answer); its output goes to ISO_RUNLOG when there is no terminal.
 pp_run_game() {
-    local exe='' how=steam level='' root
+    local exe='' how=steam level='' root=''
     while [ $# -gt 0 ]; do
-        case $1 in --gui) how=gui; shift ;; --level) level=$2; shift 2 ;; *) exe=$1; shift ;; esac
+        case $1 in --gui) how=gui; shift ;; --level) level=$2; shift 2 ;; --root) root=$2; shift 2 ;; *) exe=$1; shift ;; esac
     done
     [ -t 1 ] || { mkdir -p "$(dirname "$ISO_RUNLOG")"; exec >"$ISO_RUNLOG" 2>&1; echo "$(date '+%F %T') --run $exe"; }
     [ -f "$exe" ] || { echo "No existe: $exe" >&2; return 1; }
-    exe=$(realpath "$exe") root=$(game_root "$exe")
+    exe=$(realpath "$exe")
+    [ -n "$root" ] || root=$(awk -F'\t' -v e="$exe" '$2 == e && $4 != "" { r = $4 } END { print r }' "$ISO_LIST" 2>/dev/null)
+    [ -n "$root" ] || root=$(game_root "$exe")
     level=${level:-$(iso_level "$exe")}
     if [ "$level" = normal ]; then                 # not isolated: as PortProton's own Steam script
         START_FROM_STEAM=$([ $how = steam ] && echo 1) flatpak run ru.linux_gaming.PortProton "$exe"; return
