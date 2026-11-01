@@ -199,8 +199,9 @@ Después, pregunta en cada paso:
    de `shortcuts.vdf` y lo reescribe idéntico salvo la entrada nueva.
 4. Lo mete en la colección «PortProton» de Steam.
 
-**Mis juegos** (opción 11, `--games`) lista los juegos instalados con la caja de herramientas (o desde Dolphin) con
-su nivel, y debajo los demás juegos de PortProton; elige uno para cambiar su aislamiento o desinstalarlo.
+**Mis juegos** (opción 11, `--games`): una sola lista, por nombre, de tus juegos de PortProton con su nivel (normal,
+aislado con red o sin red), también los que instalaste antes de esta versión; elige uno para cambiar su aislamiento
+o desinstalarlo.
 
 **Desinstalar** (en «Mis juegos», `--remove-game` o en Dolphin). Pregunta por separado: quitarlo de Steam (con copia de `shortcuts.vdf`
 y sus carátulas), borrar sus accesos directos y su script, y borrar su carpeta del disco, que muestra con su tamaño y

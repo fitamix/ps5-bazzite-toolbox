@@ -2410,7 +2410,7 @@ sh_name() { { grep -l -F "\"$1\"" "$PP"/steam_scripts/*.sh 2>/dev/null | head -1
 NAME= EXE= DESK=
 if [ -z "$ARG" ]; then
     [ ${#DESKS[@]} -gt 0 ] || [ ${#ISOS[@]} -gt 0 ] || { say "PortProton no tiene juegos."; exit 0; }
-    say "Juegos de PortProton (los de abajo, instalados con la caja de herramientas):"
+    say "Juegos:"
     for i in "${!DESKS[@]}"; do
         e=$(exe_of "${DESKS[$i]}")
         printf '  %2d) %-40s %s\n' $((i + 1)) "$(basename "${DESKS[$i]}" .desktop)" "$([ -f "$e" ] || echo '(el .exe ya no está)')"
@@ -2611,42 +2611,39 @@ pp_change_level() {
         bash <(pp_add_game_script) --change "$exe"; rc=$?
     rm -f "$tmp"; return $rc
 }
-# "Mis juegos": the games installed with the toolbox (ISO_LIST, any level), then PortProton's other games
+# "Mis juegos": one list, by name, of the games installed with the toolbox (ISO_LIST, any level) and PortProton's
+# other games (normal: PortProton starts them unisolated). Changing the level of one of those adds it to ISO_LIST.
 pp_my_games() {
-    local -a names exes levels
-    local i n a e d nm lv
+    local list e d nm lv a c i
+    local -a rows
+    list=$(mktemp)
     while IFS=$'\t' read -r lv e nm; do
-        [ -n "$e" ] || continue
-        [ -n "$nm" ] || nm=$(basename "${e%.*}")
-        names+=("$nm") exes+=("$e") levels+=("$lv")
-    done < <(cat "$ISO_LIST" 2>/dev/null)
-    n=${#names[@]}
+        [ -n "$e" ] && printf '%s\t%s\t%s\n' "${nm:-$(basename "${e%.*}")}" "$lv" "$e"
+    done < <(cat "$ISO_LIST" 2>/dev/null) >"$list"
     for d in "$PP_APP"/*.desktop; do
         [ -f "$d" ] && [ "${d##*/}" != PortProton.desktop ] || continue
         e=$(sed -n 's/^Exec=.*PortProton "\(.*\)"$/\1/p' "$d" | head -1)
-        [ -n "$e" ] && ! printf '%s\n' "${exes[@]}" | grep -qxF -- "$e" || continue
-        names+=("$(basename "$d" .desktop)") exes+=("$e") levels+=("")
+        [ -n "$e" ] && ! cut -f3 "$list" | grep -qxF -- "$e" || continue
+        printf '%s\tnormal\t%s\n' "$(basename "$d" .desktop)" "$e" >>"$list"
     done
-    [ ${#names[@]} -gt 0 ] || { echo "No hay juegos instalados (opción 10 o, en Dolphin, «Instalar en PortProton y Steam»)."; return 0; }
-    while :; do
-        echo
-        [ "$n" = 0 ] || echo "${B}Instalados con la caja de herramientas$N"
-        for i in "${!names[@]}"; do
-            [ "$i" = "$n" ] && echo "${B}Otros juegos de PortProton$N"
-            case ${levels[$i]} in normal) lv=normal ;; red) lv="aislado con red" ;; sin-red) lv="aislado sin red" ;; *) lv='' ;; esac
-            printf '  %2d) %-40s %s%s\n' $((i + 1)) "${names[$i]}" "$lv" "$([ -f "${exes[$i]}" ] || echo '  (el .exe ya no está)')"
-        done
-        read -rp "¿Cuál? (número, Intro = volver): " a
-        [[ $a =~ ^[0-9]+$ ]] && [ "$a" -ge 1 ] && [ "$a" -le ${#names[@]} ] || return 0
-        e=${exes[$((a - 1))]}
-        echo "${names[$((a - 1))]}:  1) Cambiar aislamiento   2) Desinstalar   0) Volver"
-        read -rp "Elige: " c
-        case $c in
-            1) if [ -f "$e" ]; then pp_change_level "$e"; else echo "El .exe ya no está: solo se puede desinstalar."; fi ;;
-            2) if [ -f "$e" ]; then pp_remove_game "$e"; else pp_remove_game "${names[$((a - 1))]}"; fi ;;
-        esac
-        return 0
+    mapfile -t rows < <(sort -f -t$'\t' -k1,1 "$list"); rm -f "$list"
+    [ ${#rows[@]} -gt 0 ] || { echo "No hay juegos instalados (opción 10 o, en Dolphin, «Instalar en PortProton y Steam»)."; return 0; }
+    echo
+    for i in "${!rows[@]}"; do
+        IFS=$'\t' read -r nm lv e <<<"${rows[$i]}"
+        case $lv in red) lv="aislado con red" ;; sin-red) lv="aislado sin red" ;; esac
+        printf '  %2d) %-40s %s%s\n' $((i + 1)) "$nm" "$lv" "$([ -f "$e" ] || echo '  (el .exe ya no está)')"
     done
+    read -rp "¿Cuál? (número, Intro = volver): " a
+    [[ $a =~ ^[0-9]+$ ]] && [ "$a" -ge 1 ] && [ "$a" -le ${#rows[@]} ] || return 0
+    IFS=$'\t' read -r nm lv e <<<"${rows[$((a - 1))]}"
+    echo "$nm:  1) Cambiar aislamiento   2) Desinstalar   0) Volver"
+    read -rp "Elige: " c
+    case $c in
+        1) if [ -f "$e" ]; then pp_change_level "$e"; else echo "El .exe ya no está: solo se puede desinstalar."; fi ;;
+        2) if [ -f "$e" ]; then pp_remove_game "$e"; else pp_remove_game "$nm"; fi ;;
+    esac
+    return 0
 }
 toolbox_cmd() {                          # what Steam scripts and shortcuts call: the installed copy if it is this version
     if [ "$("$TOOLBOX_BIN" --version 2>/dev/null)" = "ps5-bazzite-toolbox $TOOLBOX_VERSION" ]; then echo "$TOOLBOX_BIN"
