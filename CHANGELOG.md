@@ -8,24 +8,16 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 ## [1.3.0] - 2026-11-01
 
 ### Añadido
+- **Probar un juego dudoso** (opción 13, `--test-game`): lo lanza con PortProton aislado por el propio Flatpak
+  (sin la carpeta personal, el NAS ni la red; el PortProton real en solo lectura, con una copia aparte y el
+  prefijo `PRUEBAS`; acceso solo a la carpeta raíz del juego), con el enlace de VirusTotal antes y la limpieza al terminar.
+- En Dolphin, botón derecho sobre un `.exe` → «Probar aislado» (bloque `atajos`: vuelve a aplicarlo para tenerlo).
+- Al terminar la prueba ofrece borrar la carpeta del juego (escribiendo su nombre para confirmar).
 - **Juegos aislados también desde Steam.** Al añadir un juego (opción 10) pregunta cómo se ejecuta: normal, aislado
   con red (Intro) o aislado sin red. Los aislados tienen su propio prefijo en la copia de PortProton para juegos
   aislados y Steam y el escritorio los lanzan con `--run`, en el mismo sandbox que la prueba de la opción 13.
 - Cambiar el aislamiento de un juego: vuelve a añadirlo; su prefijo (con las partidas) se mueve, preguntando.
 - «Quitar un juego» lista también los aislados y ofrece borrar su prefijo.
-
-### Corregido
-- La prueba aislada (opción 13) daba acceso solo a la carpeta del `.exe`: los juegos de Unreal
-  (`Juego/Binaries/Win64`) no podían leer su contenido. Ahora es la carpeta raíz del juego.
-
-## [1.2.0] - 2026-11-01
-
-### Añadido
-- **Probar un juego dudoso** (opción 13, `--test-game`): lo lanza con PortProton aislado por el propio Flatpak
-  (sin la carpeta personal, el NAS ni la red; el PortProton real en solo lectura, con una copia para pruebas y su
-  prefijo `PRUEBAS`), con el enlace de VirusTotal antes y la limpieza al terminar.
-- En Dolphin, botón derecho sobre un `.exe` → «Probar aislado» (bloque `atajos`: vuelve a aplicarlo para tenerlo).
-- Al terminar la prueba ofrece borrar la carpeta del juego (escribiendo su nombre para confirmar).
 
 ### Cambiado
 - El menú se renumera desde la 13: ver lo que ocupa cada carpeta es la 14, los ajustes la 15–17, actualizar la
@@ -84,8 +76,7 @@ Primera versión publicada.
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
 [Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.3.0...HEAD
-[1.3.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.2.0...v1.3.0
-[1.2.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.1.0...v1.2.0
+[1.3.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.1.0...v1.3.0
 [1.1.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.0.0...v1.0.1
