@@ -56,17 +56,16 @@ primera vez que eliges algo que la necesita, y ya no vuelve a pedirla hasta que 
   10) Añadir un juego de Windows (o cambiar su aislamiento): probarlo, accesos directos, Steam y colección
   11) Quitar un juego: de Steam, de PortProton y del disco (pregunta cada paso)
   12) Sincronizar la colección «PortProton» de Steam
-  13) Probar un juego dudoso aislado (sin tu carpeta personal, sin NAS y sin red)
  Utilidades
-  14) Ver lo que ocupa cada carpeta
+  13) Ver lo que ocupa cada carpeta
  Ajustes de la consola (cambian el sistema; cada uno explica y pregunta)
-  15) Ver qué ajustes están aplicados
-  16) Aplicar los ajustes pendientes, uno a uno
-  17) Revisar o cambiar ajustes concretos
+  14) Ver qué ajustes están aplicados
+  15) Aplicar los ajustes pendientes, uno a uno
+  16) Revisar o cambiar ajustes concretos
  Sistema
-  18) Actualizar la imagen desde GitHub
-  19) Actualizar esta caja de herramientas
-  20) Instalarla como comando y en el menú de aplicaciones, o desinstalarla
+  17) Actualizar la imagen desde GitHub
+  18) Actualizar esta caja de herramientas
+  19) Instalarla como comando y en el menú de aplicaciones, o desinstalarla
 ```
 
 Lo mismo sin menú:
@@ -79,7 +78,6 @@ ps5-bazzite-toolbox --screen                  # pantalla en negro: recuperar la 
 ps5-bazzite-toolbox --session status|restart|desktop|gamemode
 ps5-bazzite-toolbox --add-game "/ruta/Juego.exe"
 ps5-bazzite-toolbox --remove-game ["/ruta/Juego.exe" | "Nombre"]
-ps5-bazzite-toolbox --test-game ["/ruta/Juego.exe"]   # probar un juego dudoso, aislado
 ps5-bazzite-toolbox --run "/ruta/Juego.exe"           # lanzarlo como lo dejó --add-game (lo usa Steam)
 ps5-bazzite-toolbox --pp-collection [--dry-run|--yes]
 ps5-bazzite-toolbox --space [carpeta]
@@ -144,25 +142,39 @@ depende de cada consola (disco, idioma, NAS…) lo detecta o lo pregunta. Las re
 | `bios`, `media` | BIOS e imágenes de ES-DE desde el NAS | Una sola copia para todos los equipos |
 | `esde` | Arregla el `es_systems.xml` que deja EmuDeck (rutas de Windows, Citra) | Sin esto 3DS falla con *citra_libretro.dll* |
 | `portproton` | Ajustes globales de PortProton: FSYNC/ESYNC y trazado de rayos para todos los juegos, salvo los que su `.ppdb` cambie | PortProton los trae apagados; el Proton de Steam lleva la sincronización rápida, y hay juegos que exigen trazado de rayos |
-| `atajos` | Botón derecho de Dolphin (añadir, probar aislado y quitar juego; espacio por carpeta), comando `espacio`, acceso «Colección PortProton» | Tenerlo todo a mano tras instalar |
+| `atajos` | Botón derecho de Dolphin (añadir —normal o aislado— y quitar juego; espacio por carpeta), comando `espacio`, acceso «Colección PortProton» | Tenerlo todo a mano tras instalar |
 
 ## PortProton y Steam
 
 **Añadir un juego de Windows** (opción 10, `--add-game`, o en Dolphin botón derecho sobre el `.exe` →
-«Añadir a PortProton y Steam» tras el bloque `atajos`). Primero pregunta **cómo se ejecuta**:
+«Añadir a PortProton y Steam (normal o aislado)» tras el bloque `atajos`). Primero pregunta **cómo se ejecuta**:
 
 - **1) Normal:** con acceso a todo, como siempre. Para juegos de tiendas fiables.
-- **2) Aislado con red** (lo que se elige con Intro): sin tu carpeta personal, el NAS ni tus otros juegos, con tu
-  PortProton en solo lectura y un prefijo propio en la copia para juegos aislados
-  (`~/.local/share/ps5-bazzite-toolbox/aislado`). Con red, para juegos online o con launcher.
-- **3) Aislado sin red:** lo mismo, sin red. Para juegos de origen dudoso.
+- **2) Aislado con red** (lo que se elige con Intro): sin tu carpeta personal, el NAS ni tus otros juegos. Con red,
+  para juegos online o con launcher.
+- **3) Aislado sin red:** lo mismo, sin red. Para juegos de origen dudoso: así también se «prueba» uno antes de
+  decidir; si no te convence, al decir que no ha ido bien borra lo que creó la prueba y, si quieres, la carpeta.
+
+Por qué: el Flatpak de PortProton puede ver **todo el sistema** (permiso `host`), así que un programa de Windows
+lanzado con él podría borrar o cifrar tu carpeta personal, el NAS o las partidas de otros juegos. Un juego aislado se
+lanza con menos permisos, quitados por el propio Flatpak:
+
+- sin tu carpeta personal, el NAS ni otros discos, sin poder montar discos, y en el nivel 3 sin red;
+- tu PortProton de verdad queda en **solo lectura**: corre en una copia para juegos aislados (sin tus prefijos, en
+  `~/.local/share/ps5-bazzite-toolbox/aislado`, sincronizada en cada arranque), con un prefijo propio para el juego;
+- solo puede escribir en la carpeta raíz del juego, que tiene que ser una carpeta local propia (no la carpeta
+  personal, el NAS ni un disco externo).
+
+**No es una máquina virtual:** comparte pantalla, sonido y mandos (un programa de X11 puede leer lo que se teclea en
+otras ventanas X11; cierra Steam y el navegador al probarlo). Antes de probarlo da el enlace de VirusTotal con la
+huella del `.exe` (sin subir nada), y después avisa si ha aparecido algo nuevo en tu PortProton real.
 
 Un juego aislado no va en la lista de juegos de PortProton (desde ahí se abriría sin aislar): solo en el escritorio y
-en Steam, que lo lanzan con `ps5-bazzite-toolbox --run`. Para cambiarlo de nivel, vuelve a añadirlo: su prefijo, con
-las partidas, se mueve entre tu PortProton y la copia aislada (preguntando). Si estaba en el prefijo compartido
-`DEFAULT`, empieza con uno nuevo y sus partidas se quedan en `DEFAULT`. Lo aislado es el mismo sandbox que «Probar un
-juego dudoso», con sus límites (ver abajo). Si mueves o borras la caja de herramientas, los juegos aislados no
-arrancan desde Steam: instálala (opción 20).
+en Steam, que lo lanzan con `ps5-bazzite-toolbox --run` sin preguntar nada, también en el modo juego. Para cambiarlo de
+nivel (o darlo por bueno), vuelve a añadirlo: su prefijo, con las partidas, se mueve entre tu PortProton y la copia
+aislada (preguntando). Si estaba en el prefijo compartido `DEFAULT`, empieza con uno nuevo y sus partidas se quedan
+en `DEFAULT`. Si mueves o borras la caja de herramientas, los juegos aislados no arrancan desde Steam: instálala
+(opción 19).
 
 Después, pregunta en cada paso:
 
@@ -170,7 +182,8 @@ Después, pregunta en cada paso:
    - **Idioma:** si el juego lleva un emulador de Steam (`steam_emu.ini`, `steam_settings/…`, `SteamConfig.ini`,
      `cream_api.ini`) con otro idioma que el del sistema, ofrece cambiarlo: muchos juegos solo muestran el idioma que
      les dice "Steam" y no tienen selector propio. Si trae una carpeta de paquetes de idioma, ofrece copiar el tuyo.
-2. Crea el acceso directo como lo hace PortProton: en su lista de juegos y en el escritorio.
+2. Crea el acceso directo como lo hace PortProton: en su lista de juegos y en el escritorio (aislado: solo en el
+   escritorio).
 3. Lo añade a Steam como juego no-Steam (con Steam cerrado: si no, Steam borra la entrada al cerrarse). Hace copia
    de `shortcuts.vdf` y lo reescribe idéntico salvo la entrada nueva.
 4. Lo mete en la colección «PortProton» de Steam.
@@ -180,23 +193,6 @@ Sin argumento lista los juegos de PortProton, también los aislados. Pregunta po
 y sus carátulas), borrar sus accesos directos y su script, y borrar su carpeta del disco, que muestra con su tamaño y
 pide escribir su nombre para confirmar. Las partidas guardadas en el prefijo de PortProton se conservan; el prefijo
 propio de un juego aislado lo ofrece borrar al final («no» por defecto).
-
-**Probar un juego dudoso** (opción 13, `--test-game`, o en Dolphin botón derecho sobre el `.exe` → «Probar aislado»
-tras el bloque `atajos`). El Flatpak de PortProton puede ver **todo el sistema**
-(permiso `host`): un programa de Windows lanzado con él podría borrar o cifrar tu carpeta personal, el NAS o las
-partidas de otros juegos. Esta opción lo lanza una sola vez con menos permisos, quitados por el propio Flatpak:
-
-- sin tu carpeta personal, sin el NAS ni otros discos, sin red y sin poder montar discos;
-- tu PortProton de verdad queda en **solo lectura**: se usa la copia para juegos aislados (sin tus prefijos, en
-  `~/.local/share/ps5-bazzite-toolbox/aislado`, sincronizada antes de cada uso) con el prefijo `PRUEBAS`;
-- solo puede escribir en la carpeta raíz del juego, que tiene que ser una carpeta local propia (no la carpeta
-  personal, el NAS ni un disco externo).
-
-Antes te da el enlace de VirusTotal con la huella del `.exe` (sin subir nada) y avisa si Steam o un navegador siguen
-abiertos. Al cerrar el juego avisa de cualquier fichero nuevo en tu PortProton real y ofrece borrar la carpeta del
-juego, los ajustes de la prueba, el prefijo y (si no hay juegos aislados) la copia. **No es una máquina virtual:**
-comparte pantalla, sonido y mandos (un programa de X11
-puede leer lo que se teclea en otras ventanas X11). Si te convence, añádelo con la opción 10, aislado o no.
 
 **Ajustes para todos los juegos** (bloque `portproton`):
 
@@ -228,14 +224,14 @@ Sin terminal (lanzada desde otro script) lo guarda en la carpeta actual sin preg
 Cada versión publicada está en [Releases](https://github.com/fitamix/ps5-bazzite-toolbox/releases) con sus
 novedades, y el historial completo en [CHANGELOG.md](CHANGELOG.md). La numeración sigue `MAYOR.MENOR.ARREGLO`:
 
-- **MENOR** (1.**1**.0): bloques de ajustes, opciones o comprobaciones nuevas. Tras actualizar, la opción 16
+- **MENOR** (1.**1**.0): bloques de ajustes, opciones o comprobaciones nuevas. Tras actualizar, la opción 15
   (`--setup`) ofrece solo lo nuevo que tengas pendiente.
 - **ARREGLO** (1.0.**1**): correcciones, sin nada nuevo que aplicar.
 - **MAYOR** (**2**.0.0): algo que cambia cómo se usaba (opciones renombradas, formato de las respuestas guardadas).
   Las notas dicen qué hacer.
 
 Al abrir el menú, la caja de herramientas mira (en 4 segundos como mucho, y sin decir nada si no hay red) si hay
-una versión más nueva y lo avisa. La opción 19 (`--self-update`) muestra las novedades, pregunta, descarga,
+una versión más nueva y lo avisa. La opción 18 (`--self-update`) muestra las novedades, pregunta, descarga,
 comprueba el SHA-256, guarda la copia anterior como `….vX.Y.Z` (solo la última) y sustituye la instalada (o, si no la instalaste, el fichero que ejecutas). Tus respuestas
 guardadas en `~/.config/ps5-bazzite-toolbox.conf` no se tocan.
 

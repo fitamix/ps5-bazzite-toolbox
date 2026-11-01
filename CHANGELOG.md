@@ -8,21 +8,19 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 ## [1.3.0] - 2026-11-01
 
 ### Añadido
-- **Probar un juego dudoso** (opción 13, `--test-game`): lo lanza con PortProton aislado por el propio Flatpak
-  (sin la carpeta personal, el NAS ni la red; el PortProton real en solo lectura, con una copia aparte y el
-  prefijo `PRUEBAS`; acceso solo a la carpeta raíz del juego), con el enlace de VirusTotal antes y la limpieza al terminar.
-- En Dolphin, botón derecho sobre un `.exe` → «Probar aislado» (bloque `atajos`: vuelve a aplicarlo para tenerlo).
-- Al terminar la prueba ofrece borrar la carpeta del juego (escribiendo su nombre para confirmar).
-- **Juegos aislados también desde Steam.** Al añadir un juego (opción 10) pregunta cómo se ejecuta: normal, aislado
-  con red (Intro) o aislado sin red. Los aislados tienen su propio prefijo en la copia de PortProton para juegos
-  aislados y Steam y el escritorio los lanzan con `--run`, en el mismo sandbox que la prueba de la opción 13.
-- Cambiar el aislamiento de un juego: vuelve a añadirlo; su prefijo (con las partidas) se mueve, preguntando.
+- **Juegos aislados.** Al añadir un juego (opción 10, o en Dolphin «Añadir a PortProton y Steam (normal o
+  aislado)») pregunta cómo se ejecuta: normal, aislado con red (Intro) o aislado sin red. Aislado = el propio
+  Flatpak de PortProton le quita la carpeta personal, el NAS, los otros discos (y la red en el nivel 3); tu
+  PortProton queda en solo lectura y el juego corre en una copia aparte con su propio prefijo. Steam y el escritorio
+  lo lanzan con `--run`, que no pregunta nada (vale para el modo juego).
+- Para probar un juego dudoso: añádelo sin red; si no te convence, al decir que no ha ido bien borra lo que creó la
+  prueba y, si quieres, la carpeta del juego. Antes da el enlace de VirusTotal con su huella.
+- Cambiar el aislamiento de un juego (o darlo por bueno): vuelve a añadirlo; su prefijo, con las partidas, se mueve
+  entre tu PortProton y la copia aislada, preguntando.
 - «Quitar un juego» lista también los aislados y ofrece borrar su prefijo.
 
 ### Cambiado
-- El menú se renumera desde la 13: ver lo que ocupa cada carpeta es la 14, los ajustes la 15–17, actualizar la
-  imagen la 18, actualizar la caja de herramientas la 19 e instalarla la 20.
-- Al actualizarla (opción 19) guarda solo la copia de la versión anterior (`….vX.Y.Z`), no todas.
+- Al actualizarla (opción 18) guarda solo la copia de la versión anterior (`….vX.Y.Z`), no todas.
 
 ## [1.1.0] - 2026-10-31
 
