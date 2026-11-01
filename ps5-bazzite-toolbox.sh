@@ -900,7 +900,7 @@ COLL_DESKTOP="$(desk_dir)/portproton-collection.desktop"
 desc_atajos() {
     section
     say "Atajos que llaman a este toolbox ($TOOLBOX_SELF):"
-    say "- Dolphin, botón derecho sobre un .exe: «Añadir a PortProton y Steam» y «Quitar…» ($SM_GAME);"
+    say "- Dolphin, botón derecho sobre un .exe: «Añadir a PortProton y Steam», «Probar aislado» y «Quitar…» ($SM_GAME);"
     say "- Dolphin, botón derecho sobre una carpeta: «Ver lo que ocupa cada carpeta» ($SM_SPACE);"
     say "- el comando «espacio [carpeta]» en cualquier terminal ($SPACE_BIN);"
     say "- en el escritorio, «Colección PortProton» ($COLL_DESKTOP): sincroniza la colección de Steam."
@@ -914,7 +914,7 @@ check_atajos() {
     grep -qs -F "$TOOLBOX_SELF" "$SM_GAME" && grep -qs -F "$TOOLBOX_SELF" "$SM_SPACE" &&
         grep -qs -F "$TOOLBOX_SELF" "$SPACE_BIN" && grep -qs -F "$TOOLBOX_SELF" "$COLL_DESKTOP" &&
         grep -qs 'Se cierra en' "$SM_GAME" && grep -qs 'Se cierra en' "$COLL_DESKTOP" &&
-        grep -qs -- '--remove-game' "$SM_GAME" || return 1   # launchers that close by themselves
+        grep -qs -- '--remove-game' "$SM_GAME" && grep -qs -- '--test-game' "$SM_GAME" || return 1   # launchers that close by themselves
 }
 apply_atajos() {
     mkdir -p "$SM_DIR" "$(desk_dir)" || return 1
@@ -922,13 +922,18 @@ apply_atajos() {
 [Desktop Entry]
 Type=Service
 MimeType=application/vnd.microsoft.portable-executable;application/x-ms-dos-executable;application/x-msdownload;
-Actions=addProtonGame;removeProtonGame;
+Actions=addProtonGame;testProtonGame;removeProtonGame;
 X-KDE-Priority=TopLevel
 
 [Desktop Action addProtonGame]
 Name=Añadir a PortProton y Steam
 Icon=ru.linux_gaming.PortProton
 Exec=konsole -e bash -c '$(run_then_close 5 '--add-game "$1"')' _ %f
+
+[Desktop Action testProtonGame]
+Name=Probar aislado (juego dudoso: sin tu carpeta personal, NAS ni red)
+Icon=security-medium
+Exec=konsole -e bash -c '$(run_then_close 5 '--test-game "$1"')' _ %f
 
 [Desktop Action removeProtonGame]
 Name=Quitar de PortProton y Steam (pregunta cada paso)

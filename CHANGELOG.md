@@ -11,6 +11,7 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 - **Probar un juego dudoso** (opción 13, `--test-game`): lo lanza con PortProton aislado por el propio Flatpak
   (sin la carpeta personal, el NAS ni la red; el PortProton real en solo lectura, con una copia para pruebas y su
   prefijo `PRUEBAS`), con el enlace de VirusTotal antes y la limpieza al terminar.
+- En Dolphin, botón derecho sobre un `.exe` → «Probar aislado» (bloque `atajos`: vuelve a aplicarlo para tenerlo).
 
 ### Cambiado
 - El menú se renumera desde la 13: ver lo que ocupa cada carpeta es la 14, los ajustes la 15–17, actualizar la

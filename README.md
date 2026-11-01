@@ -143,7 +143,7 @@ depende de cada consola (disco, idioma, NAS…) lo detecta o lo pregunta. Las re
 | `bios`, `media` | BIOS e imágenes de ES-DE desde el NAS | Una sola copia para todos los equipos |
 | `esde` | Arregla el `es_systems.xml` que deja EmuDeck (rutas de Windows, Citra) | Sin esto 3DS falla con *citra_libretro.dll* |
 | `portproton` | Ajustes globales de PortProton: FSYNC/ESYNC y trazado de rayos para todos los juegos, salvo los que su `.ppdb` cambie | PortProton los trae apagados; el Proton de Steam lleva la sincronización rápida, y hay juegos que exigen trazado de rayos |
-| `atajos` | Botón derecho de Dolphin (añadir y quitar juego, espacio por carpeta), comando `espacio`, acceso «Colección PortProton» | Tenerlo todo a mano tras instalar |
+| `atajos` | Botón derecho de Dolphin (añadir, probar aislado y quitar juego; espacio por carpeta), comando `espacio`, acceso «Colección PortProton» | Tenerlo todo a mano tras instalar |
 
 ## PortProton y Steam
 
@@ -164,7 +164,8 @@ Sin argumento lista los juegos de PortProton. Pregunta por separado: quitarlo de
 y sus carátulas), borrar sus accesos directos y su script, y borrar su carpeta del disco, que muestra con su tamaño y
 pide escribir su nombre para confirmar. Las partidas guardadas en el prefijo de PortProton se conservan.
 
-**Probar un juego dudoso** (opción 13, `--test-game`). El Flatpak de PortProton puede ver **todo el sistema**
+**Probar un juego dudoso** (opción 13, `--test-game`, o en Dolphin botón derecho sobre el `.exe` → «Probar aislado»
+tras el bloque `atajos`). El Flatpak de PortProton puede ver **todo el sistema**
 (permiso `host`): un programa de Windows lanzado con él podría borrar o cifrar tu carpeta personal, el NAS o las
 partidas de otros juegos. Esta opción lo lanza una sola vez con menos permisos, quitados por el propio Flatpak:
 
