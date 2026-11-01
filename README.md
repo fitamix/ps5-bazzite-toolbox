@@ -177,7 +177,7 @@ partidas de otros juegos. Esta opción lo lanza una sola vez con menos permisos,
   el NAS ni un disco externo).
 
 Antes te da el enlace de VirusTotal con la huella del `.exe` (sin subir nada) y avisa si Steam o un navegador siguen
-abiertos. Al cerrar el juego avisa de cualquier fichero nuevo en tu PortProton real y ofrece borrar los ajustes de la
+abiertos. Al cerrar el juego avisa de cualquier fichero nuevo en tu PortProton real y ofrece borrar la carpeta del juego, los ajustes de la
 prueba, el prefijo y la copia. **No es una máquina virtual:** comparte pantalla, sonido y mandos (un programa de X11
 puede leer lo que se teclea en otras ventanas X11). Si te fías del juego, añádelo normal con la opción 10.
 
