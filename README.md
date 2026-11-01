@@ -176,7 +176,8 @@ lanza con menos permisos, quitados por el propio Flatpak:
 
 **No es una máquina virtual:** comparte pantalla, sonido y mandos (un programa de X11 puede leer lo que se teclea en
 otras ventanas X11; cierra Steam y el navegador al probarlo). Antes de probarlo da el enlace de VirusTotal con la
-huella del `.exe` (sin subir nada), y después avisa si ha aparecido algo nuevo en tu PortProton real.
+huella del `.exe` (sin subir nada), y después avisa si ha aparecido algo nuevo en tu PortProton real. Sin red (nivel 3)
+Wine no ve los mandos que se conectan con el juego ya abierto: conéctalos antes de lanzarlo.
 
 Un juego aislado no va en la lista de juegos de PortProton (desde ahí se abriría sin aislar): solo en el escritorio y
 en Steam, que lo lanzan con `ps5-bazzite-toolbox --run` sin preguntar nada: en Steam (también en el modo juego) es

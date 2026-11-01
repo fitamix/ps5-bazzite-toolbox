@@ -1896,8 +1896,20 @@ if [ $TEST = 1 ] && ask "¿Abrirlo ahora?" "$([ -f "$PPDB" ] && [ "$LEVEL" = "$C
     [ $YES = 1 ] || { read -r -p "¿Ha arrancado bien? (s = sí, sigue · r = vuelve a abrirlo · n = no, para) [S/r/n] " ans || ans=; }
     case ${ans:-s} in [rR]*) continue ;; [nN]*) ;; *) break ;; esac              # n: stop and undo
     undo_level
-    if [ $NEW_PFX = 1 ] && [ -d "$ISO_SB/data/prefixes/$PFX" ] && ask "¿Borro el prefijo aislado que ha creado la prueba ($PFX)?" S; then
-        rm -rf "${ISO_SB:?}/data/prefixes/$PFX"
+    # isolated prefixes this attempt used: the proposed one and whatever PortProton's window left in the .ppdb (it
+    # can switch prefix, e.g. when the Wine version is changed). Offered when the game was not installed before
+    # (or the prefix is new) and no installed game's .ppdb uses it.
+    if [ "$LEVEL" != normal ]; then
+        for p in $(printf '%s\n' "$PFX" "$(pfx_of)" | sort -u); do
+            [ -n "$p" ] && [ "$p" != DEFAULT ] && [ "$p" != DOTNET ] && [ -d "$ISO_SB/data/prefixes/$p" ] || continue
+            [ $NEW_PFX = 1 ] || { [ "$CUR" = normal ] && [ -z "$existing" ] && [ ! -f "$SH" ]; } || continue
+            users=$(cut -f2 "$ISO_LIST" 2>/dev/null | grep -vxF -- "$EXE" | while IFS= read -r e; do
+                grep -qsx "export PW_PREFIX_NAME=\"$p\"" "$e.ppdb" && echo x; done || true)
+            [ -z "$users" ] || continue
+            if ask "¿Borro el prefijo aislado $p ($(du -sh "$ISO_SB/data/prefixes/$p" 2>/dev/null | cut -f1)), que ha usado esta prueba?" S; then
+                rm -rf "${ISO_SB:?}/data/prefixes/$p"
+            fi
+        done
     fi
     if [ "$CUR" = normal ] && [ -z "$existing" ] && [ ! -f "$SH" ] && ask "¿No te convence? ¿Borro la carpeta del juego ($GTOP, $(du -sh "$GTOP" 2>/dev/null | cut -f1))?" N; then
         read -r -p "  Para confirmar, escribe el nombre de la carpeta ($(basename "$GTOP")): " c || c=
