@@ -187,16 +187,16 @@ tras el bloque `atajos`). El Flatpak de PortProton puede ver **todo el sistema**
 partidas de otros juegos. Esta opción lo lanza una sola vez con menos permisos, quitados por el propio Flatpak:
 
 - sin tu carpeta personal, sin el NAS ni otros discos, sin red y sin poder montar discos;
-- tu PortProton de verdad queda en **solo lectura**: se usa una copia para pruebas (sin tus prefijos, en
-  `~/.local/share/ps5-bazzite-toolbox/pruebas`) con un prefijo propio, `PRUEBAS`, que se sincroniza antes de cada
-  prueba;
-- solo puede escribir en la carpeta del juego, que tiene que ser una carpeta local propia (no la carpeta personal,
-  el NAS ni un disco externo).
+- tu PortProton de verdad queda en **solo lectura**: se usa la copia para juegos aislados (sin tus prefijos, en
+  `~/.local/share/ps5-bazzite-toolbox/aislado`, sincronizada antes de cada uso) con el prefijo `PRUEBAS`;
+- solo puede escribir en la carpeta raíz del juego, que tiene que ser una carpeta local propia (no la carpeta
+  personal, el NAS ni un disco externo).
 
 Antes te da el enlace de VirusTotal con la huella del `.exe` (sin subir nada) y avisa si Steam o un navegador siguen
-abiertos. Al cerrar el juego avisa de cualquier fichero nuevo en tu PortProton real y ofrece borrar la carpeta del juego, los ajustes de la
-prueba, el prefijo y la copia. **No es una máquina virtual:** comparte pantalla, sonido y mandos (un programa de X11
-puede leer lo que se teclea en otras ventanas X11). Si te fías del juego, añádelo normal con la opción 10.
+abiertos. Al cerrar el juego avisa de cualquier fichero nuevo en tu PortProton real y ofrece borrar la carpeta del
+juego, los ajustes de la prueba, el prefijo y (si no hay juegos aislados) la copia. **No es una máquina virtual:**
+comparte pantalla, sonido y mandos (un programa de X11
+puede leer lo que se teclea en otras ventanas X11). Si te convence, añádelo con la opción 10, aislado o no.
 
 **Ajustes para todos los juegos** (bloque `portproton`):
 
