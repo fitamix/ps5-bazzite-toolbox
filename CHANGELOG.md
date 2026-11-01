@@ -8,18 +8,20 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 ## [1.3.0] - 2026-11-01
 
 ### Añadido
-- **Juegos aislados.** Al añadir un juego (opción 10, o en Dolphin «Añadir a PortProton y Steam (normal o
-  aislado)») pregunta cómo se ejecuta: normal, aislado con red (Intro) o aislado sin red. Aislado = el propio
-  Flatpak de PortProton le quita la carpeta personal, el NAS, los otros discos (y la red en el nivel 3); tu
-  PortProton queda en solo lectura y el juego corre en una copia aparte con su propio prefijo. Steam y el escritorio
-  lo lanzan con `--run`, que no pregunta nada (vale para el modo juego).
-- Para probar un juego dudoso: añádelo sin red; si no te convence, al decir que no ha ido bien borra lo que creó la
-  prueba y, si quieres, la carpeta del juego. Antes da el enlace de VirusTotal con su huella.
-- Cambiar el aislamiento de un juego (o darlo por bueno): vuelve a añadirlo; su prefijo, con las partidas, se mueve
-  entre tu PortProton y la copia aislada, preguntando.
-- «Quitar un juego» lista también los aislados y ofrece borrar su prefijo.
+- **Juegos aislados.** Al instalar un juego (opción 10) pregunta cómo se ejecuta: normal, aislado con red (Intro) o
+  aislado sin red. Aislado = el propio Flatpak de PortProton le quita la carpeta personal, el NAS, los otros discos
+  (y la red en el nivel 3); tu PortProton queda en solo lectura y el juego corre en una copia aparte con su propio
+  prefijo. Se prueba igual que siempre (abre, pruebas, «¿ha ido bien?») y Steam y el escritorio lo lanzan con `--run`,
+  que no pregunta nada: en Steam es un juego más. Antes de probarlo da el enlace de VirusTotal con su huella.
+- **Mis juegos** (opción 11, `--games`): los juegos instalados con la caja de herramientas, con su nivel (y debajo los
+  demás de PortProton), para cambiar su aislamiento o desinstalarlos.
+- **Cambiar aislamiento** (`--change-level`): mueve su prefijo, lo prueba y reescribe sus accesos y su script de
+  Steam; la entrada de Steam no cambia (tiempo jugado, carátulas, colección).
+- En Dolphin, botón derecho sobre un `.exe`: «Instalar en PortProton y Steam», «Cambiar aislamiento» y «Desinstalar»
+  (vuelve a aplicar el bloque `atajos` para tenerlos).
 
 ### Cambiado
+- La opción 11 «Quitar un juego» pasa a ser «Mis juegos» (desinstalar está dentro).
 - Al actualizarla (opción 18) guarda solo la copia de la versión anterior (`….vX.Y.Z`), no todas.
 
 ## [1.1.0] - 2026-10-31

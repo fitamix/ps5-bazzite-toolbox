@@ -53,8 +53,8 @@ primera vez que eliges algo que la necesita, y ya no vuelve a pedirla hasta que 
    8) Pasar al escritorio KDE ahora y arrancar siempre en él
    9) Pasar al modo juego ahora y arrancar siempre en él
  PortProton y Steam
-  10) Añadir un juego de Windows (o cambiar su aislamiento): probarlo, accesos directos, Steam y colección
-  11) Quitar un juego: de Steam, de PortProton y del disco (pregunta cada paso)
+  10) Instalar un juego de Windows: elige su aislamiento, pruébalo y, si va bien, a Steam y a la colección
+  11) Mis juegos: cambiar su aislamiento o desinstalarlos (de Steam, PortProton y el disco)
   12) Sincronizar la colección «PortProton» de Steam
  Utilidades
   13) Ver lo que ocupa cada carpeta
@@ -78,6 +78,8 @@ ps5-bazzite-toolbox --screen                  # pantalla en negro: recuperar la 
 ps5-bazzite-toolbox --session status|restart|desktop|gamemode
 ps5-bazzite-toolbox --add-game "/ruta/Juego.exe"
 ps5-bazzite-toolbox --remove-game ["/ruta/Juego.exe" | "Nombre"]
+ps5-bazzite-toolbox --games                           # mis juegos: cambiar aislamiento o desinstalar
+ps5-bazzite-toolbox --change-level "/ruta/Juego.exe"  # cambiar cómo se ejecuta un juego instalado
 ps5-bazzite-toolbox --run "/ruta/Juego.exe"           # lanzarlo como lo dejó --add-game (lo usa Steam)
 ps5-bazzite-toolbox --pp-collection [--dry-run|--yes]
 ps5-bazzite-toolbox --space [carpeta]
@@ -142,18 +144,23 @@ depende de cada consola (disco, idioma, NAS…) lo detecta o lo pregunta. Las re
 | `bios`, `media` | BIOS e imágenes de ES-DE desde el NAS | Una sola copia para todos los equipos |
 | `esde` | Arregla el `es_systems.xml` que deja EmuDeck (rutas de Windows, Citra) | Sin esto 3DS falla con *citra_libretro.dll* |
 | `portproton` | Ajustes globales de PortProton: FSYNC/ESYNC y trazado de rayos para todos los juegos, salvo los que su `.ppdb` cambie | PortProton los trae apagados; el Proton de Steam lleva la sincronización rápida, y hay juegos que exigen trazado de rayos |
-| `atajos` | Botón derecho de Dolphin (añadir —normal o aislado— y quitar juego; espacio por carpeta), comando `espacio`, acceso «Colección PortProton» | Tenerlo todo a mano tras instalar |
+| `atajos` | Botón derecho de Dolphin (instalar, cambiar aislamiento y desinstalar un juego; espacio por carpeta), comando `espacio`, acceso «Colección PortProton» | Tenerlo todo a mano tras instalar |
 
 ## PortProton y Steam
 
-**Añadir un juego de Windows** (opción 10, `--add-game`, o en Dolphin botón derecho sobre el `.exe` →
-«Añadir a PortProton y Steam (normal o aislado)» tras el bloque `atajos`). Primero pregunta **cómo se ejecuta**:
+En Dolphin (tras el bloque `atajos`), botón derecho sobre un `.exe`: **«Instalar en PortProton y Steam»**,
+**«Cambiar aislamiento»** y **«Desinstalar»**. En el menú, lo mismo con las opciones 10 y 11 («Mis juegos»).
+
+**Instalar un juego de Windows** (opción 10, `--add-game`). Primero pregunta **cómo se ejecuta**:
 
 - **1) Normal:** con acceso a todo, como siempre. Para juegos de tiendas fiables.
 - **2) Aislado con red** (lo que se elige con Intro): sin tu carpeta personal, el NAS ni tus otros juegos. Con red,
   para juegos online o con launcher.
-- **3) Aislado sin red:** lo mismo, sin red. Para juegos de origen dudoso: así también se «prueba» uno antes de
-  decidir; si no te convence, al decir que no ha ido bien borra lo que creó la prueba y, si quieres, la carpeta.
+- **3) Aislado sin red:** lo mismo, sin red. Para juegos de origen dudoso.
+
+Luego lo abre con PortProton en el escritorio, con ese aislamiento, para que lo configures y lo pruebes, y pregunta si
+ha ido bien: si sí, sigue (accesos, Steam, colección); si no, para y deja todo como estaba (borra lo que creó la
+prueba y, si quieres, la carpeta del juego).
 
 Por qué: el Flatpak de PortProton puede ver **todo el sistema** (permiso `host`), así que un programa de Windows
 lanzado con él podría borrar o cifrar tu carpeta personal, el NAS o las partidas de otros juegos. Un juego aislado se
@@ -170,10 +177,14 @@ otras ventanas X11; cierra Steam y el navegador al probarlo). Antes de probarlo 
 huella del `.exe` (sin subir nada), y después avisa si ha aparecido algo nuevo en tu PortProton real.
 
 Un juego aislado no va en la lista de juegos de PortProton (desde ahí se abriría sin aislar): solo en el escritorio y
-en Steam, que lo lanzan con `ps5-bazzite-toolbox --run` sin preguntar nada, también en el modo juego. Para cambiarlo de
-nivel (o darlo por bueno), vuelve a añadirlo: su prefijo, con las partidas, se mueve entre tu PortProton y la copia
-aislada (preguntando). Si estaba en el prefijo compartido `DEFAULT`, empieza con uno nuevo y sus partidas se quedan
-en `DEFAULT`. Si mueves o borras la caja de herramientas, los juegos aislados no arrancan desde Steam: instálala
+en Steam, que lo lanzan con `ps5-bazzite-toolbox --run` sin preguntar nada: en Steam (también en el modo juego) es
+un juego más.
+
+**Cambiar aislamiento** (en «Mis juegos», `--change-level` o en Dolphin): eliges el nivel nuevo, su prefijo (con las
+partidas) se mueve entre tu PortProton y la copia aislada (preguntando), lo abre para que compruebes que va y, si
+dices que sí, rehace sus accesos y su script de Steam. La entrada de Steam no cambia: conserva el tiempo jugado, las
+carátulas y la colección. Si estaba en el prefijo compartido `DEFAULT`, empieza con uno nuevo y sus partidas se
+quedan en `DEFAULT`. Si mueves o borras la caja de herramientas, los juegos aislados no arrancan desde Steam: instálala
 (opción 19).
 
 Después, pregunta en cada paso:
@@ -188,8 +199,10 @@ Después, pregunta en cada paso:
    de `shortcuts.vdf` y lo reescribe idéntico salvo la entrada nueva.
 4. Lo mete en la colección «PortProton» de Steam.
 
-**Quitar un juego** (opción 11, `--remove-game`, o botón derecho sobre el `.exe` → «Quitar de PortProton y Steam»).
-Sin argumento lista los juegos de PortProton, también los aislados. Pregunta por separado: quitarlo de Steam (con copia de `shortcuts.vdf`
+**Mis juegos** (opción 11, `--games`) lista los juegos instalados con la caja de herramientas (o desde Dolphin) con
+su nivel, y debajo los demás juegos de PortProton; elige uno para cambiar su aislamiento o desinstalarlo.
+
+**Desinstalar** (en «Mis juegos», `--remove-game` o en Dolphin). Pregunta por separado: quitarlo de Steam (con copia de `shortcuts.vdf`
 y sus carátulas), borrar sus accesos directos y su script, y borrar su carpeta del disco, que muestra con su tamaño y
 pide escribir su nombre para confirmar. Las partidas guardadas en el prefijo de PortProton se conservan; el prefijo
 propio de un juego aislado lo ofrece borrar al final («no» por defecto).
