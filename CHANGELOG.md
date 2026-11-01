@@ -5,6 +5,17 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+## [1.2.0] - 2026-11-01
+
+### Añadido
+- **Probar un juego dudoso** (opción 13, `--test-game`): lo lanza con PortProton aislado por el propio Flatpak
+  (sin la carpeta personal, el NAS ni la red; el PortProton real en solo lectura, con una copia para pruebas y su
+  prefijo `PRUEBAS`), con el enlace de VirusTotal antes y la limpieza al terminar.
+
+### Cambiado
+- El menú se renumera desde la 13: ver lo que ocupa cada carpeta es la 14, los ajustes la 15–17, actualizar la
+  imagen la 18, actualizar la caja de herramientas la 19 e instalarla la 20.
+
 ## [1.1.0] - 2026-10-31
 
 ### Cambiado
@@ -56,7 +67,8 @@ Primera versión publicada.
 - Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
-[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.1.0...HEAD
+[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.0.0...v1.0.1

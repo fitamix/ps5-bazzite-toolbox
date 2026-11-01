@@ -56,16 +56,17 @@ primera vez que eliges algo que la necesita, y ya no vuelve a pedirla hasta que 
   10) Añadir un juego de Windows: probarlo con PortProton, accesos directos, Steam y colección
   11) Quitar un juego: de Steam, de PortProton y del disco (pregunta cada paso)
   12) Sincronizar la colección «PortProton» de Steam
+  13) Probar un juego dudoso aislado (sin tu carpeta personal, sin NAS y sin red)
  Utilidades
-  13) Ver lo que ocupa cada carpeta
+  14) Ver lo que ocupa cada carpeta
  Ajustes de la consola (cambian el sistema; cada uno explica y pregunta)
-  14) Ver qué ajustes están aplicados
-  15) Aplicar los ajustes pendientes, uno a uno
-  16) Revisar o cambiar ajustes concretos
+  15) Ver qué ajustes están aplicados
+  16) Aplicar los ajustes pendientes, uno a uno
+  17) Revisar o cambiar ajustes concretos
  Sistema
-  17) Actualizar la imagen desde GitHub
-  18) Actualizar esta caja de herramientas
-  19) Instalarla como comando y en el menú de aplicaciones, o desinstalarla
+  18) Actualizar la imagen desde GitHub
+  19) Actualizar esta caja de herramientas
+  20) Instalarla como comando y en el menú de aplicaciones, o desinstalarla
 ```
 
 Lo mismo sin menú:
@@ -78,6 +79,7 @@ ps5-bazzite-toolbox --screen                  # pantalla en negro: recuperar la 
 ps5-bazzite-toolbox --session status|restart|desktop|gamemode
 ps5-bazzite-toolbox --add-game "/ruta/Juego.exe"
 ps5-bazzite-toolbox --remove-game ["/ruta/Juego.exe" | "Nombre"]
+ps5-bazzite-toolbox --test-game ["/ruta/Juego.exe"]   # probar un juego dudoso, aislado
 ps5-bazzite-toolbox --pp-collection [--dry-run|--yes]
 ps5-bazzite-toolbox --space [carpeta]
 ps5-bazzite-toolbox --setup                   # ajustes, bloque a bloque
@@ -162,6 +164,22 @@ Sin argumento lista los juegos de PortProton. Pregunta por separado: quitarlo de
 y sus carátulas), borrar sus accesos directos y su script, y borrar su carpeta del disco, que muestra con su tamaño y
 pide escribir su nombre para confirmar. Las partidas guardadas en el prefijo de PortProton se conservan.
 
+**Probar un juego dudoso** (opción 13, `--test-game`). El Flatpak de PortProton puede ver **todo el sistema**
+(permiso `host`): un programa de Windows lanzado con él podría borrar o cifrar tu carpeta personal, el NAS o las
+partidas de otros juegos. Esta opción lo lanza una sola vez con menos permisos, quitados por el propio Flatpak:
+
+- sin tu carpeta personal, sin el NAS ni otros discos, sin red y sin poder montar discos;
+- tu PortProton de verdad queda en **solo lectura**: se usa una copia para pruebas (sin tus prefijos, en
+  `~/.local/share/ps5-bazzite-toolbox/pruebas`) con un prefijo propio, `PRUEBAS`, que se sincroniza antes de cada
+  prueba;
+- solo puede escribir en la carpeta del juego, que tiene que ser una carpeta local propia (no la carpeta personal,
+  el NAS ni un disco externo).
+
+Antes te da el enlace de VirusTotal con la huella del `.exe` (sin subir nada) y avisa si Steam o un navegador siguen
+abiertos. Al cerrar el juego avisa de cualquier fichero nuevo en tu PortProton real y ofrece borrar los ajustes de la
+prueba, el prefijo y la copia. **No es una máquina virtual:** comparte pantalla, sonido y mandos (un programa de X11
+puede leer lo que se teclea en otras ventanas X11). Si te fías del juego, añádelo normal con la opción 10.
+
 **Ajustes para todos los juegos** (bloque `portproton`):
 
 - **Sincronización rápida (FSYNC/ESYNC):** PortProton la trae apagada; el Proton de Steam la lleva encendida. Menos
@@ -192,14 +210,14 @@ Sin terminal (lanzada desde otro script) lo guarda en la carpeta actual sin preg
 Cada versión publicada está en [Releases](https://github.com/fitamix/ps5-bazzite-toolbox/releases) con sus
 novedades, y el historial completo en [CHANGELOG.md](CHANGELOG.md). La numeración sigue `MAYOR.MENOR.ARREGLO`:
 
-- **MENOR** (1.**1**.0): bloques de ajustes, opciones o comprobaciones nuevas. Tras actualizar, la opción 15
+- **MENOR** (1.**1**.0): bloques de ajustes, opciones o comprobaciones nuevas. Tras actualizar, la opción 16
   (`--setup`) ofrece solo lo nuevo que tengas pendiente.
 - **ARREGLO** (1.0.**1**): correcciones, sin nada nuevo que aplicar.
 - **MAYOR** (**2**.0.0): algo que cambia cómo se usaba (opciones renombradas, formato de las respuestas guardadas).
   Las notas dicen qué hacer.
 
 Al abrir el menú, la caja de herramientas mira (en 4 segundos como mucho, y sin decir nada si no hay red) si hay
-una versión más nueva y lo avisa. La opción 18 (`--self-update`) muestra las novedades, pregunta, descarga,
+una versión más nueva y lo avisa. La opción 19 (`--self-update`) muestra las novedades, pregunta, descarga,
 comprueba el SHA-256, guarda la copia anterior como `….vX.Y.Z` y sustituye la instalada (o, si no la instalaste, el fichero que ejecutas). Tus respuestas
 guardadas en `~/.config/ps5-bazzite-toolbox.conf` no se tocan.
 

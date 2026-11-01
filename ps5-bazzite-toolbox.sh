@@ -23,6 +23,7 @@
 #   bash ps5-bazzite-toolbox.sh --screen                # black screen: switch to another console and back
 #   bash ps5-bazzite-toolbox.sh --add-game [Juego.exe]  # add a Windows game to PortProton and Steam
 #   bash ps5-bazzite-toolbox.sh --remove-game [Juego.exe|"Nombre"]   # remove it (Steam, PortProton, disk), asking each step
+#   bash ps5-bazzite-toolbox.sh --test-game [Juego.exe]  # try a doubtful game isolated (no home, NAS or network)
 #   bash ps5-bazzite-toolbox.sh --pp-collection [--dry-run|--yes]   # sync Steam's "PortProton" collection
 #   bash ps5-bazzite-toolbox.sh --space [DIR]           # space taken by each folder in DIR (also the "espacio" command)
 #   bash ps5-bazzite-toolbox.sh --self-update [v1.1.0]  # update this toolbox from its GitHub releases
@@ -31,7 +32,7 @@
 # Setup blocks: locale cmdline wifi updates vram zram fans warmreboot hdmi bt disk brave nas bios media esde portproton atajos
 set -uo pipefail
 
-TOOLBOX_VERSION=1.1.0                    # bump on every release (see CHANGELOG.md and release.sh)
+TOOLBOX_VERSION=1.2.0                    # bump on every release (see CHANGELOG.md and release.sh)
 TOOLBOX_REPO=fitamix/ps5-bazzite-toolbox
 TOOLBOX_BIN=$HOME/.local/bin/ps5-bazzite-toolbox                      # where --install puts it
 TOOLBOX_DESKTOP=$HOME/.local/share/applications/ps5-bazzite-toolbox.desktop
@@ -56,7 +57,7 @@ while [ $# -gt 0 ]; do
         --install) MODE=install; shift ;;
         --uninstall) MODE=uninstall; shift ;;
         -V|--version) echo "ps5-bazzite-toolbox $TOOLBOX_VERSION"; exit 0 ;;
-        --add-game|--remove-game|--pp-collection|--space)       # the rest of the line goes to that tool
+        --add-game|--remove-game|--test-game|--pp-collection|--space)       # the rest of the line goes to that tool
                   MODE=${1#--}; shift; ARGS=("$@"); break ;;
         -h|--help) awk 'NR > 1 { if (!/^#/) exit; sub(/^# ?/, ""); print }' "$0"; exit 0 ;;
         *) echo "Opción desconocida: $1" >&2; exit 2 ;;
@@ -1179,7 +1180,7 @@ for b in $BLOCKS; do
         0) ok "$b: aplicado" ;;
         2) info "$b: no aplica en esta consola" ;;
         *) if [ "${!skipvar:-0}" = 1 ]; then info "$b: no aplicado (lo decidiste)"
-           else warn "$b: pendiente (menú 15, o --setup)"; fi ;;
+           else warn "$b: pendiente (menú 16, o --setup)"; fi ;;
     esac
 done
 if warm_on && ! check_hdmi; then warn "Reinicio en caliente sin ps5-hdmi-kick: la imagen puede salir en negro (bloque hdmi)"; fi
@@ -1204,7 +1205,7 @@ if [ "$NEED_BT" = 1 ] && [ -t 0 ]; then
     read -rp "El Bluetooth no tiene adaptador. ¿Recargar su driver ahora (btusb)? [S/n] " a
     if [[ $a != [nN]* ]]; then
         sudo modprobe -r btusb && sleep 2 && sudo modprobe btusb && sleep 5
-        if bt_present; then echo "Adaptador recuperado. Para que se haga solo en cada arranque: menú 16 → bt."
+        if bt_present; then echo "Adaptador recuperado. Para que se haga solo en cada arranque: menú 17 → bt."
         else echo "Sigue sin adaptador: apaga y arranca con el cargador (un arranque en frío reinicia el chip)."; fi
     fi
 fi
@@ -1232,7 +1233,7 @@ for b in ${ONLY:-$BLOCKS}; do
     case $st in
         0) printf '✔ %-10s aplicado\n' "$b" ;;
         2) printf '– %-10s no aplica en esta consola\n' "$b" ;;
-        3) printf '– %-10s no aplicado (lo decidiste; menú 16 o --only %s para volver a preguntar)\n' "$b" "$b" ;;
+        3) printf '– %-10s no aplicado (lo decidiste; menú 17 o --only %s para volver a preguntar)\n' "$b" "$b" ;;
         *) printf '✘ %-10s pendiente\n' "$b" ;;
     esac
     [ $STATUS_ONLY = 1 ] && continue
@@ -1375,15 +1376,15 @@ mem_watch() {
     { [ "$min_ra" -lt 512 ] || [ "$peak_s" -gt $(( ${su0:-0} + 512 )) ]; } && ram_short=1
     [ "$vt" -gt 0 ] && [ $((peak_v * 100 / vt)) -ge 90 ] && vram_full=1
     [ "$st" -gt 0 ] && [ "$peak_s" -ge $((st - 64)) ] &&
-        echo "  → La swap se llenó: si el juego pide más memoria, el sistema lo cierra. Agrándala (menú 16 → zram)."
+        echo "  → La swap se llenó: si el juego pide más memoria, el sistema lo cierra. Agrándala (menú 17 → zram)."
     if [ $ram_short = 1 ] && [ $vram_full = 1 ]; then
         echo "  → Van justas las dos (VRAM llena y Linux tirando de swap): moverlas no ayuda, la memoria total no da"
         echo "    para más con esta calidad. Baja texturas o calidad en el juego. Sin errores de la GPU, puede valer así."
     elif [ $ram_short = 1 ]; then
-        echo "  → Se acabó la RAM (no la VRAM): Linux tiró de swap. Baja la VRAM a su pico + 1 GB (menú 16 → vram)"
+        echo "  → Se acabó la RAM (no la VRAM): Linux tiró de swap. Baja la VRAM a su pico + 1 GB (menú 17 → vram)"
         echo "    para dar esa memoria a Linux, y la calidad de texturas del juego."
     elif [ $vram_full = 1 ]; then
-        echo "  → La VRAM se llenó y a Linux le sobra RAM: sube la VRAM (menú 16 → vram) o baja la resolución del juego."
+        echo "  → La VRAM se llenó y a Linux le sobra RAM: sube la VRAM (menú 17 → vram) o baja la resolución del juego."
     fi
     if [ $n -gt 0 ] && [ $((n_gpu * 100 / n)) -ge 50 ]; then
         echo "  → La GPU va al máximo la mayor parte del tiempo: ella marca los FPS. Para ganar, baja resolución o"
@@ -1429,7 +1430,7 @@ toolbox_notice() {                       # one line in the menu when a newer rel
     command -v python3 >/dev/null || return 0
     tmp=$(mktemp -d)
     if toolbox_release '' "$tmp" 4 && tag=$(<"$tmp/tag") && toolbox_newer "$tag"; then
-        printf '%s  Hay una versión nueva de esta caja de herramientas: %s (tienes v%s). Opción 18 para actualizarla.%s\n' \
+        printf '%s  Hay una versión nueva de esta caja de herramientas: %s (tienes v%s). Opción 19 para actualizarla.%s\n' \
             "$Y" "$tag" "$TOOLBOX_VERSION" "$N"
     fi
     rm -rf "$tmp"
@@ -1496,7 +1497,7 @@ install_self() {
     say "al menú de aplicaciones de KDE ($TOOLBOX_DESKTOP)."
     [ -f "$TOOLBOX_BIN" ] && say "Sustituye la que ya hay instalada ($("$TOOLBOX_BIN" --version 2>/dev/null))."
     say "POR QUÉ: abrirla desde cualquier terminal con «ps5-bazzite-toolbox» o desde el menú, sin acordarte de la"
-    say "ruta. Las actualizaciones (opción 18) y los atajos del bloque atajos usan siempre esa copia."
+    say "ruta. Las actualizaciones (opción 19) y los atajos del bloque atajos usan siempre esa copia."
     say "DESHACER: ps5-bazzite-toolbox --uninstall (o rm $TOOLBOX_BIN $TOOLBOX_DESKTOP)."
     yesno "¿Instalarla?" S || return 1
     mkdir -p "$(dirname "$TOOLBOX_BIN")" && install -m 755 "$TOOLBOX_SELF" "$TOOLBOX_BIN" || return 1
@@ -1533,7 +1534,7 @@ uninstall_self() {
 offer_install() {                        # once, from the menu: run from a downloaded file and not installed yet
     [ -n "$TOOLBOX_SELF" ] && [ -f "$TOOLBOX_SELF" ] && [ "$TOOLBOX_SELF" != "$TOOLBOX_BIN" ] || return 0
     if [ -f "$TOOLBOX_BIN" ]; then
-        printf '%s  Estás usando %s; la instalada es %s («ps5-bazzite-toolbox»). Opción 19 para sustituirla por esta.%s\n' \
+        printf '%s  Estás usando %s; la instalada es %s («ps5-bazzite-toolbox»). Opción 20 para sustituirla por esta.%s\n' \
             "$Y" "$TOOLBOX_SELF" "$("$TOOLBOX_BIN" --version 2>/dev/null)" "$N"
         return 0
     fi
@@ -2416,6 +2417,100 @@ pp_add_game() {
     rm -f "$tmp"; return $rc
 }
 
+# --- try a doubtful game, isolated ------------------------------------------------------------------------------
+# PortProton's Flatpak has filesystems=host: a Windows program run through it can read, change or delete anything
+# the user can (home, NAS, other games' prefixes). Here one run gets fewer rights from Flatpak itself:
+#  - no host/home/NAS (every extra filesystem the app has is taken away), no network, no UDisks2/NetworkManager;
+#  - the real PortProton (~/.var/app/<id>) read-only; it runs from a COPY (TEST_SB, kept in sync with rsync, its
+#    own prefixes excluded) by pointing XDG_DATA_HOME there: the wrapper then takes PORT_WINE_PATH from it;
+#  - only the game's folder and that copy are writable. Anything new in the app folder is shown afterwards.
+# Not a VM: screen (X11), sound and controllers stay shared, and a kernel or Flatpak escape is not covered.
+TEST_SB=$HOME/.local/share/ps5-bazzite-toolbox/pruebas
+TEST_PREFIX=PRUEBAS
+pp_test_game() {
+    local exe=${1:-} gdir app=$HOME/.var/app/ru.linux_gaming.PortProton sb=$TEST_SB d f ppdb had_ppdb=0 before after new
+    local -a flags
+    flatpak info ru.linux_gaming.PortProton >/dev/null 2>&1 || { echo "PortProton (Flatpak) no está instalado." >&2; return 1; }
+    [ -f "$app/data/scripts/start.sh" ] || { echo "Abre PortProton una vez antes (aún no ha creado $app/data)." >&2; return 1; }
+    if [ -z "$exe" ]; then
+        read -e -rp "Ruta del .exe que quieres probar (puedes arrastrarlo aquí desde Dolphin): " exe
+        exe=${exe%\'}; exe=${exe#\'}     # Dolphin drops paths quoted
+    fi
+    [ -f "$exe" ] || { echo "No existe: $exe" >&2; return 1; }
+    exe=$(realpath "$exe") gdir=$(dirname "$exe")
+    case $HOME/ in "$gdir"/*)            # its folder is shared with the game: never home itself or above it
+        echo "El juego está directamente en $gdir: muévelo a su propia carpeta (p. ej. ~/Descargas/Juego/)." >&2; return 1 ;;
+    esac
+    case $gdir/ in "$app"/*|/var/mnt/*|/mnt/*|/run/media/*)
+        echo "Copia antes el juego a una carpeta local propia (p. ej. ~/Descargas/Juego/): la carpeta del juego" >&2
+        echo "queda escribible para él, y no debe ser PortProton, el NAS ni un disco externo." >&2; return 1 ;;
+    esac
+    section
+    say "Ejecuta ${exe##*/} con PortProton AISLADO, solo esta vez:"
+    say "- NO ve tu carpeta personal, el NAS, otros discos ni tus otros juegos; tu PortProton queda en solo lectura;"
+    say "- NO tiene red (no puede descargar nada ni enviar tus datos);"
+    say "- SÍ puede escribir en la carpeta del juego ($gdir) y en una copia de PortProton para pruebas"
+    say "  ($sb), con su propio prefijo $TEST_PREFIX."
+    say "POR QUÉ: el Flatpak de PortProton puede ver todo el sistema (permiso «host»); un programa dañino lanzado"
+    say "con él normalmente podría borrar o cifrar tus ficheros y el NAS."
+    say "LÍMITES: no es una máquina virtual. Comparte pantalla, sonido y mandos: cierra Steam y el navegador antes"
+    say "(un programa de X11 puede leer lo que se teclea en otras ventanas X11). Si algo te pide la contraseña, no la des."
+    say "ANTES: busca su huella en VirusTotal (sin subir nada):"
+    say "  https://www.virustotal.com/gui/file/$(sha256sum "$exe" | cut -d' ' -f1)"
+    say "DESHACER: al terminar te ofrezco borrar el prefijo y la copia (rm -rf $sb)."
+    pgrep -u "$U" -x 'steam|brave|firefox|chrome|chromium' >/dev/null &&
+        echo "${Y}Steam o un navegador siguen abiertos.$N"
+    yesno "¿Probarlo así?" S || return 1
+
+    # The copy of PortProton: everything but its prefixes; rsync puts back whatever an earlier test changed
+    if [ ! -d "$sb/data/scripts" ]; then
+        echo "Primera vez: copio PortProton sin los prefijos ($(du -sh --exclude=prefixes "$app/data" 2>/dev/null | cut -f1)), tarda un poco…"
+    fi
+    mkdir -p "$sb/data" "$sb/cache" "$sb/config" &&
+        rsync -a --delete --exclude=/prefixes/ "$app/data/" "$sb/data/" &&
+        rsync -a --delete "$app/config/" "$sb/config/" || { echo "No pude preparar la copia en $sb." >&2; return 1; }
+    if [ -d "$sb/data/prefixes/$TEST_PREFIX" ] && yesno "¿Empezar con el prefijo $TEST_PREFIX limpio (borra lo de la prueba anterior)?" S; then
+        rm -rf "${sb:?}/data/prefixes/$TEST_PREFIX"
+    fi
+    ppdb=$exe.ppdb
+    if [ -f "$ppdb" ]; then had_ppdb=1; else printf 'export PW_PREFIX_NAME="%s"\n' "$TEST_PREFIX" >"$ppdb"; fi
+
+    flags=(--nofilesystem=host --nofilesystem=home --unshare=network
+           --system-no-talk-name=org.freedesktop.UDisks2 --system-no-talk-name=org.freedesktop.NetworkManager)
+    # extra folders the app was given (e.g. the NAS by the "nas" block)
+    while IFS= read -r f; do
+        case $f in /*|'~'/*) flags+=("--nofilesystem=${f%%:*}") ;; esac
+    done < <(flatpak info --show-permissions ru.linux_gaming.PortProton 2>/dev/null |
+             sed -n 's/^filesystems=//p' | tr ';' '\n')
+    for d in "$app"/*/ "$app"/.[!.]*/; do                 # the real PortProton, read-only (its folder itself can't be)
+        [ -d "$d" ] && [ ! -L "${d%/}" ] && flags+=("--filesystem=${d%/}:ro")
+    done
+    flags+=("--filesystem=$sb" "--filesystem=$gdir")
+    before=$(ls -A "$app")
+    echo "==> Abriendo PortProton aislado. Elige el prefijo $TEST_PREFIX si te pregunta, y cierra el juego para volver aquí."
+    flatpak run "${flags[@]}" --command=bash ru.linux_gaming.PortProton -c \
+        'export XDG_DATA_HOME=$1 XDG_CACHE_HOME=$2 XDG_CONFIG_HOME=$3; /app/bin/portproton "$4"' \
+        _ "$sb/data" "$sb/cache" "$sb/config" "$exe"
+    echo
+
+    after=$(ls -A "$app")
+    new=$(comm -13 <(sort <<<"$before") <(sort <<<"$after"))
+    if [ -n "$new" ]; then
+        echo "${Y}Ojo: han aparecido ficheros nuevos en tu PortProton real ($app):$N"
+        sed 's/^/  /' <<<"$new"
+        yesno "¿Los borro? (un .desktop nuevo ahí saldría en la lista de juegos de PortProton)" S &&
+            while IFS= read -r f; do rm -rf "${app:?}/$f"; done <<<"$new"
+    fi
+    [ $had_ppdb = 0 ] && [ -f "$ppdb" ] && yesno "¿Borro ${ppdb##*/} (los ajustes de la prueba, junto al .exe)?" S && rm -f "$ppdb"
+    say "Si te fías del juego, añádelo normal con la opción 10 (irá a tu PortProton, ya sin aislar)."
+    if yesno "¿Borrar el prefijo de pruebas $TEST_PREFIX ($(du -sh "$sb/data/prefixes/$TEST_PREFIX" 2>/dev/null | cut -f1))?" S; then
+        rm -rf "${sb:?}/data/prefixes/$TEST_PREFIX"
+    fi
+    yesno "¿Borrar también la copia de PortProton para pruebas ($(du -sh "$sb" 2>/dev/null | cut -f1))? Si no, la próxima prueba empieza antes." N &&
+        rm -rf "${sb:?}"
+    return 0
+}
+
 # Space taken by each folder in DIR (hidden ones too), smallest first, and the total. Was ~/verEspacioCadaDirectorio.sh.
 space_report() {
     local d=${1:-.}
@@ -2456,20 +2551,21 @@ menu() {
   10) Añadir un juego de Windows: probarlo con PortProton, accesos directos, Steam y colección
   11) Quitar un juego: de Steam, de PortProton y del disco (pregunta cada paso)
   12) Sincronizar la colección «PortProton» de Steam (cierra Steam si está abierto)
+  13) Probar un juego dudoso AISLADO: sin tu carpeta personal, sin NAS y sin red
  Utilidades
-  13) Ver lo que ocupa cada carpeta (también: comando «espacio», o botón derecho en Dolphin)
+  14) Ver lo que ocupa cada carpeta (también: comando «espacio», o botón derecho en Dolphin)
  Ajustes de la consola (cambian el sistema; cada uno explica y pregunta)
-  14) Ver qué ajustes están aplicados
-  15) Aplicar los ajustes pendientes, uno a uno
-  16) Revisar o cambiar ajustes concretos (VRAM, idioma, NAS…; también los que dijiste que no)
+  15) Ver qué ajustes están aplicados
+  16) Aplicar los ajustes pendientes, uno a uno
+  17) Revisar o cambiar ajustes concretos (VRAM, idioma, NAS…; también los que dijiste que no)
  Sistema
-  17) Actualizar la imagen desde GitHub (elige versión, descarga, comprueba e instala)
-  18) Actualizar esta caja de herramientas (muestra las novedades y pregunta)
-  19) Instalarla como comando «ps5-bazzite-toolbox» y en el menú de aplicaciones, o desinstalarla
+  18) Actualizar la imagen desde GitHub (elige versión, descarga, comprueba e instala)
+  19) Actualizar esta caja de herramientas (muestra las novedades y pregunta)
+  20) Instalarla como comando «ps5-bazzite-toolbox» y en el menú de aplicaciones, o desinstalarla
    0) Salir
 MENU
         read -rp "Elige: " c
-        case $c in [1-9]|1[4-7]) need_sudo || continue ;; esac       # 10-13, 18 and 19 don't need it
+        case $c in [1-9]|1[5-8]) need_sudo || continue ;; esac       # 10-14, 19 and 20 don't need it
         case $c in
             1) BOOT=0; run_checks ;;
             2) BOOT=-1; run_checks ;;
@@ -2483,15 +2579,16 @@ MENU
             10) pp_add_game ;;
             11) pp_remove_game ;;
             12) pp_collection ;;
-            13) read -e -rp "Carpeta (Intro = $HOME): " a; space_report "${a:-$HOME}" ;;
-            14) STATUS_ONLY=1 ALL=0 ONLY=''; setup_run; STATUS_ONLY=0 ;;
-            15) STATUS_ONLY=0 ALL=0 ONLY=''; setup_run ;;
-            16) echo "Ajustes: $BLOCKS"
+            13) pp_test_game ;;
+            14) read -e -rp "Carpeta (Intro = $HOME): " a; space_report "${a:-$HOME}" ;;
+            15) STATUS_ONLY=1 ALL=0 ONLY=''; setup_run; STATUS_ONLY=0 ;;
+            16) STATUS_ONLY=0 ALL=0 ONLY=''; setup_run ;;
+            17) echo "Ajustes: $BLOCKS"
                 read -rp "¿Cuáles? (separados por espacios o comas): " a
                 [ -n "$a" ] && { STATUS_ONLY=0 ALL=0 ONLY=${a//,/ }; setup_run; ONLY=''; } ;;
-            17) update_image ;;
-            18) self_update && { echo "Saliendo para que abras la versión nueva."; return 0; } ;;
-            19) if [ "$TOOLBOX_SELF" = "$TOOLBOX_BIN" ]; then uninstall_self && return 0; else install_self; fi ;;
+            18) update_image ;;
+            19) self_update && { echo "Saliendo para que abras la versión nueva."; return 0; } ;;
+            20) if [ "$TOOLBOX_SELF" = "$TOOLBOX_BIN" ]; then uninstall_self && return 0; else install_self; fi ;;
             0|q|'') return 0 ;;
             *) echo "Opción no válida" ;;
         esac
@@ -2501,6 +2598,7 @@ MENU
 case $MODE in                            # these need no root
     add-game) pp_add_game "${ARGS[@]}"; exit ;;
     remove-game) pp_remove_game "${ARGS[@]}"; exit ;;
+    test-game) pp_test_game "${ARGS[@]}"; exit ;;
     pp-collection) pp_collection "${ARGS[@]}"; exit ;;
     space) space_report "${ARGS[@]}"; exit ;;
     self-update) self_update "$UPDATE_TAG"; exit ;;
