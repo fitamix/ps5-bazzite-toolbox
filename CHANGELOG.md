@@ -5,6 +5,15 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+## [1.4.0] - 2026-11-02
+
+### Añadido
+- Bloque **`gpu40`**: activar las 40 unidades de cálculo de la GPU (o volver a las 36 de fábrica) con
+  `amdgpu.ps5_cu_unlock=3`, la opción que trae la imagen. Explica la «lotería del silicio» (en algunas consolas dan
+  fallos gráficos o cuelgues), guarda copia de `cmdline.txt` y se cambia en cualquier momento con la opción 16 →
+  `gpu40`. Solo PS5 original y Slim; la respuesta recomendada es «no».
+- El diagnóstico avisa si hay fallos de la GPU con las 40 unidades activas.
+
 ## [1.3.0] - 2026-11-01
 
 ### Añadido
@@ -79,7 +88,8 @@ Primera versión publicada.
 - Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
-[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.3.0...HEAD
+[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.1.0...v1.3.0
 [1.1.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.0.1...v1.0.2

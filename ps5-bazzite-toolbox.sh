@@ -8,7 +8,7 @@
 #  - PortProton and Steam: add or remove a Windows game (PortProton + Desktop + Steam + "PortProton" collection),
 #    sync the collection; global PortProton defaults (setup block "portproton"). Tools: space taken by each folder.
 #  - Settings (setup): blocks that adapt the image (language, boot options, Wi-Fi, updates, VRAM, fans, warm
-#    reboot, HDMI fix, disk, Brave, NAS, zram swap size). Each explains what it changes, why and how to undo it, and asks.
+#    reboot, HDMI fix, disk, Brave, NAS, zram swap size, the GPU's 40 compute units). Each explains what it changes, why and how to undo it, and asks.
 #    Answers are kept in ~/.config/ps5-bazzite-toolbox.conf; running it again only offers what is pending.
 #
 #   bash ps5-bazzite-toolbox.sh                         # menu (the first time it offers to install itself as the
@@ -31,10 +31,10 @@
 #   bash ps5-bazzite-toolbox.sh --self-update [v1.1.0]  # update this toolbox from its GitHub releases
 #   bash ps5-bazzite-toolbox.sh --install | --uninstall # command ~/.local/bin/ps5-bazzite-toolbox + applications menu
 #   bash ps5-bazzite-toolbox.sh --version
-# Setup blocks: locale cmdline wifi updates vram zram fans warmreboot hdmi bt disk brave nas bios media esde portproton atajos
+# Setup blocks: locale cmdline wifi updates vram gpu40 zram fans warmreboot hdmi bt disk brave nas bios media esde portproton atajos
 set -uo pipefail
 
-TOOLBOX_VERSION=1.3.0                    # bump on every release (see CHANGELOG.md and release.sh)
+TOOLBOX_VERSION=1.4.0                    # bump on every release (see CHANGELOG.md and release.sh)
 TOOLBOX_REPO=fitamix/ps5-bazzite-toolbox
 TOOLBOX_BIN=$HOME/.local/bin/ps5-bazzite-toolbox                      # where --install puts it
 TOOLBOX_DESKTOP=$HOME/.local/share/applications/ps5-bazzite-toolbox.desktop
@@ -112,7 +112,7 @@ TOOLS_REPO=https://github.com/ps5-linux/ps5-linux-tools
 TOOLS_COMMIT=f1fa98a                     # the revision reviewed on 2026-10-27
 POLKIT_RULE=/etc/polkit-1/rules.d/50-ps5-no-kde-smart.rules
 BRAVE_FLAGS=$HOME/.var/app/com.brave.Browser/config/brave-flags.conf
-BLOCKS="locale cmdline wifi updates vram zram fans warmreboot hdmi bt disk brave nas bios media esde portproton atajos"
+BLOCKS="locale cmdline wifi updates vram gpu40 zram fans warmreboot hdmi bt disk brave nas bios media esde portproton atajos"
 
 # ======================================== settings (setup) ========================================
 # --- saved answers -------------------------------------------------------------------------------
@@ -343,6 +343,56 @@ apply_vram() {
     sudo test -f "$VRAMTXT.orig" || { [ -n "$cur" ] && sudo cp "$VRAMTXT" "$VRAMTXT.orig"; }
     echo "$VRAM_WANT" | sudo tee "$VRAMTXT" >/dev/null || return 1
     say "VRAM: $(vram_gb "$VRAM_WANT") ($VRAM_WANT); Linux tendrá $(vram_left "$VRAM_WANT") de RAM tras el próximo arranque en frío."
+    COLD=1
+}
+
+# --- gpu40 ---------------------------------------------------------------------------------------
+# The PS5's GPU has 40 compute units; Sony enables 36. The image's kernel can switch the other 4 on with
+# amdgpu.ps5_cu_unlock=3 in cmdline.txt (its README, "40 GPU compute units"): silicon lottery, on some consoles
+# they give green dots, a purple tint or crashes. Original PS5 and Slim only (a Pro's 60 are all active).
+# GPU_CU (40 or 36) is what you chose here; "applied" means the console is set that way.
+GPU_CU_PARAM=/sys/module/amdgpu/parameters/ps5_cu_unlock
+gpu_cu_now() {                           # active compute units this boot (amdgpu logs active_cu_number)
+    sudo journalctl -k -b --no-pager 2>/dev/null | grep -o 'active_cu_number[^0-9]*[0-9]\+' | tail -1 | grep -o '[0-9]\+$'
+}
+gpu_cu_set() { sudo grep -qE '(^| )amdgpu\.ps5_cu_unlock=[1-9]' "$CMDLINE"; }   # unlock asked for at the next boot
+desc_gpu40() {
+    local now; now=$(gpu_cu_now)
+    section
+    say "Las 40 unidades de cálculo (CU) de la GPU en vez de 36 (amdgpu.ps5_cu_unlock=3 en $CMDLINE)."
+    say "Ahora: ${now:-?} activas en este arranque; en el próximo, $(gpu_cu_set && echo 40 || echo 36)."
+    say "POR QUÉ: Sony apaga 4 de las 40 en fábrica, en parte porque en algunos chips alguna sale defectuosa."
+    say "Es la «lotería del silicio»: en muchas consolas las 40 funcionan y la GPU rinde más (~11 % más"
+    say "unidades); en otras salen puntitos verdes u otros fallos gráficos, un tinte morado o cuelgues."
+    say "Pruébalo con varios juegos exigentes un buen rato; si ves algo de eso, vuelve a 36 aquí mismo."
+    say "Solo PS5 original y Slim (en la Pro ya están todas activas). Las actualizaciones de la imagen lo respetan."
+    say "DESHACER: vuelve a este bloque (menú 16 → gpu40) y elige 36, o copia un $CMDLINE.bak-* encima."
+    say "Cuenta solo tras APAGAR y arrancar con el cargador. Comprobar: sudo dmesg | grep active_cu_number"
+}
+check_gpu40() {
+    [ -e "$GPU_CU_PARAM" ] && sudo test -f "$CMDLINE" || return 2   # a kernel without the option
+    local now; now=$(gpu_cu_now)
+    [ -z "$now" ] || [ "$now" -lt 60 ] || return 2                  # a PS5 Pro: all its units are on
+    case ${GPU_CU:-} in
+        40) gpu_cu_set ;;
+        36) ! gpu_cu_set ;;
+        *) return 1 ;;                                              # not chosen yet
+    esac
+}
+apply_gpu40() {
+    local c def=40
+    gpu_cu_set && def=36                  # asked again while on: the likely wish is to go back
+    say "  40 = desbloquear las 4 unidades extra · 36 = como viene de fábrica"
+    while :; do
+        read -rp "  ¿Cuántas unidades? (40 o 36, Intro = $def): " c </dev/tty
+        c=${c:-$def}
+        case $c in 40|36) break ;; *) say "Escribe 40 o 36." ;; esac
+    done
+    sudo cp "$CMDLINE" "$CMDLINE.bak-$(date +%Y%m%d-%H%M%S)" || return 1
+    if [ "$c" = 40 ]; then cmd_set amdgpu.ps5_cu_unlock 3 || return 1
+    else sudo sed -i -E 's/ *amdgpu\.ps5_cu_unlock=[0-9]+//' "$CMDLINE" || return 1; fi
+    remember GPU_CU "$c"
+    say "GPU: $c unidades tras el próximo arranque en frío. Comprueba luego: sudo dmesg | grep active_cu_number"
     COLD=1
 }
 
@@ -982,6 +1032,7 @@ default_for() {
         brave) echo N ;;                 # loses Brave's saved logins: only if the wallet prompt bothers you
         nas) [ -n "${NAS_IP:-}" ] && echo S || echo N ;;
         bios|media) echo N ;;            # a choice, not a fix: only if you want them shared from the NAS
+        gpu40) echo N ;;                 # silicon lottery: only if you want to try it
         *) echo S ;;
     esac
 }
@@ -1126,6 +1177,8 @@ vt=$(cat "$dev/mem_info_vram_total" 2>/dev/null || echo 0)
 [ "$vt" -lt $((1 << 31)) ] && warn "VRAM menor de 2 GB: los juegos DX12/UE5 pueden caerse con 'Not enough memory' (bloque vram)"
 check_k "Reinicios y fallos de la GPU" "$P_GPU" warn
 [ "$(kcount "$P_GPU")" = 0 ] || info "Al entrar en el modo juego es un fallo conocido de la imagen; si coincide con un juego, es el juego."
+[ "$(kcount "$P_GPU")" = 0 ] || [ "$(gpu_cu_now)" != 40 ] ||
+    info "Tienes las 40 unidades de la GPU activas (bloque gpu40): si estos fallos son nuevos, prueba a volver a 36."
 
 # --- hangs, memory, crashes ----------------------------------------------------------------------------
 head_ "Cuelgues, memoria y cierres"
@@ -1264,7 +1317,7 @@ done
 [ $STATUS_ONLY = 1 ] && return 0
 
 echo "Resumen — aplicados:${DONE:- ninguno} | omitidos:${SKIPPED:- ninguno} | fallidos:${FAILED:- ninguno}"
-[ $COLD = 1 ] && echo "APAGA (sudo poweroff) y arranca con el cargador: la VRAM solo cambia en un arranque en frío."
+[ $COLD = 1 ] && echo "APAGA (sudo poweroff) y arranca con el cargador: la VRAM y las unidades de la GPU solo cambian en un arranque en frío."
 [ $COLD = 0 ] && [ $REBOOT = 1 ] && echo "Reinicia para que cuenten los cambios (parámetros de arranque, zram)."
 [ -z "$ONLY" ] && cat <<'EOF'
 A mano (no se puede automatizar desde aquí):

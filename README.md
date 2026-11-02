@@ -133,6 +133,7 @@ depende de cada consola (disco, idioma, NAS…) lo detecta o lo pregunta. Las re
 | `wifi` | Apaga o vuelve a encender el Wi-Fi según la versión de la imagen | El driver del IW620 se colgaba con el Wi-Fi activo antes de la v1.5.0 |
 | `updates` | Bloquea las actualizaciones automáticas de kernel, Mesa, firmware y gamescope | Esos paquetes llevan parches de la PS5: actualizarlos rompe la imagen |
 | `vram` | VRAM reservada para la gráfica (`/efi/vram.txt`, de 512 MB a 8 GB) | Con 512 MB, los juegos DX12/UE5 se caen con *Not enough memory* |
+| `gpu40` | Las 40 unidades de cálculo de la GPU en vez de 36 (`amdgpu.ps5_cu_unlock=3`), o volver a 36; solo PS5 original y Slim. Se cambia con la opción 16 → `gpu40` | Más potencia gráfica si tu chip las aguanta («lotería del silicio»): en algunas consolas dan puntitos verdes, tinte morado o cuelgues. Recomendado «no»: pruébalo tú |
 | `zram` | Swap zram del tamaño de toda la RAM (Bazzite pone la mitad), con un fichero aparte en `/etc/systemd/zram-generator.conf.d/` | Juegos grandes la llenan y, sin swap libre, el sistema los cierra |
 | `fans` | Control del ventilador y temperatura objetivo (60–85 °C) | El objetivo de fábrica (80 °C) es silencioso pero caliente |
 | `warmreboot` | Reinicio en caliente (sin pasar por el cargador) | Comodidad; experimental |
