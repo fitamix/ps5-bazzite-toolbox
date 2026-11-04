@@ -5,8 +5,12 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+## [1.5.0] - 2026-11-04
+
 ### Añadido
-- **Volver atrás en la imagen.** Antes de cada actualización, la opción 17 guarda una copia completa de lo que cambia:
+- **Volver atrás en la imagen (EN PRUEBAS).** Ya probado: la copia (17 → 3) guarda todo lo que debe en una PS5 con la
+  imagen v1.8.4. Falta probar la vuelta (17 → 2) y una actualización real con su copia; úsalo sabiendo que puede
+  fallar, y si lo pruebas, cuenta cómo te ha ido. Antes de cada actualización, la opción 17 guarda una copia completa de lo que cambia:
   kernel, initrd, `cmdline.txt`, módulos, scripts, servicios y reglas de la imagen, `/etc/ps5-bazzite-deck` y qué
   servicios estaban activos. La opción 17 → «Volver» (`--rollback`) la restaura sin red, aunque el kernel sea otro, y
   borra lo que añadió la versión nueva; antes guarda cómo está, así que también se deshace. Se guardan las 3 últimas.
@@ -15,6 +19,10 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 - Opción 17 → «Guardar ahora una copia» de la imagen tal como está.
 
 ### Cambiado
+- **README reescrito:** cada opción del menú con su equivalente sin menú y, si lo hay, el comando del sistema; cada
+  bloque de ajustes en detalle (qué cambia, por qué, qué pregunta, los comandos para hacerlo a mano y cómo
+  deshacerlo); y una sección nueva con todos los ficheros que usa o crea, dónde, qué opción los genera y cómo
+  quitarlos.
 - La opción 17 pregunta primero: instalar una versión de GitHub, volver a una copia o guardar una.
 - Antes de instalar, avisa si el `update.sh` del autor no admite el cambio de kernel (hasta la v2.4) y dice cómo
   hacerlo.
@@ -102,7 +110,8 @@ Primera versión publicada.
 - Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
-[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.4.0...HEAD
+[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.1.0...v1.3.0
 [1.1.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.0.2...v1.1.0

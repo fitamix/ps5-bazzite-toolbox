@@ -7,14 +7,29 @@ y escritorio KDE). Es **un solo fichero** que se ejecuta en la consola y sirve p
 - **Diagnosticar** problemas sin cambiar nada, y dejar un informe para pedir ayuda.
 - **Recuperar la pantalla o la sesión gráfica** cuando se queda en negro.
 - **Poner a punto un sistema recién instalado**: idioma, VRAM, ventilador, NAS, EmuDeck/ES-DE… bloque a bloque,
-  explicando cada cambio y preguntando antes. Incluye montar un NAS para las ROMs, BIOS e imágenes de
-  EmuDeck/ES-DE.
-- **Añadir y quitar juegos de Windows** en PortProton y Steam en un paso, con ajustes por defecto pensados para
-  que funcionen el máximo de juegos sin tocar nada.
-- **Actualizar la imagen** desde GitHub con comprobación de SHA-256.
+  explicando cada cambio y preguntando antes.
+- **Añadir y quitar juegos de Windows** en PortProton y Steam en un paso, normales o aislados del resto del sistema.
+- **Cambiar de versión de la imagen** desde GitHub (más nueva o anterior) con comprobación de SHA-256, y volver a
+  como estaba antes (en pruebas).
 
-Todo está en español. Probado en una PS5 (FW 4.50) con las versiones v1.4 – v1.8 de la imagen, arrancando desde un
-disco USB. No es un proyecto oficial de la imagen ni de sus autores.
+Todo está en español. Probado en una PS5 original (FW 4.50, chip Wi-Fi IW620) con las versiones v1.4 – v1.8 de la
+imagen, arrancando desde un disco USB. No es un proyecto oficial de la imagen ni de sus autores.
+
+Cada ajuste explica qué cambia, por qué y cómo deshacerlo, y aquí abajo está también **el comando equivalente**, por
+si prefieres hacerlo a mano sin instalar nada.
+
+## Índice
+
+- [Uso rápido](#uso-rápido)
+- [Opciones del menú y de la línea de comandos](#opciones-del-menú-y-de-la-línea-de-comandos)
+- [Diagnóstico](#diagnóstico)
+- [Pantalla y sesión gráfica](#pantalla-y-sesión-gráfica)
+- [Ajustes de la consola](#ajustes-de-la-consola) (cada bloque en detalle, con sus comandos)
+- [PortProton y Steam](#portproton-y-steam)
+- [Cambiar de versión de la imagen y volver atrás](#cambiar-de-versión-de-la-imagen-y-volver-atrás)
+- [Ficheros: qué usa y dónde guarda cada cosa](#ficheros-qué-usa-y-dónde-guarda-cada-cosa)
+- [Versiones de la caja de herramientas](#versiones-de-la-caja-de-herramientas)
+- [Cosas que se hacen a mano](#cosas-que-se-hacen-a-mano)
 
 ## Uso rápido
 
@@ -29,77 +44,53 @@ Ese enlace descarga siempre la **última versión publicada**. La rama `main` pu
 
 La primera vez se ofrece a **instalarse** como el comando `ps5-bazzite-toolbox` (en `~/.local/bin`, sin `sudo`; las
 actualizaciones de la imagen no lo borran) y como «Caja de herramientas PS5» en el menú de aplicaciones de KDE.
-A partir de ahí:
+A partir de ahí basta con `ps5-bazzite-toolbox`, y el fichero descargado ya se puede borrar. Si prefieres no
+instalarla, sigue funcionando con `bash ps5-bazzite-toolbox.sh`.
 
-```sh
-ps5-bazzite-toolbox
-```
+Se ejecuta con tu usuario (no como root). La contraseña de `sudo` la pide solo la primera vez que eliges algo que la
+necesita, y no vuelve a pedirla hasta que la cierras.
 
-y el fichero descargado ya se puede borrar. Si prefieres no instalarla, sigue funcionando con `bash ps5-bazzite-toolbox.sh`.
+## Opciones del menú y de la línea de comandos
 
-Sin opciones muestra un menú. Se ejecuta con tu usuario (no como root). La contraseña de `sudo` la pide solo la
-primera vez que eliges algo que la necesita, y ya no vuelve a pedirla hasta que la cierras.
+Sin opciones muestra un menú (sin terminal, por ejemplo lanzada desde otro script, hace el diagnóstico). Cada opción
+tiene su equivalente sin menú (`ps5-bazzite-toolbox --…`, o `bash ps5-bazzite-toolbox.sh --…` sin instalar) y, cuando
+lo hay, un comando del sistema que hace lo mismo.
 
-```
- Diagnóstico (solo mira, no cambia nada)
-   1) Revisión completa de este arranque (y guarda el informe)
-   2) Revisar el arranque anterior (tras un cuelgue o un apagado forzado)
-   3) Vigilar el kernel en directo
-   4) Vigilar en directo: CPU, GPU, VRAM, RAM, swap, temperatura y qué gasta más
- Pantalla y sesión gráfica
-   5) Ver en qué modo arranca la consola y qué sesión hay ahora
-   6) Pantalla en negro: recuperar la imagen (cambia de consola y vuelve; no cierra nada)
-   7) Pantalla en negro que no se arregla con el 6: reiniciar la sesión (cierra Steam y lo abierto)
-   8) Pasar al escritorio KDE ahora y arrancar siempre en él
-   9) Pasar al modo juego ahora y arrancar siempre en él
- PortProton y Steam
-  10) Instalar un juego de Windows: elige su aislamiento, pruébalo y, si va bien, a Steam y a la colección
-  11) Mis juegos: cambiar su aislamiento o desinstalarlos (de Steam, PortProton y el disco)
-  12) Sincronizar la colección «PortProton» de Steam
- Utilidades
-  13) Ver lo que ocupa cada carpeta
- Ajustes de la consola (cambian el sistema; cada uno explica y pregunta)
-  14) Ver qué ajustes están aplicados
-  15) Aplicar los ajustes pendientes, uno a uno
-  16) Revisar o cambiar ajustes concretos
- Sistema
-  17) Imagen: instalar otra versión de GitHub o volver a como estaba antes de actualizar
-  18) Actualizar esta caja de herramientas
-  19) Instalarla como comando y en el menú de aplicaciones, o desinstalarla
-```
-
-Lo mismo sin menú:
-
-```sh
-ps5-bazzite-toolbox --check [--boot -1]       # diagnóstico de este arranque (o del anterior) + informe
-ps5-bazzite-toolbox --watch                   # kernel en directo
-ps5-bazzite-toolbox --mem                     # CPU, GPU y memoria en directo
-ps5-bazzite-toolbox --screen                  # pantalla en negro: recuperar la imagen
-ps5-bazzite-toolbox --session status|restart|desktop|gamemode
-ps5-bazzite-toolbox --add-game "/ruta/Juego.exe"
-ps5-bazzite-toolbox --remove-game ["/ruta/Juego.exe" | "Nombre"]
-ps5-bazzite-toolbox --games                           # mis juegos: cambiar aislamiento o desinstalar
-ps5-bazzite-toolbox --change-level "/ruta/Juego.exe"  # cambiar cómo se ejecuta un juego instalado
-ps5-bazzite-toolbox --run "/ruta/Juego.exe"           # lanzarlo como lo dejó --add-game (lo usa Steam)
-ps5-bazzite-toolbox --pp-collection [--dry-run|--yes]
-ps5-bazzite-toolbox --space [carpeta]
-ps5-bazzite-toolbox --setup                   # ajustes, bloque a bloque
-ps5-bazzite-toolbox --setup --status          # solo el estado de cada bloque
-ps5-bazzite-toolbox --setup --all             # la respuesta recomendada en todo, sin preguntar
-ps5-bazzite-toolbox --setup --only vram,nas   # solo esos bloques (vuelve a preguntar)
-ps5-bazzite-toolbox --update [v1.8.4]         # actualizar la imagen
-ps5-bazzite-toolbox --rollback               # volver a como estaba la imagen antes de una actualización
-ps5-bazzite-toolbox --self-update [v1.1.0]    # actualizar esta caja de herramientas
-ps5-bazzite-toolbox --install | --uninstall
-ps5-bazzite-toolbox --version
-```
-
-(Sin instalar, lo mismo con `bash ps5-bazzite-toolbox.sh --check`, etc.)
+| Menú | Qué hace | Sin menú | Comando equivalente (sin la caja) |
+|---|---|---|---|
+| **Diagnóstico** (solo mira) | | | |
+| 1 | Revisión completa de este arranque y guarda el informe | `--check` | `journalctl -k -b 0` y `journalctl -b 0` (la caja además los interpreta) |
+| 2 | Lo mismo con el arranque anterior (tras un cuelgue o un apagado forzado) | `--check --boot -1` | `journalctl -k -b -1` |
+| 3 | Vigilar el kernel en directo (Ctrl+C vuelve) | `--watch` | `sudo journalctl -k -f -n 0` |
+| 4 | Vigilar CPU, GPU, VRAM, RAM, swap, temperatura y qué gasta más | `--mem` | — (lee `/sys/class/drm/card*/device/mem_info_*`, `/proc/meminfo`, `sensors`…) |
+| **Pantalla y sesión** | | | |
+| 5 | En qué sesión arranca la consola y cuál hay ahora | `--session status` | `loginctl list-sessions`; `systemctl is-active sddm` |
+| 6 | Pantalla en negro: recuperar la imagen (no cierra nada) | `--screen` | `sudo chvt 2; sleep 3; sudo chvt 1` |
+| 7 | Pantalla en negro que no se arregla con el 6: reiniciar la sesión (cierra Steam y lo abierto) | `--session restart` | ver [Pantalla y sesión](#pantalla-y-sesión-gráfica) |
+| 8 | Pasar al escritorio KDE ahora y arrancar siempre en él | `--session desktop` | ver [Pantalla y sesión](#pantalla-y-sesión-gráfica) |
+| 9 | Pasar al modo juego ahora y arrancar siempre en él | `--session gamemode` | `sudo rm /etc/sddm.conf.d/zzz-ps5-session.conf` y reiniciar la sesión |
+| **PortProton y Steam** | | | |
+| 10 | Instalar un juego de Windows (normal o aislado), probarlo y añadirlo a Steam | `--add-game [Juego.exe]` | — |
+| 11 | Mis juegos: cambiar su aislamiento o desinstalarlos | `--games`, `--change-level Juego.exe`, `--remove-game [Juego.exe\|"Nombre"]` | — |
+| 12 | Sincronizar la colección «PortProton» de Steam (cierra Steam) | `--pp-collection [--dry-run\|--yes]` | — |
+| — | Lanzar un juego como lo dejó la opción 10 (lo usan Steam y el escritorio) | `--run Juego.exe` | — |
+| **Utilidades** | | | |
+| 13 | Lo que ocupa cada carpeta (también el comando `espacio` y el botón derecho de Dolphin) | `--space [carpeta]` | `du -bsh -- */ .[!.]*/ \| sort -h` |
+| **Ajustes de la consola** | | | |
+| 14 | Ver qué ajustes están aplicados | `--setup --status` | — |
+| 15 | Aplicar los pendientes, uno a uno | `--setup` | — |
+| — | Aplicar sin preguntar la respuesta recomendada en todos | `--setup --all` | — |
+| 16 | Revisar o cambiar ajustes concretos (también los que dijiste que no) | `--setup --only vram,nas` | cada bloque, en [Ajustes](#ajustes-de-la-consola) |
+| **Sistema** | | | |
+| 17 | Imagen: instalar otra versión de GitHub, volver a como estaba antes de actualizar (en pruebas) o guardar una copia | `--update [v1.8.4]`, `--rollback` | ver [Cambiar de versión](#cambiar-de-versión-de-la-imagen-y-volver-atrás) |
+| 18 | Actualizar esta caja de herramientas (muestra las novedades y pregunta) | `--self-update [v1.1.0]` | — |
+| 19 | Instalarla como comando y en el menú de aplicaciones, o desinstalarla | `--install`, `--uninstall` | — |
+| — | Versión y ayuda | `--version`, `--help` | — |
 
 ## Diagnóstico
 
-Solo lee. Al final ofrece guardar el informe (sin contraseñas) y repasa lo que ha dado problemas en esta
-consola:
+Solo lee. Al final ofrece guardar el informe (sin contraseñas; ver [Ficheros](#ficheros-qué-usa-y-dónde-guarda-cada-cosa))
+y repasa lo que ha dado problemas en esta consola:
 
 - **Disco USB:** atascos (`timing out command`), resets, errores de E/S y espacio libre.
 - **Gráfica:** reinicios de la GPU, errores de memoria, VRAM disponible.
@@ -108,45 +99,410 @@ consola:
 - **Temperatura y ventilador**, **red** (router, DNS, Wi-Fi, Bluetooth, NAS), **sesión gráfica** y el estado de cada
   bloque de ajustes.
 
-**Vigilar en directo** (opción 4): cada 2 s muestra la carga de CPU (media y el hilo más cargado) y de GPU, VRAM, GTT (RAM que la gráfica toma prestada), RAM y swap, todo
-como usado/total, la temperatura de CPU y GPU y los programas que más VRAM usan. La swap de Bazzite es zram (RAM comprimida):
-`2.5/4.3 GB (0.8)` son 2,5 GB en la swap que ocupan 0,8 GB de RAM. Al parar (Ctrl+C) resume los picos y dice si
-falta VRAM, RAM o las dos, si se llenó la swap y si el límite es la GPU o un hilo de la CPU. Al pararlo ofrece guardar cada medida en `ps5-mem-FECHA.csv`.
+**Vigilar en directo** (opción 4): cada 2 s muestra la carga de CPU (media y el hilo más cargado) y de GPU, VRAM, GTT
+(RAM que la gráfica toma prestada), RAM y swap, todo como usado/total, la temperatura de CPU y GPU y los programas que
+más VRAM usan. La swap de Bazzite es zram (RAM comprimida): `2.5/4.3 GB (0.8)` son 2,5 GB en la swap que ocupan
+0,8 GB de RAM. Al parar (Ctrl+C) resume los picos, dice si falta VRAM, RAM o las dos, si se llenó la swap y si el
+límite es la GPU o un hilo de la CPU, y ofrece guardar cada medida en un CSV.
 
 ## Pantalla y sesión gráfica
 
 - **Recuperar la imagen** (6): pasar a otra consola virtual y volver hace que la gráfica vuelva a configurar la
   salida HDMI. No cierra nada.
 - **Reiniciar la sesión** (7): `systemctl restart sddm` deja vivo el compositor anterior y la pantalla sigue en
-  negro. El toolbox cierra primero las sesiones y el compositor, y luego arranca SDDM.
-- **Escritorio / modo juego** (8, 9): cambia en qué sesión entra la consola al arrancar y la reinicia ya.
+  negro. La caja cierra primero las sesiones y el compositor, y luego arranca SDDM. A mano:
+  ```sh
+  sudo systemctl stop sddm
+  loginctl list-sessions                      # y por cada sesión del seat0: sudo loginctl terminate-session <id>
+  sudo pkill -u "$USER" -x 'gamescope|gamescope-wl|kwin_wayland|plasmashell'
+  sudo systemctl start sddm
+  ```
+- **Escritorio / modo juego** (8, 9): cambia en qué sesión entra la consola al arrancar y la reinicia ya. El
+  escritorio se fija con `/etc/sddm.conf.d/zzz-ps5-session.conf`; sin ese fichero entra en el modo juego, como viene
+  la imagen. A mano:
+  ```sh
+  printf '[Autologin]\nUser=%s\nSession=plasma.desktop\n' "$USER" | sudo tee /etc/sddm.conf.d/zzz-ps5-session.conf  # escritorio
+  sudo rm -f /etc/sddm.conf.d/zzz-ps5-session.conf                                                                 # modo juego
+  ```
 
 ## Ajustes de la consola
 
-Cada bloque explica **qué cambia, por qué y cómo deshacerlo**, y pregunta con una respuesta recomendada. Lo que
-depende de cada consola (disco, idioma, NAS…) lo detecta o lo pregunta. Las respuestas quedan en
-`~/.config/ps5-bazzite-toolbox.conf`; al repetirlo solo ofrece lo pendiente.
+Los ajustes van en **bloques**. Cada uno, al ofrecerse, explica **qué cambia, por qué y cómo deshacerlo**, y
+pregunta con una respuesta recomendada (`[S/n]` = sí por defecto, `[s/N]` = no). Lo que depende de cada consola
+(disco, idioma, NAS…) lo detecta o lo pregunta.
 
-| Bloque | Qué hace | Por qué |
-|---|---|---|
-| `locale` | Idioma, teclado, zona horaria y NTP | La imagen viene en inglés, teclado US y UTC |
-| `cmdline` | `/efi/cmdline.txt`: idioma en el arranque y `usb-storage.quirks` para el disco USB de arranque | Algunos discos USB con UAS dan resets y errores de E/S |
-| `wifi` | Apaga o vuelve a encender el Wi-Fi según la versión de la imagen | El driver del IW620 se colgaba con el Wi-Fi activo antes de la v1.5.0 |
-| `updates` | Bloquea las actualizaciones automáticas de kernel, Mesa, firmware y gamescope | Esos paquetes llevan parches de la PS5: actualizarlos rompe la imagen |
-| `vram` | VRAM reservada para la gráfica (`/efi/vram.txt`, de 512 MB a 8 GB) | Con 512 MB, los juegos DX12/UE5 se caen con *Not enough memory* |
-| `gpu40` | Las 40 unidades de cálculo de la GPU en vez de 36 (`amdgpu.ps5_cu_unlock=3`), o volver a 36; solo PS5 original y Slim. Se cambia con la opción 16 → `gpu40` | Más potencia gráfica si tu chip las aguanta («lotería del silicio»): en algunas consolas dan puntitos verdes, tinte morado o cuelgues. Recomendado «no»: pruébalo tú |
-| `zram` | Swap zram del tamaño de toda la RAM (Bazzite pone la mitad), con un fichero aparte en `/etc/systemd/zram-generator.conf.d/` | Juegos grandes la llenan y, sin swap libre, el sistema los cierra |
-| `fans` | Control del ventilador y temperatura objetivo (60–85 °C) | El objetivo de fábrica (80 °C) es silencioso pero caliente |
-| `warmreboot` | Reinicio en caliente (sin pasar por el cargador) | Comodidad; experimental |
-| `hdmi` | Recupera la imagen tras un reinicio en caliente | A veces el HDMI sale en negro |
-| `bt` | Recarga `btusb` si el Bluetooth arranca sin adaptador | El IW620 a veces no responde a su primer reinicio |
-| `disk` | Desactiva la consulta SMART de KDE | Dejaba algunos discos USB 60 s sin responder |
-| `brave` | Brave sin la Cartera de KDE | Con inicio automático, Brave pide su contraseña cada vez |
-| `nas` | Monta un NAS por SMB y enlaza las ROMs de EmuDeck | ROMs compartidas con otros equipos (p. ej. una Steam Deck) |
-| `bios`, `media` | BIOS e imágenes de ES-DE desde el NAS | Una sola copia para todos los equipos |
-| `esde` | Arregla el `es_systems.xml` que deja EmuDeck (rutas de Windows, Citra) | Sin esto 3DS falla con *citra_libretro.dll* |
-| `portproton` | Ajustes globales de PortProton: FSYNC/ESYNC y trazado de rayos para todos los juegos, salvo los que su `.ppdb` cambie | PortProton los trae apagados; el Proton de Steam lleva la sincronización rápida, y hay juegos que exigen trazado de rayos |
-| `atajos` | Botón derecho de Dolphin (instalar, cambiar aislamiento y desinstalar un juego; espacio por carpeta), comando `espacio`, acceso «Colección PortProton» | Tenerlo todo a mano tras instalar |
+- **Opción 15** (`--setup`) ofrece uno a uno los pendientes; **14** (`--setup --status`) solo enseña el estado:
+  ✔ aplicado, ✘ pendiente, – no aplica en esta consola (o dijiste que no).
+- **Opción 16** (`--setup --only vram,nas`) vuelve a un bloque concreto, aunque ya esté aplicado o le dijeras que no:
+  es la forma de cambiar un valor o deshacerlo.
+- **Tus respuestas** (idioma, VRAM, datos del NAS, bloques que no quieres…) se guardan en
+  `~/.config/ps5-bazzite-toolbox.conf`, y la próxima vez solo ofrece lo pendiente.
+- Algunos piden **reiniciar**, y los que tocan la memoria o la GPU, **apagar y arrancar con el cargador**
+  (un reinicio, también el reinicio en caliente, no los cambia). Lo dice al final.
+
+### Resumen
+
+| Bloque | Qué hace | Recomendado | Reinicio |
+|---|---|---|---|
+| [`locale`](#locale) | Idioma, teclado, zona horaria y hora por red | sí | no |
+| [`cmdline`](#cmdline) | Idioma en el arranque y arreglo para el disco USB, en `/efi/cmdline.txt` | sí | reiniciar |
+| [`wifi`](#wifi) | Apaga o enciende el Wi-Fi según la versión de la imagen | sí | no |
+| [`updates`](#updates) | Bloquea las actualizaciones que rompen la imagen | sí | no |
+| [`vram`](#vram) | Memoria reservada para la gráfica | sí | apagar |
+| [`gpu40`](#gpu40) | Las 40 unidades de cálculo de la GPU en vez de 36 | **no** (pruébalo tú) | apagar |
+| [`zram`](#zram) | Swap comprimida del tamaño de toda la RAM | sí | reiniciar |
+| [`fans`](#fans) | Control del ventilador y temperatura objetivo | sí | no |
+| [`warmreboot`](#warmreboot) | Reinicio en caliente (sin pasar por el cargador) | **no** (experimental) | no |
+| [`hdmi`](#hdmi) | Recupera la imagen tras un reinicio en caliente | sí, si usas el reinicio en caliente | no |
+| [`bt`](#bt) | Recarga el Bluetooth si arranca sin adaptador (PS5 original) | sí | no |
+| [`disk`](#disk) | Quita la consulta SMART de KDE que bloquea discos USB | sí | no |
+| [`brave`](#brave) | Brave sin pedir la contraseña de la Cartera de KDE | no | no |
+| [`nas`](#nas) | Monta un NAS por SMB y enlaza las ROMs de EmuDeck | sí, si ya diste sus datos | no |
+| [`bios`](#bios) | BIOS de EmuDeck desde el NAS | no | no |
+| [`media`](#media) | Imágenes de ES-DE desde el NAS | no | no |
+| [`esde`](#esde) | Arregla el `es_systems.xml` que deja EmuDeck | sí | no |
+| [`portproton`](#portproton) | Sincronización rápida y trazado de rayos para todos los juegos de PortProton | sí | no |
+| [`atajos`](#atajos) | Botón derecho de Dolphin, comando `espacio` y acceso «Colección PortProton» | sí | no |
+
+Los comandos de cada bloque son lo que hace la caja, con los valores por defecto; cámbialos por los tuyos.
+
+### `locale`
+
+**Qué cambia:** idioma del sistema, teclado (consola y escritorio), zona horaria y hora automática por red.
+**Por qué:** la imagen viene en inglés, con teclado US y hora UTC.
+**Pregunta:** idioma (`es_ES.UTF-8`), teclado (`es`) y zona horaria (`Europe/Madrid`).
+
+```sh
+sudo localectl set-locale LANG=es_ES.UTF-8
+sudo localectl set-keymap es
+sudo localectl set-x11-keymap es
+sudo timedatectl set-timezone Europe/Madrid
+sudo timedatectl set-ntp true
+```
+
+**Deshacer:** los mismos comandos con otros valores. Steam tiene su propio idioma y zona horaria (ver
+[Cosas que se hacen a mano](#cosas-que-se-hacen-a-mano)).
+
+### `cmdline`
+
+**Qué cambia:** `/efi/cmdline.txt`, las opciones con las que arranca el kernel (una sola línea):
+
+- `locale.LANG=…` y `vconsole.keymap=…`: el idioma y el teclado desde el arranque (las sesiones por SSH no leen
+  los de `locale`).
+- `usb-storage.quirks=VID:PID:letras` para el disco USB de arranque: `u` = sin UAS, `m` = transferencias de 32 KB.
+  Propone `um` para el Lexar ES3 (`21c4:0003`), `u` si este arranque ya tuvo errores UAS, y nada si no los hay.
+- En la imagen v1.5.0 o posterior, quita `module_blacklist=moal` (el Wi-Fi ya no se cuelga).
+
+**Por qué:** algunos discos USB con UAS dan resets y errores de E/S.
+
+```sh
+sudo cp /efi/cmdline.txt /efi/cmdline.txt.bak-$(date +%Y%m%d-%H%M%S)
+lsusb                                          # el VID:PID de tu disco, p. ej. 21c4:0003
+sudo nano /efi/cmdline.txt                     # añade al final: locale.LANG=es_ES.UTF-8 vconsole.keymap=es usb-storage.quirks=21c4:0003:um
+sudo sed -i 's| module_blacklist=moal||' /efi/cmdline.txt     # solo con la imagen v1.5.0 o posterior
+```
+
+**Deshacer:** `sudo cp /efi/cmdline.txt.bak-<fecha> /efi/cmdline.txt`. Cuenta tras reiniciar.
+
+### `wifi`
+
+**Qué cambia:**
+
+- Imagen **v1.5.0 o posterior**: vuelve a encender el Wi-Fi si estaba apagado. Si vas solo por cable, puedes
+  responder que no.
+  ```sh
+  sudo rm -f /etc/NetworkManager/conf.d/99-ps5-no-wifi.conf
+  sudo systemctl unmask wpa_supplicant.service
+  sudo systemctl restart NetworkManager
+  ```
+- Imagen **anterior a la v1.5.0**: apaga el Wi-Fi sin bloquear su driver (`moal`), que también lleva el Bluetooth.
+  ```sh
+  printf '[keyfile]\nunmanaged-devices=type:wifi\n' | sudo tee /etc/NetworkManager/conf.d/99-ps5-no-wifi.conf
+  sudo systemctl mask --now wpa_supplicant.service
+  sudo systemctl reload NetworkManager
+  ```
+
+**Por qué:** antes de la v1.5.0, el driver del chip IW620 colgaba la consola con el Wi-Fi activo.
+**Deshacer:** el otro par de comandos. No aplica si la consola no tiene Wi-Fi.
+
+### `updates`
+
+**Qué cambia:** apaga las actualizaciones automáticas de Bazzite y prohíbe a `dnf` actualizar el kernel, Mesa, el
+firmware y gamescope.
+**Por qué:** esos paquetes llevan parches de la PS5; actualizarlos rompe la imagen. La imagen se actualiza con su
+propio actualizador ([opción 17](#cambiar-de-versión-de-la-imagen-y-volver-atrás)), no con `ujust update` ni
+`rpm-ostree` (no es una imagen ostree).
+
+```sh
+sudo systemctl mask --now uupd.timer rpm-ostreed-automatic.timer
+sudo mkdir -p /etc/dnf/libdnf5.conf.d
+printf '[main]\nexcludepkgs=kernel*,mesa-*,linux-firmware*,gamescope*\n' | sudo tee /etc/dnf/libdnf5.conf.d/90-ps5-hold.conf
+```
+
+**Deshacer:** `sudo systemctl unmask uupd.timer rpm-ostreed-automatic.timer; sudo rm /etc/dnf/libdnf5.conf.d/90-ps5-hold.conf`.
+
+### `vram`
+
+**Qué cambia:** la memoria reservada para la gráfica, en `/efi/vram.txt` (bytes en hexadecimal). De 512 MB a 8 GB,
+en pasos de 256 MB; recomienda 4 GB. Lo que se reserva para la gráfica deja de estar disponible como RAM.
+**Por qué:** con 512 MB, los juegos DX12/UE5 se caen con *Not enough memory*.
+**Pregunta:** cuánta (`4`, `4G`, `1536M`…).
+
+```sh
+[ -f /efi/vram.txt.orig ] || sudo cp /efi/vram.txt /efi/vram.txt.orig
+echo 0x100000000 | sudo tee /efi/vram.txt      # 4 GB (2 GB = 0x80000000, 6 GB = 0x180000000, 8 GB = 0x200000000)
+```
+
+**Deshacer:** `sudo cp /efi/vram.txt.orig /efi/vram.txt`. Cuenta solo tras **apagar** y arrancar con el cargador.
+
+### `gpu40`
+
+**Qué cambia:** `amdgpu.ps5_cu_unlock=3` en `/efi/cmdline.txt`: la GPU usa sus 40 unidades de cálculo en vez de las
+36 que activa Sony (unas 11 % más). Solo PS5 original y Slim (en la Pro ya están todas activas).
+**Por qué no se recomienda:** es la «lotería del silicio». En muchas consolas funcionan, pero en otras salen
+puntitos verdes u otros fallos gráficos, un tinte morado o cuelgues. Pruébalo un buen rato con juegos exigentes;
+si ves algo raro, vuelve a 36. El diagnóstico avisa si hay fallos de la GPU con las 40 activas. Las
+actualizaciones de la imagen respetan la opción.
+**Pregunta:** 40 o 36.
+
+```sh
+sudo cp /efi/cmdline.txt /efi/cmdline.txt.bak-$(date +%Y%m%d-%H%M%S)
+grep -q ps5_cu_unlock /efi/cmdline.txt || sudo sed -i -E 's/[[:space:]]*$/ amdgpu.ps5_cu_unlock=3/' /efi/cmdline.txt   # 40
+sudo sed -i -E 's/ *amdgpu\.ps5_cu_unlock=[0-9]+//' /efi/cmdline.txt               # 36
+sudo dmesg | grep active_cu_number                                                # tras arrancar: 40 o 36
+```
+
+**Deshacer:** opción 16 → `gpu40` y elegir 36. Cuenta solo tras **apagar** y arrancar con el cargador.
+
+### `zram`
+
+**Qué cambia:** el tamaño de la swap zram (RAM comprimida): toda la RAM, cuando Bazzite pone la mitad. Va en un
+fichero aparte, sin tocar el de Bazzite.
+**Por qué:** los juegos grandes la llenan y, sin swap libre, el sistema los cierra.
+**Pregunta:** tamaño (`ram` = toda, `ram / 2` = lo de Bazzite, o en MB).
+
+```sh
+sudo mkdir -p /etc/systemd/zram-generator.conf.d
+printf '[zram0]\nzram-size = ram\n' | sudo tee /etc/systemd/zram-generator.conf.d/90-ps5-bazzite-toolbox.conf
+sudo reboot
+```
+
+**Deshacer:** `sudo rm /etc/systemd/zram-generator.conf.d/90-ps5-bazzite-toolbox.conf` y reiniciar.
+
+### `fans`
+
+**Qué cambia:** quién controla el ventilador, y a qué temperatura apunta (60–85 °C; la de fábrica, 80 °C, es
+silenciosa pero caliente). Dos formas, y la caja usa solo una:
+
+- **perf**: `ps5-perf`, el que trae la imagen (v1.5.0 o posterior). Nada que instalar y se actualiza con la imagen.
+  ```sh
+  sudo systemctl disable --now ps5fan.service ps5boost.service      # por si estaba la otra forma
+  echo 'FAN_TARGET=70' | sudo tee -a /etc/ps5-bazzite-deck/perf.conf    # solo si quieres otro objetivo
+  ps5-perf on && sudo systemctl enable ps5-perf.service
+  ```
+- **tools**: `ps5fan` y `ps5boost` de [ps5-linux-tools](https://github.com/ps5-linux/ps5-linux-tools) (la caja
+  usa la revisión `f1fa98a`, la que se revisó). `ps5fan` enciende el control del ventilador de la propia consola;
+  si eliges otro objetivo, `ps5-perf` solo pone esa temperatura (sin su boost de CPU, `CPU_BOOST=0`).
+  ```sh
+  sudo dnf5 install -y gcc make git
+  git clone https://github.com/ps5-linux/ps5-linux-tools ~/ps5-linux-tools
+  git -C ~/ps5-linux-tools checkout f1fa98a
+  (cd ~/ps5-linux-tools && sudo ./install.sh)
+  sudo systemctl enable --now ps5fan.service ps5boost.service
+  ```
+
+**Pregunta:** perf o tools (si la imagen trae `ps5-perf`), y la temperatura objetivo.
+**Deshacer:** perf → `ps5-perf off`; tools → `sudo systemctl disable --now ps5fan ps5boost`; objetivo → vacío en el
+bloque (vuelve a los 80 °C de fábrica).
+
+### `warmreboot`
+
+**Qué cambia:** activa el reinicio en caliente de la imagen: al reiniciar (desde Steam, el escritorio o
+`sudo reboot`) vuelve directo a Linux sin pasar por la PS5 ni por el cargador.
+**Por qué no se recomienda:** es experimental. En algunas consolas la imagen sale en negro o corrupta tras el
+reinicio (para eso está el bloque `hdmi`), y en la PS5 original el Bluetooth a veces no vuelve. Un kernel nuevo
+siempre necesita apagar y arrancar con el cargador. En la imagen v2.x, el «mando compartido con la PS5» desactiva el
+reinicio en caliente en consolas con IW620 (`ps5-bt-address off` lo recupera).
+
+```sh
+ps5-warm-reboot on          # estado: ps5-warm-reboot status
+```
+
+**Deshacer:** `ps5-warm-reboot off`.
+
+### `hdmi`
+
+**Qué cambia:** instala `ps5-hdmi-kick`, un servicio que una vez por arranque, cuando aparece el modo juego o el
+escritorio, cambia a la consola 2 y vuelve (lo mismo que la opción 6).
+**Por qué:** tras un reinicio en caliente, el HDMI a veces sale en negro aunque todo funcione.
+**A mano:** dos ficheros, `/usr/local/sbin/ps5-hdmi-kick` (el script: espera a `gamescope-wl` o `kwin_wayland`,
+5 s más, `chvt 2`, 3 s, `chvt` a la consola de antes) y `/etc/systemd/system/ps5-hdmi-kick.service` (un `oneshot`
+después de `graphical.target`). Están en la función `apply_hdmi` del script; luego:
+
+```sh
+sudo systemctl daemon-reload && sudo systemctl enable ps5-hdmi-kick.service
+journalctl -b -u ps5-hdmi-kick                 # lo que hizo en este arranque
+```
+
+**Deshacer:** `sudo systemctl disable ps5-hdmi-kick`.
+
+### `bt`
+
+**Qué cambia:** instala `ps5-bt-guard`, un servicio que al arrancar y al despertar comprueba que el Bluetooth tiene
+adaptador y, si no, recarga el driver `btusb` (hasta 2 veces). Solo en consolas con el chip IW620 (PS5 original).
+**Por qué:** el IW620 a veces no responde a su primer reinicio y el Bluetooth arranca sin adaptador
+(«No default controller available»); el `ps5-bt-revive` de la imagen no reconoce ese error.
+**A mano:** `/usr/local/sbin/ps5-bt-guard` y `/etc/systemd/system/ps5-bt-guard.service` (función `apply_bt` del
+script); lo que hace equivale a:
+
+```sh
+bluetoothctl list | grep -q '^Controller' || { sudo modprobe -r btusb; sleep 2; sudo modprobe btusb; }
+```
+
+**Deshacer:** `sudo systemctl disable ps5-bt-guard`. Si ni así vuelve: apagar y arrancar con el cargador.
+
+### `disk`
+
+**Qué cambia:** impide que el monitor de discos de KDE consulte el SMART del disco, y apaga `smartd`.
+**Por qué:** algunos adaptadores USB-NVMe se quedan unos 60 s sin responder con esa consulta (la consola parece
+colgada). Se pierden los avisos SMART de KDE. No aplica si no arrancas desde USB.
+
+```sh
+printf '%s\n' 'polkit.addRule(function (action, subject) {' \
+  '    if (action.id == "org.kde.kded.smart.smartctl") return polkit.Result.NO;' '});' |
+  sudo tee /etc/polkit-1/rules.d/50-ps5-no-kde-smart.rules
+sudo systemctl restart polkit
+sudo systemctl disable --now smartd.service
+kwriteconfig6 --file kded6rc --group Module-smart --key autoload false
+```
+
+**Deshacer:** `sudo rm /etc/polkit-1/rules.d/50-ps5-no-kde-smart.rules; sudo systemctl restart polkit; sudo systemctl enable --now smartd`.
+
+### `brave`
+
+**Qué cambia:** Brave (Flatpak) guarda sus contraseñas sin la Cartera de KDE.
+**Por qué:** con inicio automático, Brave pide la contraseña de la Cartera cada vez. **Ojo:** las sesiones y
+contraseñas que ya tenía guardadas dejan de leerse; por eso no se recomienda. No aplica si no tienes Brave.
+
+```sh
+mkdir -p ~/.var/app/com.brave.Browser/config
+echo '--password-store=basic' >> ~/.var/app/com.brave.Browser/config/brave-flags.conf
+flatpak kill com.brave.Browser
+```
+
+**Deshacer:** borra esa línea de `brave-flags.conf`.
+
+### `nas`
+
+**Qué cambia:** monta una carpeta compartida de un NAS por SMB en `/var/mnt/nas` (al primer acceso, y sin bloquear
+el arranque si el NAS está apagado) y hace que `~/Emulation/roms` de EmuDeck apunte a las ROMs del NAS. La carpeta
+local se queda como `~/Emulation/roms.local`. Si ya tienes un montaje SMB en `/etc/fstab`, lo reutiliza. Necesita
+EmuDeck instalado.
+**Por qué:** ROMs compartidas con otros equipos (p. ej. una Steam Deck), sin copiarlas.
+**Pregunta:** IP del NAS, carpeta compartida, usuario y su contraseña (que se guarda en un fichero solo legible por
+root), y la ruta de las ROMs dentro de la compartida (`Emulation/roms`). Si el NAS tiene BIOS, ofrece copiar las que
+falten.
+
+```sh
+rpm -q cifs-utils || sudo dnf5 install -y cifs-utils
+printf 'username=USUARIO\npassword=CONTRASEÑA\n' | sudo tee /etc/samba/nas-USUARIO.cred >/dev/null
+sudo chmod 600 /etc/samba/nas-USUARIO.cred
+sudo mkdir -p /var/mnt/nas
+echo "//IP/COMPARTIDA /var/mnt/nas cifs credentials=/etc/samba/nas-USUARIO.cred,uid=$(id -u),gid=$(id -g),vers=3.0,iocharset=utf8,_netdev,nofail,noauto,x-systemd.automount,x-systemd.mount-timeout=15 0 0" | sudo tee -a /etc/fstab
+sudo systemctl daemon-reload && sudo systemctl restart remote-fs.target
+mv ~/Emulation/roms ~/Emulation/roms.local
+ln -s /var/mnt/nas/Emulation/roms ~/Emulation/roms
+flatpak override --user --filesystem=/var/mnt/nas          # que los emuladores (Flatpak) lo vean
+```
+
+**Deshacer:** `rm ~/Emulation/roms && mv ~/Emulation/roms.local ~/Emulation/roms`, y quitar la línea de `/etc/fstab`.
+
+### `bios`
+
+**Qué cambia:** `~/Emulation/bios` pasa a apuntar a la carpeta de BIOS del NAS (`Emulation/bios`; la crea si no
+existe). Si tienes BIOS locales que no están en el NAS, ofrece copiarlas antes (sin sobrescribir nada allí). La
+carpeta local queda como `~/Emulation/bios.local`. Necesita el bloque `nas`.
+**Por qué:** una sola copia de las BIOS para todos los equipos.
+
+```sh
+cp -rn ~/Emulation/bios/. /var/mnt/nas/Emulation/bios/        # las que falten en el NAS
+mv ~/Emulation/bios ~/Emulation/bios.local
+ln -s /var/mnt/nas/Emulation/bios ~/Emulation/bios
+```
+
+**Deshacer:** `rm ~/Emulation/bios && mv ~/Emulation/bios.local ~/Emulation/bios`.
+
+### `media`
+
+**Qué cambia:** la carpeta de imágenes de ES-DE (la de `MediaDirectory` en `~/ES-DE/settings/es_settings.xml`, o
+`~/ES-DE/downloaded_media`) pasa a apuntar a la del NAS (`Emulation/downloaded_media`). No copia nada ni toca la
+configuración de ES-DE; con ES-DE cerrado. La local queda como `<carpeta>.local`. Necesita el bloque `nas`.
+**Por qué:** capturas, carátulas y vídeos descargados una vez para todos los equipos.
+
+```sh
+mv ~/ES-DE/downloaded_media ~/ES-DE/downloaded_media.local
+ln -s /var/mnt/nas/Emulation/downloaded_media ~/ES-DE/downloaded_media
+```
+
+**Deshacer:** `rm ~/ES-DE/downloaded_media && mv ~/ES-DE/downloaded_media.local ~/ES-DE/downloaded_media`.
+
+### `esde`
+
+**Qué cambia:** arregla `~/ES-DE/custom_systems/es_systems.xml`, que EmuDeck deja con rutas de Windows
+(`\…_libretro.dll` en vez de `/…_libretro.so`) y una etiqueta rota (`< command>`). Si tienes Citra (AppImage en
+`~/Applications` o Flatpak), añade «Citra (Standalone)» a Nintendo 3DS. Comprueba que el XML sigue siendo válido;
+si no, deja la copia. Con ES-DE cerrado.
+**Por qué:** sin esto, 3DS (y otros) fallan con *citra_libretro.dll*. EmuDeck puede volver a escribir el fichero al
+actualizarse: repite el bloque.
+
+```sh
+f=~/ES-DE/custom_systems/es_systems.xml
+cp "$f" "$f.bak-$(date +%Y%m%d-%H%M%S)"
+sed -i -e 's#%CORE_RETROARCH%\\\([A-Za-z0-9_]*\)_libretro\.dll#%CORE_RETROARCH%/\1_libretro.so#g' -e 's#< command>#</command>#g' "$f"
+# Citra: en el bloque de n3ds, antes de <platform>n3ds</platform>, añade
+#   <command label="Citra (Standalone)">%EMULATOR_CITRA% %ROM%</command>
+```
+
+Luego, en ES-DE: Otros ajustes → Emuladores alternativos → Nintendo 3DS → Citra (Standalone).
+**Deshacer:** copia encima el `es_systems.xml.bak-<fecha>` más reciente.
+
+### `portproton`
+
+**Qué cambia:** ajustes globales de PortProton para todos los juegos, salvo los que su `.ppdb` cambie: sincronización
+rápida (FSYNC/ESYNC) y trazado de rayos. Va en un bloque marcado de
+`~/.var/app/ru.linux_gaming.PortProton/data/user.conf` (con copia `user.conf.bak-<fecha>`). Ver
+[Ajustes para todos los juegos](#portproton-y-steam).
+**Por qué:** PortProton los trae apagados; el Proton de Steam lleva la sincronización rápida, y hay juegos que exigen
+trazado de rayos. No aplica hasta que abras PortProton una vez (crea `user.conf`).
+**A mano:** añade al final de `user.conf`:
+
+```sh
+# >>> ps5-bazzite-toolbox (bloque portproton) PP_DEFAULTS: PW_USE_FSYNC=1 PW_USE_ESYNC=1 PW_USE_RAY_TRACING=1
+for _pp_kv in PW_USE_FSYNC=1 PW_USE_ESYNC=1 PW_USE_RAY_TRACING=1; do
+    grep -qs "^export ${_pp_kv%%=*}=" "${PORTWINE_DB_FILE:-/nonexistent}" || export "${_pp_kv%%=*}=${_pp_kv#*=}"
+done
+unset _pp_kv
+# <<< ps5-bazzite-toolbox
+```
+
+**Deshacer:** borra ese bloque. Para un solo juego: `export PW_USE_RAY_TRACING="0"` en su `.ppdb`.
+
+### `atajos`
+
+**Qué cambia:** pone a mano lo que la caja hace:
+
+- **Botón derecho de Dolphin sobre un `.exe`:** «Instalar en PortProton y Steam», «Cambiar aislamiento» y
+  «Desinstalar» (`~/.local/share/kio/servicemenus/ps5-bazzite-toolbox-add-game.desktop`).
+- **Botón derecho sobre una carpeta:** «Ver lo que ocupa cada carpeta»
+  (`~/.local/share/kio/servicemenus/ps5-bazzite-toolbox-space.desktop`).
+- **El comando `espacio [carpeta]`** (`/usr/local/bin/espacio`).
+- **El acceso «Colección PortProton»** en el escritorio (`portproton-collection.desktop`).
+
+Todos llaman a la caja de herramientas en su sitio actual: si la mueves, repite el bloque (instalada con la opción 19
+no se mueve). Si Dolphin estaba abierto, ciérralo y ábrelo. No aplica si la caja se ejecuta desde una tubería
+(`curl … | bash`).
+**Deshacer:**
+`rm ~/.local/share/kio/servicemenus/ps5-bazzite-toolbox-*.desktop "$(xdg-user-dir DESKTOP)/portproton-collection.desktop"; sudo rm /usr/local/bin/espacio`.
 
 ## PortProton y Steam
 
@@ -224,39 +580,135 @@ propio de un juego aislado lo ofrece borrar al final («no» por defecto).
 PortProton lee sus ajustes globales (`data/user.conf`) después de los de cada juego, así que el bloque solo pone el
 valor cuando el `.ppdb` del juego no dice nada.
 
-## Actualizar la imagen
 
-Lista las versiones publicadas (estables, preliminares y «rápidas» que solo cambian el kernel), muestra sus
-novedades, comprueba el espacio, descarga, verifica el SHA-256 y ejecuta el `update.sh` del autor. Después recuerda
-**apagar** y arrancar con el cargador, no reiniciar.
+## Cambiar de versión de la imagen y volver atrás
 
-Se puede instalar cualquier versión que tenga paquete de actualización, también una anterior. El `update.sh` del
-autor hasta la v2.4 solo instala un paquete con el mismo kernel que el que funciona; si no, la caja lo avisa antes.
+**Opción 17** (`--update [versión]`, `--rollback`). Primero pregunta qué quieres hacer:
 
-### Volver atrás
+1. **Instalar una versión de GitHub.** Lista las publicadas (estables, preliminares y «rápidas» que solo cambian el
+   kernel), enseña sus novedades y avisa si es preliminar o anterior a la tuya. Comprueba el espacio, descarga,
+   verifica el SHA-256, **guarda una copia de la imagen actual** y ejecuta el `update.sh` del autor. Al terminar
+   ofrece guardar su salida (con el comando para deshacer del autor), enseña el estado de tus ajustes y recuerda
+   **apagar** y arrancar con el cargador, no reiniciar.
+2. **Volver a como estaba antes de una actualización** (**en pruebas**, ver abajo).
+3. **Guardar ahora una copia** de la imagen tal como está, sin actualizar nada.
 
-Antes de instalar, la opción 17 guarda una copia completa de lo que cambia una actualización en
-`/var/lib/ps5-bazzite-toolbox/imagen/`: los ficheros de la partición de arranque (kernel, initrd, `cmdline.txt`),
-los módulos del kernel, los scripts, servicios y reglas de la imagen, `/etc/ps5-bazzite-deck` y qué servicios estaban
-activos. La copia del autor (`/var/lib/ps5-update-backup`) solo guarda el kernel y los módulos.
+Se puede instalar cualquier versión que siga en GitHub y tenga paquete de actualización, también una anterior. Las
+que el autor retira ya no se pueden instalar (pasó con la v2.1.2 – v2.3). El `update.sh` del autor hasta la v2.4
+solo instala un paquete con el mismo kernel que el que funciona: para bajar, por ejemplo, de la v2.4.1 (kernel
+7.3.1) a la v2.1.1 (7.3.0), primero se vuelve a una copia con el kernel 7.3.0 y desde ahí se instala. La caja lo
+detecta y lo explica antes de tocar nada.
 
-La opción 17 → «Volver» (`--rollback`) la restaura tal cual, sin red y aunque el kernel sea otro, y borra lo que había
-añadido la versión nueva. Antes guarda cómo está ahora, así que la vuelta también se deshace. Se guardan las 3 últimas
-copias; cada una ocupa lo que los módulos del kernel. Bazzite, Steam, los juegos y tus ficheros no van en ella: las
-actualizaciones de la imagen no los tocan.
+A mano, lo mismo que hace la opción 1 (sin la copia):
 
-Si la versión nueva ni arranca, la caja no puede ayudar desde la consola. Por eso, si cabe, también deja el kernel
-anterior en la partición de arranque, en `anterior-toolbox/`. Esa partición es FAT, así que cualquier ordenador la
-lee: se copian sus ficheros a la raíz de la partición, se arranca y se termina la vuelta con la opción 17. Lo explica
-su `LEEME.txt`.
+```sh
+bash <(curl -fsSL https://raw.githubusercontent.com/VivaLaVent/ps5-bazzite-deck/main/tools/update-latest.sh) v2.1.1
+# o paso a paso: descargar ps5-bazzite-deck-<versión>-update.tar.xz y su .sha256 de la release,
+# sha256sum -c …sha256; tar xJf …tar.xz; bash ps5-bazzite-deck-<versión>-update/update.sh
+sudo poweroff                                   # y arrancar con el cargador
+```
 
-## Dónde deja sus ficheros
+### Volver atrás (en pruebas)
 
-En ningún sitio sin preguntar. El informe del diagnóstico (`ps5-diag-FECHA.txt`), las medidas del monitor en
-directo (`ps5-mem-FECHA.csv`) y la salida de una actualización de la imagen (`update-vX.Y.Z.log`) se escriben en un
-fichero temporal y, al terminar, pregunta si guardarlo: **Intro** lo guarda en la carpeta desde la que la abriste
-(desde el menú de aplicaciones, tu carpeta personal), puedes escribir otra carpeta, o **n** para no guardarlo.
-Sin terminal (lanzada desde otro script) lo guarda en la carpeta actual sin preguntar.
+> **En pruebas.** Ya está probado que la copia guarda todo lo que debe (en una PS5 con la imagen v1.8.4). Falta
+> probar la vuelta y una actualización real con su copia. Si lo usas, cuenta cómo te ha ido en un
+> [issue](https://github.com/fitamix/ps5-bazzite-toolbox/issues).
+
+**La copia** (antes de cada actualización, o con la opción 3) guarda en
+`/var/lib/ps5-bazzite-toolbox/imagen/<fecha>-v<versión>/` todo lo que cambia una actualización:
+
+| Dentro | Qué guarda |
+|---|---|
+| `efi/` (lista en `efi.list`) | los ficheros de la partición de arranque: kernel (`bzImage`), `initrd.img`, `cmdline.txt` y sus copias, `vram.txt` |
+| `modules/` | los módulos del kernel (`/usr/lib/modules/<kernel>`, unos 200 MB) |
+| `root/` (lista en `paths`) | con su ruta original: los scripts `ps5-*` de `/usr/local`, los servicios `ps5-*`, reglas udev, `modprobe.d`, NetworkManager, `/etc/bluetooth/main.conf`, `/etc/ps5-bazzite-deck/` (reinicio en caliente, Bluetooth, `perf.conf`), el fichero de versión… También lo que montó la caja (`ps5-hdmi-kick`, `ps5-bt-guard`…) |
+| `units` | qué servicios `ps5-*` estaban activos |
+| `absent` | lo que no existía al hacer la copia: al volver se borra |
+| `info` | versión, kernel, fecha y nota |
+
+Cada copia ocupa unos 300 MB; se guardan las 3 últimas (pregunta antes de borrar las más antiguas). La copia del
+autor (`/var/lib/ps5-update-backup/`) solo guarda el kernel y los módulos: su «undo» deja los scripts, servicios y
+el fichero de versión de la versión nueva.
+
+**Volver** (opción 17 → 2, `--rollback`): eliges una copia y la restaura tal cual, sin red y aunque el kernel sea
+otro. Borra lo que había añadido la versión nueva y ofrece borrar los módulos del kernel que ya no arranca. Antes
+guarda cómo está todo (copia «antes de volver a …»), así que la vuelta también se deshace. Lo que hayas cambiado en
+esas partes después de la copia (por ejemplo con los bloques `gpu40` o `fans`) vuelve a como estaba: revísalo con la
+opción 14. Bazzite, Steam, los juegos y tus ficheros no van en la copia, porque las actualizaciones de la imagen no
+los tocan. Después hay que **apagar** y arrancar con el cargador.
+
+**Si la versión nueva ni arranca**, la caja no puede ayudar desde la consola. Por eso, al actualizar y si cabe,
+también deja el kernel actual en la partición de arranque, en `anterior-toolbox/`. Esa partición es FAT, así que
+cualquier ordenador la lee: conecta la memoria USB al ordenador, copia los ficheros de `anterior-toolbox/` a la raíz
+de la partición, arranca la PS5 con el cargador y termina la vuelta con la opción 17 → 2. Lo explica su `LEEME.txt`.
+
+## Ficheros: qué usa y dónde guarda cada cosa
+
+La caja de herramientas no deja nada fuera de estos sitios. «Desinstalar» (opción 19) solo quita el comando, su
+acceso en el menú y su copia anterior; lo demás se queda, y aquí está cómo quitarlo.
+
+### Sus propios ficheros
+
+| Fichero | Qué es | Lo crea | Se quita con |
+|---|---|---|---|
+| `~/.local/bin/ps5-bazzite-toolbox` | la caja instalada como comando | opción 19, `--install` (y la oferta del menú la primera vez) | opción 19 |
+| `~/.local/bin/ps5-bazzite-toolbox.v<versión>` | la versión anterior, tras actualizarla (solo la última) | opción 18, `--self-update` | opción 19 |
+| `~/.local/share/applications/ps5-bazzite-toolbox.desktop` | «Caja de herramientas PS5» en el menú de aplicaciones | opción 19 | opción 19 |
+| `~/.config/ps5-bazzite-toolbox.conf` | tus respuestas a los ajustes (idioma, VRAM, NAS sin contraseña, temperatura del ventilador, bloques que no quieres…) | opciones 15 y 16, `--setup` | `rm` (vuelve a preguntar todo) |
+| `~/.config/ps5-bazzite-toolbox-juegos.conf` | tus juegos de PortProton instalados con la caja: aislamiento, `.exe`, nombre y carpeta que ve | opciones 10 y 11 | se actualiza al desinstalar cada juego |
+| `~/.local/share/ps5-bazzite-toolbox/aislado/` | la copia de PortProton para juegos aislados, con un prefijo por juego | opción 10 o 11 con un juego aislado | `rm -rf` (con los juegos aislados desinstalados: ahí están sus partidas) |
+| `~/.cache/ps5-bazzite-toolbox-run.log` | lo que dice un juego aislado al lanzarlo desde Steam o el modo juego | `--run` | `rm` |
+| `/var/lib/ps5-bazzite-toolbox/imagen/` | las copias de la imagen ([arriba](#volver-atrás-en-pruebas)) | opción 17 | opción 17 al hacer otra copia, o `sudo rm -rf` |
+| `/efi/anterior-toolbox/` | el kernel de antes de la última actualización, con su `LEEME.txt` | opción 17 → 1 | `sudo rm -rf /efi/anterior-toolbox` |
+
+### Informes que ofrece guardar
+
+Se escriben primero en un temporal (`/tmp`) y, al terminar, pregunta: **Intro** lo guarda en la carpeta desde la
+que abriste la caja (desde el menú de aplicaciones, tu carpeta personal), puedes escribir otra carpeta, o **n** para
+no guardarlo. Sin terminal (lanzada desde otro script), lo guarda en la carpeta actual sin preguntar.
+
+| Fichero | Qué tiene | Lo crea |
+|---|---|---|
+| `ps5-diag-<fecha>.txt` | el informe del diagnóstico, sin contraseñas | opciones 1 y 2, `--check` |
+| `ps5-mem-<fecha>.csv` | una fila cada 2 s: VRAM, GTT, RAM, swap, temperaturas, carga de CPU y GPU y quién gasta más | opción 4, `--mem` |
+| `update-<versión>.log` | la salida del actualizador de la imagen, con su comando para deshacer | opción 17 → 1, `--update` |
+
+La descarga de una actualización va a `~/ps5-update-<versión>/`; al terminar bien ofrece borrarla, y si falla se
+queda ahí para repetir.
+
+### Lo que cambia en el sistema cada ajuste
+
+| Fichero o carpeta | Bloque | Copia de seguridad |
+|---|---|---|
+| `/efi/cmdline.txt` | `cmdline`, `gpu40` | `/efi/cmdline.txt.bak-<fecha>` antes de cada cambio |
+| `/efi/vram.txt` | `vram` | `/efi/vram.txt.orig` (la primera vez) |
+| `/etc/NetworkManager/conf.d/99-ps5-no-wifi.conf` | `wifi` | — |
+| `/etc/dnf/libdnf5.conf.d/90-ps5-hold.conf` | `updates` | — |
+| `/etc/systemd/zram-generator.conf.d/90-ps5-bazzite-toolbox.conf` | `zram` | — |
+| `/etc/ps5-bazzite-deck/perf.conf` (claves `FAN_TARGET`, `CPU_BOOST`) y `~/ps5-linux-tools/` | `fans` | — |
+| `/usr/local/sbin/ps5-hdmi-kick`, `/etc/systemd/system/ps5-hdmi-kick.service` | `hdmi` | — |
+| `/usr/local/sbin/ps5-bt-guard`, `/etc/systemd/system/ps5-bt-guard.service` | `bt` | — |
+| `/etc/polkit-1/rules.d/50-ps5-no-kde-smart.rules`, `~/.config/kded6rc` | `disk` | — |
+| `~/.var/app/com.brave.Browser/config/brave-flags.conf` | `brave` | — |
+| `/etc/fstab` (una línea), `/etc/samba/nas-<usuario>.cred` (contraseña del NAS, solo root), `/var/mnt/nas`, `~/.local/share/flatpak/overrides/global` | `nas` | — |
+| `~/Emulation/roms`, `~/Emulation/bios`, carpeta de imágenes de ES-DE | `nas`, `bios`, `media` | la carpeta local, como `….local` |
+| `~/ES-DE/custom_systems/es_systems.xml` | `esde` | `es_systems.xml.bak-<fecha>` |
+| `~/.var/app/ru.linux_gaming.PortProton/data/user.conf` | `portproton` | `user.conf.bak-<fecha>` |
+| `~/.local/share/kio/servicemenus/ps5-bazzite-toolbox-*.desktop`, `/usr/local/bin/espacio`, `portproton-collection.desktop` en el escritorio | `atajos` | — |
+| `/etc/sddm.conf.d/zzz-ps5-session.conf` | opciones 8 y 9 | — |
+
+### Lo que toca al instalar o quitar un juego (opciones 10 y 11)
+
+| Fichero | Qué es | Copia de seguridad |
+|---|---|---|
+| `<carpeta del juego>/<Juego>.exe.ppdb` | los ajustes de PortProton para ese juego (los aislados añaden su prefijo) | — |
+| `~/.var/app/ru.linux_gaming.PortProton/<Nombre>.desktop` | el acceso en la lista de PortProton (solo juegos normales) | — |
+| `<Escritorio>/<Nombre>.desktop` | el acceso en el escritorio | — |
+| `~/.var/app/ru.linux_gaming.PortProton/steam_scripts/<Nombre>.sh` | lo que lanza Steam (en un aislado, `ps5-bazzite-toolbox --run`) | — |
+| `~/.local/share/Steam/userdata/<id>/config/shortcuts.vdf` | la entrada del juego no-Steam (con Steam cerrado) | `shortcuts.vdf.bak-<fecha>` |
+| `…/config/grid/<appid>*` | las carátulas (al desinstalar se borran) | — |
+| `…/config/cloudstorage/cloud-storage-namespace*.json` | la colección «PortProton» de Steam (opción 12) | `….bak-<fecha>` |
+| `steam_emu.ini`, `steam_settings/…`, `SteamConfig.ini`, `cream_api.ini` en la carpeta del juego | el idioma del emulador de Steam del juego, si aceptas cambiarlo | `….bak-<fecha>` |
 
 ## Versiones de la caja de herramientas
 
@@ -269,10 +721,10 @@ novedades, y el historial completo en [CHANGELOG.md](CHANGELOG.md). La numeraci�
 - **MAYOR** (**2**.0.0): algo que cambia cómo se usaba (opciones renombradas, formato de las respuestas guardadas).
   Las notas dicen qué hacer.
 
-Al abrir el menú, la caja de herramientas mira (en 4 segundos como mucho, y sin decir nada si no hay red) si hay
-una versión más nueva y lo avisa. La opción 18 (`--self-update`) muestra las novedades, pregunta, descarga,
-comprueba el SHA-256, guarda la copia anterior como `….vX.Y.Z` (solo la última) y sustituye la instalada (o, si no la instalaste, el fichero que ejecutas). Tus respuestas
-guardadas en `~/.config/ps5-bazzite-toolbox.conf` no se tocan.
+Al abrir el menú, la caja mira (en 4 segundos como mucho, y sin decir nada si no hay red) si hay una versión más
+nueva y lo avisa. La opción 18 (`--self-update`) muestra las novedades, pregunta, descarga, comprueba el SHA-256,
+guarda la copia anterior como `….v<versión>` (solo la última) y sustituye la instalada (o, si no la instalaste, el
+fichero que ejecutas). Tus respuestas guardadas no se tocan.
 
 ## Cosas que se hacen a mano
 

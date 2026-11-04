@@ -1871,6 +1871,8 @@ img_rollback() {
     say "Los ajustes de esas partes cambiados después de esa fecha (p. ej. con el bloque gpu40 o fans) vuelven" \
         "a como estaban; revísalos luego con la opción 14. Bazzite, Steam, juegos y tus ficheros no se tocan."
     say "Antes se guarda una copia de cómo está ahora, así que también esto se puede deshacer (opción 17 → volver)."
+    say "EN PRUEBAS: la vuelta aún no se ha probado en una consola de verdad. Si algo falla, la copia de antes" \
+        "queda en $IMG_SNAPS y el kernel anterior, si cupo, en /efi/$IMG_PREV_EFI."
     yesno "¿Volver a $v?" N || return 0
     efi_ready || return 1
     echo "==> Copia de la imagen actual…"
@@ -1909,7 +1911,7 @@ img_rollback() {
 img_menu() {
     local c n; n=$(img_snap_list | wc -l)
     echo "  1) Instalar una versión de GitHub (la más nueva u otra, también anterior)"
-    echo "  2) Volver a como estaba la imagen antes de una actualización ($n copia(s) guardada(s))"
+    echo "  2) Volver a como estaba la imagen antes de una actualización ($n copia(s) guardada(s)) [EN PRUEBAS]"
     echo "  3) Guardar ahora una copia de la imagen tal como está (la opción 1 ya la hace sola antes de instalar)"
     read -rp "Elige (Intro = 1, 0 = cancelar): " c
     case ${c:-1} in
