@@ -5,6 +5,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+## [1.6.0] - 2026-11-04
+
 ### Añadido
 - **Versiones de la imagen descargadas.** La opción 17 lista, junto a las de GitHub, las que tengas en tus carpetas
   (`l` añade una, p. ej. en el NAS; se guarda en `IMG_LOCAL`), marcadas `[descargada]` o `[descargada, ya no está en
@@ -122,7 +124,8 @@ Primera versión publicada.
 - Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
-[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.5.0...HEAD
+[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.1.0...v1.3.0
