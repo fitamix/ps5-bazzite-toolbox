@@ -5,6 +5,12 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+### Añadido
+- **Versiones de la imagen descargadas.** La opción 17 lista, junto a las de GitHub, las que tengas en tus carpetas
+  (`l` añade una, p. ej. en el NAS; se guarda en `IMG_LOCAL`), marcadas `[descargada]` o `[descargada, ya no está en
+  GitHub]`, y las instala desde ahí comprobando su SHA-256; sin red, solo las tuyas. Al instalar una de GitHub ofrece
+  guardar su paquete en tu carpeta: el autor retira versiones (el 4 de noviembre solo quedaban la v2.5 y la v1.8.9).
+
 ## [1.5.0] - 2026-11-04
 
 ### Añadido

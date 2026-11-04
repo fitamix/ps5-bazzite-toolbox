@@ -593,11 +593,22 @@ valor cuando el `.ppdb` del juego no dice nada.
 2. **Volver a como estaba antes de una actualización** (**en pruebas**, ver abajo).
 3. **Guardar ahora una copia** de la imagen tal como está, sin actualizar nada.
 
-Se puede instalar cualquier versión que siga en GitHub y tenga paquete de actualización, también una anterior. Las
-que el autor retira ya no se pueden instalar (pasó con la v2.1.2 – v2.3). El `update.sh` del autor hasta la v2.4
+Se puede instalar cualquier versión que siga en GitHub y tenga paquete de actualización, también una anterior, **o
+que tengas descargada** en una carpeta tuya (ver abajo). El autor retira versiones de GitHub (el 4 de noviembre de
+2026 solo quedaban la v2.5 y la v1.8.9): las que guardes siguen instalándose desde tu carpeta. El `update.sh` del autor hasta la v2.4
 solo instala un paquete con el mismo kernel que el que funciona: para bajar, por ejemplo, de la v2.4.1 (kernel
 7.3.1) a la v2.1.1 (7.3.0), primero se vuelve a una copia con el kernel 7.3.0 y desde ahí se instala. La caja lo
 detecta y lo explica antes de tocar nada.
+
+**Versiones descargadas.** En la lista de versiones, `l` añade una carpeta con versiones descargadas (puede estar
+en el NAS, montado con el bloque `nas`); se guarda y la próxima vez ya sale. La caja busca en ella, hasta 3 niveles
+por debajo, los paquetes tal como vienen en la release (`ps5-bazzite-deck-<versión>-update.tar.xz` con su `.sha256`,
+o `ps5-quick-<versión>.tar.gz`), por ejemplo `<carpeta>/v1.8.4/…`, y los junta con los de GitHub en una sola lista:
+`[descargada]` si la tienes, `[descargada, ya no está en GitHub]` si solo está en tu carpeta. Si una versión está en
+los dos sitios, la copia de tu carpeta (sin descargar nada; su SHA-256 se comprueba igual). Las notas salen de GitHub o,
+si ya no está, del `NOTAS.md` de su carpeta. Sin red, la lista enseña solo las tuyas. Y cada vez que instalas una
+versión de GitHub, ofrece guardar su paquete (con su `.sha256` y sus notas) en `<tu primera carpeta>/<versión>/`, para
+que siga ahí si la retiran.
 
 A mano, lo mismo que hace la opción 1 (sin la copia):
 
@@ -654,12 +665,13 @@ acceso en el menú y su copia anterior; lo demás se queda, y aquí está cómo 
 | `~/.local/bin/ps5-bazzite-toolbox` | la caja instalada como comando | opción 19, `--install` (y la oferta del menú la primera vez) | opción 19 |
 | `~/.local/bin/ps5-bazzite-toolbox.v<versión>` | la versión anterior, tras actualizarla (solo la última) | opción 18, `--self-update` | opción 19 |
 | `~/.local/share/applications/ps5-bazzite-toolbox.desktop` | «Caja de herramientas PS5» en el menú de aplicaciones | opción 19 | opción 19 |
-| `~/.config/ps5-bazzite-toolbox.conf` | tus respuestas a los ajustes (idioma, VRAM, NAS sin contraseña, temperatura del ventilador, bloques que no quieres…) | opciones 15 y 16, `--setup` | `rm` (vuelve a preguntar todo) |
+| `~/.config/ps5-bazzite-toolbox.conf` | tus respuestas a los ajustes (idioma, VRAM, NAS sin contraseña, temperatura del ventilador, bloques que no quieres…) y tus carpetas con versiones descargadas de la imagen (`IMG_LOCAL`) | opciones 15, 16 y 17, `--setup` | `rm` (vuelve a preguntar todo) |
 | `~/.config/ps5-bazzite-toolbox-juegos.conf` | tus juegos de PortProton instalados con la caja: aislamiento, `.exe`, nombre y carpeta que ve | opciones 10 y 11 | se actualiza al desinstalar cada juego |
 | `~/.local/share/ps5-bazzite-toolbox/aislado/` | la copia de PortProton para juegos aislados, con un prefijo por juego | opción 10 o 11 con un juego aislado | `rm -rf` (con los juegos aislados desinstalados: ahí están sus partidas) |
 | `~/.cache/ps5-bazzite-toolbox-run.log` | lo que dice un juego aislado al lanzarlo desde Steam o el modo juego | `--run` | `rm` |
 | `/var/lib/ps5-bazzite-toolbox/imagen/` | las copias de la imagen ([arriba](#volver-atrás-en-pruebas)) | opción 17 | opción 17 al hacer otra copia, o `sudo rm -rf` |
 | `/efi/anterior-toolbox/` | el kernel de antes de la última actualización, con su `LEEME.txt` | opción 17 → 1 | `sudo rm -rf /efi/anterior-toolbox` |
+| `<tu carpeta de versiones>/<versión>/` | el paquete de una versión instalada desde GitHub, con su `.sha256` y `NOTAS.md`, si aceptas guardarlo | opción 17 → 1 | `rm -rf` |
 
 ### Informes que ofrece guardar
 

@@ -1464,7 +1464,10 @@ mem_watch() {
 # Same steps as by hand: pick a release, download its update bundle, check its SHA-256, run the author's
 # update.sh (it backs up the kernel and modules and prints an undo command), then power off + loader.
 # Before that, a full copy of what the update changes (img_snap_take), so img_rollback can put it all back.
+# Besides GitHub's releases it lists the ones you keep in your own folders (IMG_LOCAL, e.g. on the NAS): the author
+# withdraws releases, and a saved one still installs from there, also without network.
 REPO=VivaLaVent/ps5-bazzite-deck
+IMG_LOCAL=${IMG_LOCAL:-}                 # folders with downloaded releases, separated by ":" (kept in CONF)
 yesno() {                                # yesno "question" S|N -> 0 = yes
     local a d=${2:-N}
     if [ "$d" = S ]; then read -rp "$1 [S/n] " a; [[ $a != [nN]* ]]; else read -rp "$1 [s/N] " a; [[ $a == [sS]* ]]; fi
@@ -1607,17 +1610,32 @@ offer_install() {                        # once, from the menu: run from a downl
 }
 
 update_image() {
-    local want=${1:-} tmp n i c tag date kind type url sha title def='' dir log rc
+    local want=${1:-} tmp n i c tag date kind type url sha title src lfile lsha def='' dir log rc online=1 d
     command -v python3 >/dev/null || { echo "Falta python3." >&2; return 1; }
     tmp=$(mktemp -d)
     echo "==> Consultando las versiones de $REPO en GitHub…"
-    curl -fsSL --retry 3 "https://api.github.com/repos/$REPO/releases?per_page=40" -o "$tmp/rel.json" ||
-        { echo "No puedo conectar con GitHub (¿hay red?)." >&2; rm -rf "$tmp"; return 1; }
-    # tag, date, stable|pre, full|quick, bundle URL, checksum URL, title (separated by \x1f, which unlike a tab
-    # keeps empty fields when read). Full = *-update.tar.xz (update.sh,
-    # any older version); quick = ps5-quick-*.tar.gz (install.sh, kernel only, on top of a given base version)
-    python3 -I - "$tmp/rel.json" >"$tmp/list" <<'PY'
-import json, sys
+    if ! curl -fsSL --retry 3 "https://api.github.com/repos/$REPO/releases?per_page=100" -o "$tmp/rel.json"; then
+        online=0; echo '[]' >"$tmp/rel.json"
+        echo "No puedo conectar con GitHub (¿hay red?): solo las versiones de tus carpetas." >&2
+    fi
+    # the bundles in your folders (up to 3 levels down; an unreachable NAS gives up after 30 s)
+    : >"$tmp/local"
+    local IFS_OLD=$IFS; IFS=:
+    for d in $IMG_LOCAL; do
+        IFS=$IFS_OLD
+        [ -d "$d" ] || { echo "Aviso: no encuentro la carpeta $d (¿NAS apagado o sin montar?)." >&2; continue; }
+        echo "==> Buscando versiones descargadas en $d…"
+        timeout 30 find "$d" -maxdepth 3 -type f \( -name 'ps5-bazzite-deck-v*-update.tar.xz' -o -name 'ps5-quick-v*.tar.gz' \) \
+            >>"$tmp/local" 2>/dev/null
+    done
+    IFS=$IFS_OLD
+    # tag, date, stable|pre|local, full|quick, bundle URL, checksum URL, title, source (github|local|both), local
+    # bundle, local checksum (separated by \x1f, which unlike a tab keeps empty fields when read), newest first.
+    # Full = *-update.tar.xz (update.sh, any older version); quick = ps5-quick-*.tar.gz (install.sh, kernel only, on
+    # top of a given base version). A local copy wins over the download (same file: its SHA-256 is checked alike).
+    python3 -I - "$tmp/rel.json" "$tmp/local" >"$tmp/list" <<'PY'
+import datetime, json, os, re, sys
+rows = {}
 for r in json.load(open(sys.argv[1])):
     a = {x["name"]: x["browser_download_url"] for x in r.get("assets", [])}
     full = [k for k in a if k.endswith("-update.tar.xz")]
@@ -1626,48 +1644,82 @@ for r in json.load(open(sys.argv[1])):
         continue
     k, kind = (full[0], "full") if full else (quick[0], "quick")
     title = (r.get("name") or "").replace(r["tag_name"], "", 1).strip(" -–—:")
-    print("\x1f".join([r["tag_name"], r["published_at"][:10], "pre" if r["prerelease"] else "stable", kind,
-                     a[k], a.get(k + ".sha256", ""), title.replace("\x1f", " ")]))
+    rows[r["tag_name"]] = [r["tag_name"], r["published_at"][:10], "pre" if r["prerelease"] else "stable", kind,
+                           a[k], a.get(k + ".sha256", ""), title.replace("\x1f", " "), "github", "", ""]
+for f in open(sys.argv[2]).read().splitlines():
+    m = re.match(r"ps5-bazzite-deck-(v[^/]+)-update\.tar\.xz$|ps5-quick-(v[^/]+)\.tar\.gz$", os.path.basename(f))
+    if not m:
+        continue
+    tag, typ = (m.group(1), "full") if m.group(1) else (m.group(2), "quick")
+    sha = f + ".sha256" if os.path.isfile(f + ".sha256") else ""
+    r = rows.get(tag)
+    if r and r[3] == "full" and typ == "quick" or r and r[8]:
+        continue                                   # a full bundle beats a quick one; one local copy is enough
+    if r:
+        r[3:4] = [typ]; r[7:10] = ["both", f, sha]
+    else:
+        date = datetime.date.fromtimestamp(os.path.getmtime(f)).isoformat()
+        rows[tag] = [tag, date, "local", typ, "", "", "", "local", f, sha]
+def key(t):
+    return [int(x) for x in re.findall(r"\d+", t)]
+for t in sorted(rows, key=key, reverse=True):
+    print("\x1f".join(rows[t]))
 PY
     [ -s "$tmp/list" ] || { echo "No encuentro versiones con paquete de actualización." >&2; rm -rf "$tmp"; return 1; }
     def=$(awk -F'\037' '$3 == "stable" && $4 == "full" { print $1; exit }' "$tmp/list")
+    [ -n "$def" ] || def=$(awk -F'\037' '$4 == "full" { print $1; exit }' "$tmp/list")
     if [ -z "$want" ]; then
         printf '\nInstalada: %s\n' "${VERSION:+v$VERSION}"
         i=0
-        while IFS=$'\037' read -r tag date kind type _ _ title; do
+        while IFS=$'\037' read -r tag date kind type _ _ title src _; do
             i=$((i + 1)); n=''
             [ "$kind" = pre ] && n="$n [preliminar]"
             [ "$type" = quick ] && n="$n [rápida: solo kernel]"
+            case $src in
+                both) n="$n [descargada]" ;;
+                local) n="$n [descargada$([ $online = 1 ] && echo ', ya no está en GitHub')]" ;;
+            esac
             [ -n "$title" ] && n="$n  $title"
             [ "$tag" = "$def" ] && n="$n ← estable más reciente"
             [ "$tag" = "v$VERSION" ] && n="$n (instalada)"
             printf '  %2d) %-8s %s%s\n' "$i" "$tag" "$date" "$n"
         done <"$tmp/list"
-        read -rp "¿Qué versión? (número o etiqueta, Intro = $def, 0 = cancelar): " c
+        [ -n "$IMG_LOCAL" ] && echo "  Carpetas con versiones descargadas: ${IMG_LOCAL//:/, }"
+        read -rp "¿Qué versión? (número o etiqueta, Intro = $def, l = añadir una carpeta con versiones descargadas, 0 = cancelar): " c
         case $c in
             0) rm -rf "$tmp"; return 0 ;;
+            l|L) rm -rf "$tmp"; img_local_add && update_image; return ;;
             '') want=$def ;;
             *[!0-9]*) want=$c ;;
             *) want=$(sed -n "${c}p" "$tmp/list" | cut -d$'\037' -f1) ;;
         esac
     fi
     [[ $want == v* ]] || want=v$want
-    IFS=$'\037' read -r tag date kind type url sha title < <(awk -F'\037' -v t="$want" '$1 == t' "$tmp/list")
-    [ -n "${url:-}" ] || { echo "No hay paquete de actualización para $want." >&2; rm -rf "$tmp"; return 1; }
+    IFS=$'\037' read -r tag date kind type url sha title src lfile lsha < <(awk -F'\037' -v t="$want" '$1 == t' "$tmp/list")
+    [ -n "${url:-}${lfile:-}" ] || { echo "No hay paquete de actualización para $want." >&2; rm -rf "$tmp"; return 1; }
 
     echo; echo "== Novedades de $tag ($date) =="
-    python3 -I - "$tmp/rel.json" "$tag" <<'PY'
-import json, sys
-for r in json.load(open(sys.argv[1])):
-    if r["tag_name"] == sys.argv[2]:
-        body = r["body"].split("## Updating")[0].split("## VRR test")[0].strip().splitlines()
-        print("\n".join(body[:40]) + ("\n…" if len(body) > 40 else ""))
+    # the release's own notes; for one only in your folder, its NOTAS.md or notes.md if it has one
+    python3 -I - "$tmp/rel.json" "$tag" "$(dirname "${lfile:-/x/x}")" <<'PY' | tee "$tmp/notes"
+import json, os, sys
+body = next((r["body"] for r in json.load(open(sys.argv[1])) if r["tag_name"] == sys.argv[2]), None)
+if body is None:
+    for n in ("NOTAS.md", "notes.md", "RELEASE.md"):
+        f = os.path.join(sys.argv[3], n)
+        if os.path.isfile(f):
+            body = open(f, errors="replace").read(); break
+if body is None:
+    print("(sin notas: ni en GitHub ni junto al paquete)")
+else:
+    body = body.split("## Updating")[0].split("## VRR test")[0].strip().splitlines()
+    print("\n".join(body[:40]) + ("\n…" if len(body) > 40 else ""))
 PY
     echo
+    [ -n "$lfile" ] && echo "Se instala desde tu copia: $lfile"
     [ "$kind" = pre ] && echo "Aviso: $tag es PRELIMINAR (de pruebas); la estable más reciente es $def."
     [[ ${title:-} == *PRO* ]] && echo "Aviso: según su título es SOLO para la PS5 Pro ($title)."
     if [ "$type" = quick ]; then
-        echo "Aviso: es una actualización RÁPIDA (solo el kernel), sin SHA-256, que va encima de una versión base:"
+        echo "Aviso: es una actualización RÁPIDA (solo el kernel), que va encima de una versión base:"
         python3 -I - "$tmp/rel.json" "$tag" <<'PY'
 import json, sys
 for r in json.load(open(sys.argv[1])):
@@ -1689,17 +1741,36 @@ PY
 
     dir=$HOME/ps5-update-$tag; log=$(mktemp "${TMPDIR:-/tmp}/ps5-update.XXXXXX")
     mkdir -p "$dir" || { rm -rf "$tmp"; return 1; }
-    rm -rf "$tmp"
-    local file="$dir/${url##*/}"
-    echo "==> Descargando ${url##*/}…"
-    curl -fL -C - --retry 5 -o "$file" "$url" || { echo "Falló la descarga (repite: se reanuda)." >&2; return 1; }
-    if [ -n "$sha" ]; then
-        curl -fsSL --retry 3 -o "$dir/${sha##*/}" "$sha" && (cd "$dir" && sha256sum -c "${sha##*/}") ||
-            { echo "El SHA-256 NO coincide: no se instala. Borra $dir y repite." >&2; return 1; }
+    local file sumf=''
+    if [ -n "$lfile" ]; then
+        file="$dir/${lfile##*/}"
+        echo "==> Copiando ${lfile##*/} desde tu carpeta…"
+        cp "$lfile" "$file" || { echo "No se ha podido copiar (¿NAS?)." >&2; rm -rf "$tmp"; return 1; }
+        if [ -n "$lsha" ]; then cp "$lsha" "$dir/" && sumf=${lsha##*/}
+        elif [ -n "$sha" ]; then curl -fsSL --retry 3 -o "$dir/${sha##*/}" "$sha" && sumf=${sha##*/}; fi
     else
-        echo "Aviso: esta versión no publica SHA-256; no se puede comprobar la descarga."
-        yesno "¿Seguir de todos modos?" N || return 1
+        file="$dir/${url##*/}"
+        echo "==> Descargando ${url##*/}…"
+        curl -fL -C - --retry 5 -o "$file" "$url" || { echo "Falló la descarga (repite: se reanuda)." >&2; rm -rf "$tmp"; return 1; }
+        [ -n "$sha" ] && curl -fsSL --retry 3 -o "$dir/${sha##*/}" "$sha" && sumf=${sha##*/}
     fi
+    if [ -n "$sumf" ]; then
+        (cd "$dir" && sha256sum -c "$sumf") ||
+            { echo "El SHA-256 NO coincide: no se instala. Borra $dir y repite." >&2; rm -rf "$tmp"; return 1; }
+    else
+        echo "Aviso: no hay SHA-256 de esta versión; no se puede comprobar el paquete."
+        yesno "¿Seguir de todos modos?" N || { rm -rf "$tmp"; return 1; }
+    fi
+    # a download goes to your folder too, so it stays installable when the author withdraws it
+    if [ -z "$lfile" ] && [ -n "$IMG_LOCAL" ]; then
+        local keep=${IMG_LOCAL%%:*}/$tag
+        if yesno "¿Guardar también el paquete en $keep (por si lo retiran de GitHub)?" S; then
+            mkdir -p "$keep" && cp "$file" "$keep/" && { [ -z "$sumf" ] || cp "$dir/$sumf" "$keep/"; } &&
+                cp "$tmp/notes" "$keep/NOTAS.md" && echo "    Guardado en $keep." ||
+                echo "    No se ha podido guardar en $keep (sigue la actualización)." >&2
+        fi
+    fi
+    rm -rf "$tmp"
     echo "==> Descomprimiendo…"
     case $file in *.tar.gz) tar xzf "$file" -C "$dir" ;; *) tar xJf "$file" -C "$dir" ;; esac || return 1
     local up script=update.sh; [ "$type" = quick ] && script=install.sh
@@ -1746,6 +1817,19 @@ PY
     echo "Ahora hay que APAGAR y arrancar con el cargador (no reiniciar: el kernel nuevo necesita un arranque en frío)."
     yesno "¿Apagar ahora?" N && sudo poweroff
     return 0
+}
+
+img_local_add() {                        # asks for a folder with downloaded releases and adds it to IMG_LOCAL
+    local d
+    say "Una carpeta con versiones descargadas de la imagen: los ficheros tal como vienen en la release" \
+        "(ps5-bazzite-deck-<versión>-update.tar.xz con su .sha256, o ps5-quick-<versión>.tar.gz), en ella o hasta" \
+        "3 niveles por debajo (p. ej. <carpeta>/v1.8.4/…). Puede estar en el NAS (montado con el bloque nas)."
+    read -r -e -p "Carpeta: " d || return 1
+    d=${d%/}; d=${d/#\~/$HOME}
+    [ -n "$d" ] && [ -d "$d" ] || { echo "No existe: $d" >&2; return 1; }
+    case ":$IMG_LOCAL:" in *":$d:"*) echo "Ya está en la lista."; return 0 ;; esac
+    remember IMG_LOCAL "${IMG_LOCAL:+$IMG_LOCAL:}$d"
+    echo "Añadida. Las descargas de GitHub también se ofrecerán guardar en ${IMG_LOCAL%%:*}."
 }
 
 # --- going back: full copies of the image taken before each update ---------------------------------------
