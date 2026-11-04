@@ -5,6 +5,20 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+### Añadido
+- **Volver atrás en la imagen.** Antes de cada actualización, la opción 17 guarda una copia completa de lo que cambia:
+  kernel, initrd, `cmdline.txt`, módulos, scripts, servicios y reglas de la imagen, `/etc/ps5-bazzite-deck` y qué
+  servicios estaban activos. La opción 17 → «Volver» (`--rollback`) la restaura sin red, aunque el kernel sea otro, y
+  borra lo que añadió la versión nueva; antes guarda cómo está, así que también se deshace. Se guardan las 3 últimas.
+- Si cabe, deja además el kernel anterior en la partición de arranque (`anterior-toolbox/`, con un `LEEME.txt`) para
+  volver desde otro ordenador si la versión nueva no arranca.
+- Opción 17 → «Guardar ahora una copia» de la imagen tal como está.
+
+### Cambiado
+- La opción 17 pregunta primero: instalar una versión de GitHub, volver a una copia o guardar una.
+- Antes de instalar, avisa si el `update.sh` del autor no admite el cambio de kernel (hasta la v2.4) y dice cómo
+  hacerlo.
+
 ## [1.4.0] - 2026-11-02
 
 ### Añadido

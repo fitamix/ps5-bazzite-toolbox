@@ -63,7 +63,7 @@ primera vez que eliges algo que la necesita, y ya no vuelve a pedirla hasta que 
   15) Aplicar los ajustes pendientes, uno a uno
   16) Revisar o cambiar ajustes concretos
  Sistema
-  17) Actualizar la imagen desde GitHub
+  17) Imagen: instalar otra versión de GitHub o volver a como estaba antes de actualizar
   18) Actualizar esta caja de herramientas
   19) Instalarla como comando y en el menú de aplicaciones, o desinstalarla
 ```
@@ -88,6 +88,7 @@ ps5-bazzite-toolbox --setup --status          # solo el estado de cada bloque
 ps5-bazzite-toolbox --setup --all             # la respuesta recomendada en todo, sin preguntar
 ps5-bazzite-toolbox --setup --only vram,nas   # solo esos bloques (vuelve a preguntar)
 ps5-bazzite-toolbox --update [v1.8.4]         # actualizar la imagen
+ps5-bazzite-toolbox --rollback               # volver a como estaba la imagen antes de una actualización
 ps5-bazzite-toolbox --self-update [v1.1.0]    # actualizar esta caja de herramientas
 ps5-bazzite-toolbox --install | --uninstall
 ps5-bazzite-toolbox --version
@@ -228,6 +229,26 @@ valor cuando el `.ppdb` del juego no dice nada.
 Lista las versiones publicadas (estables, preliminares y «rápidas» que solo cambian el kernel), muestra sus
 novedades, comprueba el espacio, descarga, verifica el SHA-256 y ejecuta el `update.sh` del autor. Después recuerda
 **apagar** y arrancar con el cargador, no reiniciar.
+
+Se puede instalar cualquier versión que tenga paquete de actualización, también una anterior. El `update.sh` del
+autor hasta la v2.4 solo instala un paquete con el mismo kernel que el que funciona; si no, la caja lo avisa antes.
+
+### Volver atrás
+
+Antes de instalar, la opción 17 guarda una copia completa de lo que cambia una actualización en
+`/var/lib/ps5-bazzite-toolbox/imagen/`: los ficheros de la partición de arranque (kernel, initrd, `cmdline.txt`),
+los módulos del kernel, los scripts, servicios y reglas de la imagen, `/etc/ps5-bazzite-deck` y qué servicios estaban
+activos. La copia del autor (`/var/lib/ps5-update-backup`) solo guarda el kernel y los módulos.
+
+La opción 17 → «Volver» (`--rollback`) la restaura tal cual, sin red y aunque el kernel sea otro, y borra lo que había
+añadido la versión nueva. Antes guarda cómo está ahora, así que la vuelta también se deshace. Se guardan las 3 últimas
+copias; cada una ocupa lo que los módulos del kernel. Bazzite, Steam, los juegos y tus ficheros no van en ella: las
+actualizaciones de la imagen no los tocan.
+
+Si la versión nueva ni arranca, la caja no puede ayudar desde la consola. Por eso, si cabe, también deja el kernel
+anterior en la partición de arranque, en `anterior-toolbox/`. Esa partición es FAT, así que cualquier ordenador la
+lee: se copian sus ficheros a la raíz de la partición, se arranca y se termina la vuelta con la opción 17. Lo explica
+su `LEEME.txt`.
 
 ## Dónde deja sus ficheros
 

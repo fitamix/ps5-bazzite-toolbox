@@ -20,6 +20,7 @@
 #   bash ps5-bazzite-toolbox.sh --setup                 # settings, block by block, asking
 #   bash ps5-bazzite-toolbox.sh --setup --status | --all | --only vram,nas
 #   bash ps5-bazzite-toolbox.sh --update [v1.7.2]       # update the image from GitHub (asks which version)
+#   bash ps5-bazzite-toolbox.sh --rollback              # go back to the image as it was before an update (saved copy)
 #   bash ps5-bazzite-toolbox.sh --screen                # black screen: switch to another console and back
 #   bash ps5-bazzite-toolbox.sh --add-game [Juego.exe]  # add a Windows game to PortProton and Steam
 #   bash ps5-bazzite-toolbox.sh --remove-game [Juego.exe|"Nombre"]   # remove it (Steam, PortProton, disk), asking each step
@@ -34,7 +35,7 @@
 # Setup blocks: locale cmdline wifi updates vram gpu40 zram fans warmreboot hdmi bt disk brave nas bios media esde portproton atajos
 set -uo pipefail
 
-TOOLBOX_VERSION=1.4.0                    # bump on every release (see CHANGELOG.md and release.sh)
+TOOLBOX_VERSION=1.5.0                    # bump on every release (see CHANGELOG.md and release.sh)
 TOOLBOX_REPO=fitamix/ps5-bazzite-toolbox
 TOOLBOX_BIN=$HOME/.local/bin/ps5-bazzite-toolbox                      # where --install puts it
 TOOLBOX_DESKTOP=$HOME/.local/share/applications/ps5-bazzite-toolbox.desktop
@@ -53,6 +54,7 @@ while [ $# -gt 0 ]; do
         --only) MODE=setup; ONLY=${2//,/ }; shift 2 ;;
         --update) MODE=update; UPDATE_TAG=''
                   if [ $# -gt 1 ] && [[ $2 != -* ]]; then UPDATE_TAG=$2; shift; fi; shift ;;
+        --rollback) MODE=rollback; shift ;;
         --screen) MODE=screen; shift ;;
         --self-update) MODE=self-update; UPDATE_TAG=''
                   if [ $# -gt 1 ] && [[ $2 != -* ]]; then UPDATE_TAG=$2; shift; fi; shift ;;
@@ -1461,6 +1463,7 @@ mem_watch() {
 # ======================================== image update ========================================
 # Same steps as by hand: pick a release, download its update bundle, check its SHA-256, run the author's
 # update.sh (it backs up the kernel and modules and prints an undo command), then power off + loader.
+# Before that, a full copy of what the update changes (img_snap_take), so img_rollback can put it all back.
 REPO=VivaLaVent/ps5-bazzite-deck
 yesno() {                                # yesno "question" S|N -> 0 = yes
     local a d=${2:-N}
@@ -1702,6 +1705,20 @@ PY
     local up script=update.sh; [ "$type" = quick ] && script=install.sh
     up=$(find "$dir" -maxdepth 2 -name "$script" | head -1)
     [ -n "$up" ] || { echo "No encuentro $script en el paquete." >&2; return 1; }
+    # the author's update.sh up to v2.4 only installs a bundle whose kernel has the running kernel's name
+    local bk; bk=$(cat "$(dirname "$up")/KERNEL" 2>/dev/null)
+    if [ -n "$bk" ] && [ "$bk" != "$(uname -r)" ] && ! grep -q 'OLD=\$(uname -r)' "$up"; then
+        echo "El actualizador de $tag solo se instala sobre su kernel ($bk) y ahora tienes $(uname -r)." >&2
+        if img_snap_list | awk -F'\t' -v k="$bk" '$3 == k { f = 1 } END { exit !f }'; then
+            echo "Tienes una copia guardada con ese kernel: vuelve antes a ella (opción 17 → volver), apaga, arranca" >&2
+            echo "con el cargador y repite esto." >&2
+        else echo "No hay ninguna copia guardada con ese kernel: así no se puede instalar." >&2; fi
+        echo "Los ficheros descargados siguen en $dir." >&2
+        return 1
+    fi
+    echo "==> Copia de la imagen actual (para poder volver a ella con la opción 17)…"
+    img_snap_take "$(dirname "$up")" ||
+        { yesno "No se ha podido guardar la copia. ¿Actualizar de todos modos (sin poder volver)?" N || return 1; }
 
     echo "==> Ejecutando el actualizador del autor…"
     bash "$up" 2>&1 | tee "$log"; rc=${PIPESTATUS[0]}
@@ -1729,6 +1746,178 @@ PY
     echo "Ahora hay que APAGAR y arrancar con el cargador (no reiniciar: el kernel nuevo necesita un arranque en frío)."
     yesno "¿Apagar ahora?" N && sudo poweroff
     return 0
+}
+
+# --- going back: full copies of the image taken before each update ---------------------------------------
+# The author's backup (/var/lib/ps5-update-backup) holds the boot files and the modules only: its undo leaves the
+# new version's scripts, services and version file. A copy here holds everything an update changes, so a restore
+# puts the console back exactly as it was before it, whatever the kernel:
+#   efi/      the boot partition's top-level files (kernel, initrd, cmdline.txt)
+#   modules/  /usr/lib/modules/<kernel>
+#   root/     every file the bundle installs (its FILES list), the image's ps5-* scripts and units,
+#             /etc/ps5-bazzite-deck (warm reboot, Bluetooth address, perf.conf…) and a few files update.sh edits
+#   absent    those paths that didn't exist then (the new version's own files: a restore deletes them)
+#   units     whether each ps5-* service/timer was enabled
+#   info      version, kernel, date
+# Only the image's own parts: Bazzite itself, Steam, games and your files aren't in it (no update touches them).
+IMG_SNAPS=/var/lib/ps5-bazzite-toolbox/imagen
+IMG_PREV_EFI=anterior-toolbox            # folder on the boot partition with the previous kernel (see img_snap_take)
+efi_ready() {                            # mounts the boot partition at /efi if it isn't (an M.2 install)
+    sudo test -f "$CMDLINE" && return 0
+    sudo mkdir -p /efi && sudo mount LABEL=boot /efi 2>/dev/null && sudo test -f "$CMDLINE" ||
+        { echo "No encuentro la partición de arranque (etiqueta «boot»): ¿está la memoria USB?" >&2; return 1; }
+}
+img_paths() {                            # img_paths [BUNDLE_DIR]: the system paths a copy keeps, one per line
+    { [ -n "${1:-}" ] && [ -f "$1/FILES" ] && awk 'NF >= 2 { print $2 }' "$1/FILES"
+      ls -1d /usr/local/sbin/ps5-* /usr/local/bin/ps5-report /usr/local/bin/vrr-report \
+             /etc/systemd/system/ps5-* /etc/udev/rules.d/*ps5* /etc/modprobe.d/*ps5* /etc/modules-load.d/ps5-* \
+             /etc/NetworkManager/conf.d/99-ps5-* /etc/NetworkManager/dispatcher.d/90-ps5-* 2>/dev/null
+      printf '%s\n' /etc/ps5-bazzite-deck /etc/ps5-bazzite-deck-version /etc/bluetooth/main.conf /usr/sbin/kexec \
+          /etc/systemd/system/reboot.target /etc/systemd/system/bluetooth.service.d/10-ps5-connectable.conf \
+          /usr/local/share/ps5-bazzite-deck
+    } | sort -u
+}
+img_snap_list() {                        # one line per copy, newest first: dir<TAB>version<TAB>kernel<TAB>date
+    local d
+    for d in $(sudo ls -1d "$IMG_SNAPS"/*/ 2>/dev/null | sort -r); do
+        d=${d%/}
+        sudo test -f "$d/info" || continue
+        printf '%s\t%s\t%s\t%s\n' "$d" "$(sudo awk -F= '$1 == "version" { print $2 }' "$d/info")" \
+            "$(sudo awk -F= '$1 == "kernel" { print $2 }' "$d/info")" "$(sudo awk -F= '$1 == "date" { print $2 }' "$d/info")"
+    done
+}
+img_snap_take() {                        # img_snap_take [BUNDLE_DIR [NOTE [PATHS_FROM_COPY]]] -> SNAP=its folder
+    local bundle=${1:-} note=${2:-} from=${3:-} k need free f u
+    efi_ready || return 1
+    k=$(uname -r)
+    need=$(( $(sudo du -sk "/usr/lib/modules/$k" | cut -f1) + $(sudo du -sk /efi --max-depth=0 2>/dev/null | cut -f1) + 50000 ))
+    free=$(df --output=avail -k /var | tail -1)
+    [ "$free" -gt "$need" ] || { echo "Hacen falta $((need / 1024)) MB libres en /var y hay $((free / 1024))." >&2; return 1; }
+    SNAP=$IMG_SNAPS/$(date +%Y%m%d-%H%M%S)-v${VERSION:-desconocida}
+    sudo mkdir -p "$SNAP/efi" "$SNAP/root" || return 1
+    # boot partition: its top-level files now, plus the bundle's (if new ones, the restore deletes them)
+    { sudo find /efi -maxdepth 1 -type f -printf '%f\n'
+      [ -n "$bundle" ] && ls -1 "$bundle/efi" 2>/dev/null
+      [ -n "$from" ] && sudo cat "$from/efi.list"; } | sort -u | sudo tee "$SNAP/efi.list" >/dev/null
+    while read -r f; do
+        if sudo test -f "/efi/$f"; then sudo cp -a "/efi/$f" "$SNAP/efi/" || return 1
+        else echo "/efi/$f" | sudo tee -a "$SNAP/absent" >/dev/null; fi
+    done < <(sudo cat "$SNAP/efi.list")
+    sudo cp -a "/usr/lib/modules/$k" "$SNAP/modules" || return 1
+    { img_paths "$bundle"; [ -n "$from" ] && sudo cat "$from/paths"; } | sort -u | sudo tee "$SNAP/paths" >/dev/null
+    while read -r f; do
+        if sudo test -e "$f" || sudo test -L "$f"; then sudo cp -a --parents "$f" "$SNAP/root/" || return 1
+        else echo "$f" | sudo tee -a "$SNAP/absent" >/dev/null; fi
+    done < <(sudo cat "$SNAP/paths")
+    for u in $(sudo cat "$SNAP/paths" | grep -E '^/etc/systemd/system/ps5-[^/]*\.(service|timer)$' | xargs -rn1 basename); do
+        printf '%s %s\n' "$u" "$(systemctl is-enabled "$u" 2>/dev/null || echo disabled)"
+    done | sudo tee "$SNAP/units" >/dev/null
+    printf 'version=%s\nkernel=%s\ndate=%s\nnote=%s\n' "v${VERSION:-?}" "$k" "$(date '+%Y-%m-%d %H:%M')" "$note" |
+        sudo tee "$SNAP/info" >/dev/null
+    echo "    Guardada: $SNAP ($(sudo du -sh "$SNAP" | cut -f1)): v${VERSION:-?}, kernel $k."
+    # if even the new kernel doesn't start, nothing on the console can help: the current one also goes to the
+    # boot partition (FAT: any computer reads it), with the steps in LEEME.txt
+    if [ -n "$bundle" ]; then
+        local sz; sz=$(sudo du -ck $(sudo find /efi -maxdepth 1 -type f ! -name '*.txt') 2>/dev/null | tail -1 | cut -f1)
+        if [ "$(df --output=avail -k /efi | tail -1)" -gt $(( ${sz:-0} + 30000 )) ]; then
+            sudo rm -rf "/efi/$IMG_PREV_EFI" && sudo mkdir -p "/efi/$IMG_PREV_EFI" &&
+                sudo find /efi -maxdepth 1 -type f -exec cp --preserve=timestamps {} "/efi/$IMG_PREV_EFI/" \; &&
+                printf '%s\r\n' "Copia de la imagen v${VERSION:-?} (kernel $k), guardada por ps5-bazzite-toolbox el $(date '+%Y-%m-%d %H:%M')" \
+                    "antes de actualizar. Si la version nueva no arranca:" \
+                    "  1. Conecta esta memoria USB a un ordenador." \
+                    "  2. Copia los ficheros de esta carpeta a la raiz de la particion (sustituyendo los que hay)." \
+                    "  3. Vuelve a ponerla en la PS5 y arranca con el cargador: arrancara el kernel $k." \
+                    "  4. Ya en Linux, ejecuta la caja de herramientas, opcion 17 -> volver, para dejarlo todo como estaba." |
+                    sudo tee "/efi/$IMG_PREV_EFI/LEEME.txt" >/dev/null &&
+                echo "    Y el kernel actual, en la partición de arranque: /efi/$IMG_PREV_EFI (por si el nuevo no arranca; ver LEEME.txt)."
+        else
+            echo "    (No cabe una copia del kernel en la partición de arranque: si el nuevo no arranca, habrá que reflashear.)"
+        fi
+    fi
+    # keep the newest 3 (each one is the size of the kernel's modules); not while going back (it could be that one)
+    local olds=''; [ -z "$bundle" ] || olds=$(img_snap_list | tail -n +4 | cut -f1)
+    if [ -n "$olds" ]; then
+        echo "    Copias más antiguas (se guardan las 3 últimas):"
+        for f in $olds; do echo "      $(sudo du -sh "$f" | cut -f1)  $f"; done
+        yesno "    ¿Borrarlas?" S && sudo rm -rf $olds
+    fi
+    return 0
+}
+img_rollback() {
+    local list n i c d v k dt cur_k f st
+    need_sudo || return 1
+    list=$(img_snap_list)
+    if [ -z "$list" ]; then
+        echo "No hay copias guardadas. Se hacen solas al actualizar con la opción 17 (desde la v1.5.0 de esta caja)."
+        local bk; bk=$(sudo ls -1d /var/lib/ps5-update-backup/*/ 2>/dev/null | sort | tail -1)
+        [ -n "$bk" ] && echo "Queda la copia del actualizador del autor ($bk): solo kernel y módulos. Su comando para" \
+            "deshacer está en el registro de la actualización (update-<versión>.log), si lo guardaste."
+        return 0
+    fi
+    cur_k=$(uname -r)
+    printf '\nAhora: %s, kernel %s\nCopias guardadas (cada una es la imagen tal como estaba antes de una actualización):\n' "${VERSION:+v$VERSION}" "$cur_k"
+    i=0
+    while IFS=$'\t' read -r d v k dt; do
+        i=$((i + 1))
+        printf '  %d) %-8s kernel %-14s guardada el %s  (%s)\n' "$i" "$v" "$k" "$dt" "$(sudo du -sh "$d" | cut -f1)"
+    done <<<"$list"
+    read -rp "¿A cuál vuelves? (número, Intro = 1, 0 = cancelar): " c
+    case ${c:-1} in 0) return 0 ;; *[!0-9]*) echo "Opción no válida"; return 1 ;; esac
+    IFS=$'\t' read -r d v k dt < <(sed -n "${c:-1}p" <<<"$list")
+    [ -n "${d:-}" ] || { echo "Opción no válida"; return 1; }
+    echo
+    say "Vuelve a $v (kernel $k), tal como estaba el $dt: kernel, initrd, cmdline.txt, módulos, los scripts y" \
+        "servicios de la imagen y /etc/ps5-bazzite-deck. Lo que la versión actual añadió se borra."
+    say "Los ajustes de esas partes cambiados después de esa fecha (p. ej. con el bloque gpu40 o fans) vuelven" \
+        "a como estaban; revísalos luego con la opción 14. Bazzite, Steam, juegos y tus ficheros no se tocan."
+    say "Antes se guarda una copia de cómo está ahora, así que también esto se puede deshacer (opción 17 → volver)."
+    yesno "¿Volver a $v?" N || return 0
+    efi_ready || return 1
+    echo "==> Copia de la imagen actual…"
+    img_snap_take '' "antes de volver a $v" "$d" || { yesno "Sin esa copia no podrás deshacerlo. ¿Seguir?" N || return 1; }
+    echo "==> Restaurando $v…"
+    sudo cp -r --preserve=timestamps "$d/efi/." /efi/ ||   # FAT: no owners to keep (cp -a would fail)
+        { echo "Falló al copiar a la partición de arranque: NO apagues; pide ayuda." >&2; return 1; }
+    sudo rm -rf "/usr/lib/modules/$k.toolbox" && sudo cp -a "$d/modules" "/usr/lib/modules/$k.toolbox" &&
+        sudo rm -rf "/usr/lib/modules/$k" && sudo mv "/usr/lib/modules/$k.toolbox" "/usr/lib/modules/$k" || return 1
+    sudo depmod -a "$k"
+    # the saved paths: directories are put back whole (files added since then go), files one by one
+    while read -r f; do
+        sudo test -d "$d/root$f" && sudo rm -rf "$f"
+        sudo mkdir -p "$(dirname "$f")" && sudo cp -a "$d/root$f" "$(dirname "$f")/" || return 1
+    done < <(sudo cat "$d/paths" | while read -r f; do sudo test -e "$d/root$f" -o -L "$d/root$f" && echo "$f"; done)
+    sudo cat "$d/absent" 2>/dev/null | while read -r f; do
+        case $f in /efi/*|/etc/*|/usr/local/*|/usr/sbin/kexec) sudo rm -rf "$f" ;; esac   # never anything else
+    done
+    sudo systemctl daemon-reload
+    sudo udevadm control --reload 2>/dev/null || true
+    while read -r f st; do
+        case $st in enabled) sudo systemctl enable "$f" 2>/dev/null ;; disabled) sudo systemctl disable "$f" 2>/dev/null ;; esac
+    done < <(sudo cat "$d/units" 2>/dev/null)
+    if [ "$k" != "$cur_k" ] && sudo test -d "/usr/lib/modules/$cur_k"; then
+        yesno "¿Borrar los módulos del kernel $cur_k? (ya no arranca; $(sudo du -sh "/usr/lib/modules/$cur_k" | cut -f1))" S &&
+            sudo rm -rf "/usr/lib/modules/$cur_k"
+    fi
+    sync
+    VERSION=${v#v}
+    sudo test -e /etc/ps5-bazzite-deck/warm-reboot && sudo touch /run/ps5-reboot-to-ps5   # the kernel needs a cold start
+    echo; echo "${G}Vuelto a $v.${N} Para deshacerlo: opción 17 → volver, y elige la copia «antes de volver a $v»."
+    echo "Ahora hay que APAGAR y arrancar con el cargador (el kernel cambia: hace falta un arranque en frío)."
+    yesno "¿Apagar ahora?" N && sudo poweroff
+    return 0
+}
+img_menu() {
+    local c n; n=$(img_snap_list | wc -l)
+    echo "  1) Instalar una versión de GitHub (la más nueva u otra, también anterior)"
+    echo "  2) Volver a como estaba la imagen antes de una actualización ($n copia(s) guardada(s))"
+    echo "  3) Guardar ahora una copia de la imagen tal como está (la opción 1 ya la hace sola antes de instalar)"
+    read -rp "Elige (Intro = 1, 0 = cancelar): " c
+    case ${c:-1} in
+        1) update_image ;;
+        2) img_rollback ;;
+        3) need_sudo && img_snap_take '' "guardada a mano" ;;
+        *) return 0 ;;
+    esac
 }
 
 # ======================================== PortProton, Steam and tools ========================================
@@ -2866,7 +3055,7 @@ menu() {
   15) Aplicar los ajustes pendientes, uno a uno
   16) Revisar o cambiar ajustes concretos (VRAM, idioma, NAS…; también los que dijiste que no)
  Sistema
-  17) Actualizar la imagen desde GitHub (elige versión, descarga, comprueba e instala)
+  17) Imagen: instalar otra versión de GitHub (más nueva o anterior), o volver a como estaba antes de actualizar
   18) Actualizar esta caja de herramientas (muestra las novedades y pregunta)
   19) Instalarla como comando «ps5-bazzite-toolbox» y en el menú de aplicaciones, o desinstalarla
    0) Salir
@@ -2892,7 +3081,7 @@ MENU
             16) echo "Ajustes: $BLOCKS"
                 read -rp "¿Cuáles? (separados por espacios o comas): " a
                 [ -n "$a" ] && { STATUS_ONLY=0 ALL=0 ONLY=${a//,/ }; setup_run; ONLY=''; } ;;
-            17) update_image ;;
+            17) img_menu ;;
             18) self_update && { echo "Saliendo para que abras la versión nueva."; return 0; } ;;
             19) if [ "$TOOLBOX_SELF" = "$TOOLBOX_BIN" ]; then uninstall_self && return 0; else install_self; fi ;;
             0|q|'') return 0 ;;
@@ -2920,6 +3109,7 @@ case $MODE in
     session) session "$SESSION_CMD" ;;
     setup) setup_run ;;
     update) update_image "$UPDATE_TAG" ;;
+    rollback) img_rollback ;;
     screen) screen_kick ;;
     install) install_self ;;
     uninstall) uninstall_self ;;
