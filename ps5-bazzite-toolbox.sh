@@ -1340,6 +1340,16 @@ EOF
 # compressed RAM: "swap 2.6/4.3 (en RAM 0.8)" means 2.6 GB swapped out taking 0.8 GB of RAM.
 # Ctrl+C stops it and prints the peaks; every sample also goes to a CSV it offers to keep (ps5-mem-FECHA.csv).
 P_GPUMEM='ENOMEM|Not enough memory|Failed to pin|ring [a-z_0-9.]+ (timeout|reset)|page fault'
+# "__vm_enough_memory: … not enough memory for the allocation" also matches it, but it isn't the GPU: a program asked
+# for more address space at once than RAM + swap (overcommit heuristic), e.g. RPCS3 reserving 32 GB, which then
+# carries on another way. Counted apart (vm_refused).
+P_VMREF='__vm_enough_memory'
+vm_refused() {                           # vm_refused SINCE: "count|program|GB" of refused reservations, or nothing
+    sudo journalctl -k --since "$1" --no-pager 2>/dev/null | grep -F "$P_VMREF" | awk '
+        { for (i = 1; i <= NF; i++) { if ($i == "pid:") pid = $(i + 1); if ($i == "comm:") c = $(i + 1); if ($i == "bytes:") b = $(i + 1) }
+          sub(/,$/, "", pid); sub(/,$/, "", c); n++ }
+        END { if (n) printf "%d|%s|%s|%.0f\n", n, pid, c, b / 2^30 }'
+}
 zram_mb() {                              # RAM taken by zram swap (mm_stat field 3: mem_used_total, bytes)
     cat /sys/block/zram*/mm_stat 2>/dev/null | awk '{ s += $3 } END { print int(s / 1048576) }'
 }
@@ -1394,7 +1404,7 @@ mem_watch() {
         ram=$(ps -eo rss=,comm= --sort=-rss | head -1 | awk '{ printf "%s %.1fG", $2, $1 / 2^20 }')
         [ -n "$su0" ] || su0=$su
         if [ $((n % 3)) = 0 ]; then     # the kernel log every 6 s is enough
-            events=$(sudo journalctl -k --since "$start" --no-pager 2>/dev/null | grep -ciE "$P_GPUMEM")
+            events=$(sudo journalctl -k --since "$start" --no-pager 2>/dev/null | grep -iE "$P_GPUMEM" | grep -vcF "$P_VMREF")
         fi
         n=$((n + 1))
         [ "$vu" -gt "$peak_v" ] && peak_v=$vu
@@ -1432,8 +1442,18 @@ mem_watch() {
     echo "  Temperatura:  CPU ${peak_ct} °C, GPU ${peak_t} °C como máximo"
     if [ "$events" -gt 0 ]; then
         echo "  ${R}Errores de memoria de la GPU: $events${N}"
-        sudo journalctl -k --since "$start" --no-pager 2>/dev/null | grep -iE "$P_GPUMEM" | tail -5 | sed 's/^/    /'
+        sudo journalctl -k --since "$start" --no-pager 2>/dev/null | grep -iE "$P_GPUMEM" | grep -vF "$P_VMREF" | tail -5 | sed 's/^/    /'
     else echo "  Errores de memoria de la GPU: ninguno"; fi
+    local vr vr_n vr_pid vr_c vr_gb vr_exe
+    vr=$(vm_refused "$start")
+    if [ -n "$vr" ]; then
+        IFS='|' read -r vr_n vr_pid vr_c vr_gb <<<"$vr"
+        # an AppImage is "AppRun.wrapped" in the log: its real program, if it's still running
+        vr_exe=$(basename "$(readlink "/proc/$vr_pid/exe" 2>/dev/null)" 2>/dev/null)
+        echo "  Reservas de memoria rechazadas (no son de la GPU): $vr_n, de $vr_c${vr_exe:+ ($vr_exe)}, de $vr_gb GB de una vez"
+        echo "    Pidió de golpe más memoria de la que hay (RAM + swap) y Linux se lo negó. Los emuladores (p. ej. RPCS3)"
+        echo "    reservan así espacio de direcciones y siguen de otra forma: si el juego no se cerró, no es un fallo."
+    fi
     local ram_short=0 vram_full=0
     { [ "$min_ra" -lt 512 ] || [ "$peak_s" -gt $(( ${su0:-0} + 512 )) ]; } && ram_short=1
     [ "$vt" -gt 0 ] && [ $((peak_v * 100 / vt)) -ge 90 ] && vram_full=1

@@ -11,6 +11,12 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
   GitHub]`, y las instala desde ahí comprobando su SHA-256; sin red, solo las tuyas. Al instalar una de GitHub ofrece
   guardar su paquete en tu carpeta: el autor retira versiones (el 4 de noviembre solo quedaban la v2.5 y la v1.8.9).
 
+### Arreglado
+- El monitor en directo (opción 4) contaba como «errores de memoria de la GPU» las reservas que Linux niega a un
+  programa que pide de golpe más memoria de la que hay (`__vm_enough_memory: … not enough memory for the
+  allocation`), como RPCS3 al reservar 32 GB al arrancar un juego. No son de la GPU ni un fallo: ahora salen aparte,
+  con el programa de verdad (un AppImage aparece como `AppRun.wrapped`), y no cuentan como errores.
+
 ## [1.5.0] - 2026-11-04
 
 ### Añadido
