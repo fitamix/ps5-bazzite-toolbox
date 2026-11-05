@@ -12,8 +12,18 @@ y escritorio KDE). Es **un solo fichero** que se ejecuta en la consola y sirve p
 - **Cambiar de versión de la imagen** desde GitHub (más nueva o anterior) con comprobación de SHA-256, y volver a
   como estaba antes (en pruebas).
 
-Todo está en español. Probado en una PS5 original (FW 4.50, chip Wi-Fi IW620) con las versiones v1.4 – v1.8 de la
-imagen, arrancando desde un disco USB. No es un proyecto oficial de la imagen ni de sus autores.
+Todo está en español. No es un proyecto oficial de la imagen ni de sus autores.
+
+**Equipo de pruebas** (versiones v1.4 – v1.8 de la imagen, instalación Legacy):
+
+| | |
+|---|---|
+| Consola | PS5 original «fat» (chip Wi-Fi/Bluetooth IW620), firmware 4.50 |
+| Jailbreak | [Y2JB](https://github.com/Gezine/Y2JB) |
+| Cargador de Linux | `ps5-linux-loader-v3.5.elf` ([ps5-linux-loader](https://github.com/ps5-linux/ps5-linux-loader)) |
+| Disco | SSD externo Lexar ES3 de 1 TB por USB 3.2 (10 Gb/s, USB `21c4:0003`; va estable con `usb-storage.quirks=21c4:0003:um`, que pone el bloque `cmdline`) |
+
+Con otros modelos (Slim, Pro), firmwares, cargadores o discos puede funcionar, pero no está probado.
 
 Cada ajuste explica qué cambia, por qué y cómo deshacerlo, y aquí abajo está también **el comando equivalente**, por
 si prefieres hacerlo a mano sin instalar nada.
