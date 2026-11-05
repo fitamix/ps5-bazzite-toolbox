@@ -8,7 +8,7 @@
 #  - PortProton and Steam: add or remove a Windows game (PortProton + Desktop + Steam + "PortProton" collection),
 #    sync the collection; global PortProton defaults (setup block "portproton"). Tools: space taken by each folder.
 #  - Settings (setup): blocks that adapt the image (language, boot options, Wi-Fi, updates, VRAM, fans, warm
-#    reboot, HDMI fix, disk, Brave, NAS, zram swap size, the GPU's 40 compute units). Each explains what it changes, why and how to undo it, and asks.
+#    reboot, HDMI fix, disk, Brave, Edge, NAS, zram swap size, the GPU's 40 compute units). Each explains what it changes, why and how to undo it, and asks.
 #    Answers are kept in ~/.config/ps5-bazzite-toolbox.conf; running it again only offers what is pending.
 #
 #   bash ps5-bazzite-toolbox.sh                         # menu (the first time it offers to install itself as the
@@ -32,10 +32,10 @@
 #   bash ps5-bazzite-toolbox.sh --self-update [v1.1.0]  # update this toolbox from its GitHub releases
 #   bash ps5-bazzite-toolbox.sh --install | --uninstall # command ~/.local/bin/ps5-bazzite-toolbox + applications menu
 #   bash ps5-bazzite-toolbox.sh --version
-# Setup blocks: locale cmdline wifi updates vram gpu40 zram fans warmreboot hdmi bt disk brave nas bios media esde portproton atajos
+# Setup blocks: locale cmdline wifi updates vram gpu40 zram fans warmreboot hdmi bt disk brave edge nas bios media esde portproton atajos
 set -uo pipefail
 
-TOOLBOX_VERSION=1.6.0                    # bump on every release (see CHANGELOG.md and release.sh)
+TOOLBOX_VERSION=1.7.0                    # bump on every release (see CHANGELOG.md and release.sh)
 TOOLBOX_REPO=fitamix/ps5-bazzite-toolbox
 TOOLBOX_BIN=$HOME/.local/bin/ps5-bazzite-toolbox                      # where --install puts it
 TOOLBOX_DESKTOP=$HOME/.local/share/applications/ps5-bazzite-toolbox.desktop
@@ -114,7 +114,8 @@ TOOLS_REPO=https://github.com/ps5-linux/ps5-linux-tools
 TOOLS_COMMIT=f1fa98a                     # the revision reviewed on 2026-10-27
 POLKIT_RULE=/etc/polkit-1/rules.d/50-ps5-no-kde-smart.rules
 BRAVE_FLAGS=$HOME/.var/app/com.brave.Browser/config/brave-flags.conf
-BLOCKS="locale cmdline wifi updates vram gpu40 zram fans warmreboot hdmi bt disk brave nas bios media esde portproton atajos"
+EDGE_FLAGS=$HOME/.var/app/com.microsoft.Edge/config/edge-flags.conf
+BLOCKS="locale cmdline wifi updates vram gpu40 zram fans warmreboot hdmi bt disk brave edge nas bios media esde portproton atajos"
 
 # ======================================== settings (setup) ========================================
 # --- saved answers -------------------------------------------------------------------------------
@@ -673,6 +674,23 @@ apply_brave() {
         { flatpak kill com.brave.Browser 2>/dev/null; true; }
 }
 
+# --- edge ----------------------------------------------------------------------------------------
+desc_edge() {
+    section
+    say "Microsoft Edge (Flatpak) guarda sus claves sin la Cartera de KDE (--password-store=basic en $EDGE_FLAGS)."
+    say "POR QUÉ: como la sesión entra sola, la Cartera de KDE no se abre y Edge pide su contraseña cada vez."
+    say "Ojo: las sesiones y contraseñas ya guardadas en Edge dejan de leerse (hay que volver a entrar)."
+    say "DESHACER: borra esa línea del fichero."
+}
+check_edge() {
+    flatpak info com.microsoft.Edge >/dev/null 2>&1 || return 2
+    grep -qs -- '--password-store=basic' "$EDGE_FLAGS" || return 1
+}
+apply_edge() {
+    mkdir -p "$(dirname "$EDGE_FLAGS")" && echo '--password-store=basic' >>"$EDGE_FLAGS" &&
+        { flatpak kill com.microsoft.Edge 2>/dev/null; true; }
+}
+
 # --- nas -----------------------------------------------------------------------------------------
 desc_nas() {
     section
@@ -1031,7 +1049,7 @@ default_for() {
     case $1 in
         warmreboot) echo N ;;
         hdmi) warm_on && echo S || echo N ;;
-        brave) echo N ;;                 # loses Brave's saved logins: only if the wallet prompt bothers you
+        brave|edge) echo N ;;            # loses the browser's saved logins: only if the wallet prompt bothers you
         nas) [ -n "${NAS_IP:-}" ] && echo S || echo N ;;
         bios|media) echo N ;;            # a choice, not a fix: only if you want them shared from the NAS
         gpu40) echo N ;;                 # silicon lottery: only if you want to try it

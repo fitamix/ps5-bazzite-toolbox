@@ -168,6 +168,7 @@ pregunta con una respuesta recomendada (`[S/n]` = sí por defecto, `[s/N]` = no)
 | [`bt`](#bt) | Recarga el Bluetooth si arranca sin adaptador (PS5 original) | sí | no |
 | [`disk`](#disk) | Quita la consulta SMART de KDE que bloquea discos USB | sí | no |
 | [`brave`](#brave) | Brave sin pedir la contraseña de la Cartera de KDE | no | no |
+| [`edge`](#edge) | Microsoft Edge sin pedir la contraseña de la Cartera de KDE | no | no |
 | [`nas`](#nas) | Monta un NAS por SMB y enlaza las ROMs de EmuDeck | sí, si ya diste sus datos | no |
 | [`bios`](#bios) | BIOS de EmuDeck desde el NAS | no | no |
 | [`media`](#media) | Imágenes de ES-DE desde el NAS | no | no |
@@ -402,6 +403,19 @@ flatpak kill com.brave.Browser
 ```
 
 **Deshacer:** borra esa línea de `brave-flags.conf`.
+
+### `edge`
+
+Lo mismo que [`brave`](#brave) para Microsoft Edge (Flatpak), que pide igualmente la contraseña de la Cartera de KDE.
+No aplica si no tienes Edge.
+
+```sh
+mkdir -p ~/.var/app/com.microsoft.Edge/config
+echo '--password-store=basic' >> ~/.var/app/com.microsoft.Edge/config/edge-flags.conf
+flatpak kill com.microsoft.Edge
+```
+
+**Deshacer:** borra esa línea de `edge-flags.conf`.
 
 ### `nas`
 
@@ -713,6 +727,7 @@ queda ahí para repetir.
 | `/usr/local/sbin/ps5-bt-guard`, `/etc/systemd/system/ps5-bt-guard.service` | `bt` | — |
 | `/etc/polkit-1/rules.d/50-ps5-no-kde-smart.rules`, `~/.config/kded6rc` | `disk` | — |
 | `~/.var/app/com.brave.Browser/config/brave-flags.conf` | `brave` | — |
+| `~/.var/app/com.microsoft.Edge/config/edge-flags.conf` | `edge` | — |
 | `/etc/fstab` (una línea), `/etc/samba/nas-<usuario>.cred` (contraseña del NAS, solo root), `/var/mnt/nas`, `~/.local/share/flatpak/overrides/global` | `nas` | — |
 | `~/Emulation/roms`, `~/Emulation/bios`, carpeta de imágenes de ES-DE | `nas`, `bios`, `media` | la carpeta local, como `….local` |
 | `~/ES-DE/custom_systems/es_systems.xml` | `esde` | `es_systems.xml.bak-<fecha>` |

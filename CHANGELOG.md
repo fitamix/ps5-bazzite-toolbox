@@ -5,6 +5,13 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+## [1.7.0] - 2026-11-05
+
+### Añadido
+- Bloque de ajustes **`edge`**: Microsoft Edge (Flatpak) deja de pedir la contraseña de la Cartera de KDE en cada
+  arranque, igual que el bloque `brave` (`--password-store=basic` en `edge-flags.conf`). No se recomienda por defecto:
+  las sesiones y contraseñas ya guardadas en Edge dejan de leerse.
+
 ## [1.6.0] - 2026-11-04
 
 ### Añadido
@@ -124,7 +131,8 @@ Primera versión publicada.
 - Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
-[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.6.0...HEAD
+[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.3.0...v1.4.0
