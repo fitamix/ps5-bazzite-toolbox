@@ -1940,7 +1940,7 @@ img_snap_take() {                        # img_snap_take [BUNDLE_DIR [NOTE [PATH
     # if even the new kernel doesn't start, nothing on the console can help: the current one also goes to the
     # boot partition (FAT: any computer reads it), with the steps in LEEME.txt
     if [ -n "$bundle" ]; then
-        local sz; sz=$(sudo du -ck $(sudo find /efi -maxdepth 1 -type f ! -name '*.txt') 2>/dev/null | tail -1 | cut -f1)
+        local sz; sz=$(sudo find /efi -maxdepth 1 -type f ! -name '*.txt' -exec du -ck {} + 2>/dev/null | tail -1 | cut -f1)
         if [ "$(df --output=avail -k /efi | tail -1)" -gt $(( ${sz:-0} + 30000 )) ]; then
             sudo rm -rf "/efi/$IMG_PREV_EFI" && sudo mkdir -p "/efi/$IMG_PREV_EFI" &&
                 sudo find /efi -maxdepth 1 -type f -exec cp --preserve=timestamps {} "/efi/$IMG_PREV_EFI/" \; &&
