@@ -5,6 +5,19 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+## [1.8.0] - 2026-11-05
+
+### Añadido
+- **Copia de seguridad de tu carpeta personal** (opción 20, `--backup`, `--restore [carpeta]`). Guarda en otro disco,
+  el NAS o una carpeta lo que elijas: mide tu carpeta, lista lo grande y los sitios que conviene decidir aparte
+  (juegos de Steam, prefijos de Proton y PortProton, juegos dentro de cada prefijo, juegos de PS3, `~/Games`…),
+  deja fuera por defecto lo que se rehace solo y permite entrar en cualquier carpeta para elegir dentro. Avisa de
+  los juegos de PortProton que quedarían sin sus ficheros. Los enlaces al NAS se guardan como enlace. En un disco
+  Linux es una carpeta que se actualiza con `rsync`; en el NAS o exFAT, un `.tar.zst` por carpeta. Guarda también
+  el servicio de Decky y la lista de Flatpaks del sistema. Al recuperar, desde una copia o desde la carpeta
+  personal de otra instalación (otro disco enchufado, también bootc), reinstala Decky y los Flatpaks que falten y
+  ofrece aplicar tus ajustes guardados.
+
 ## [1.7.0] - 2026-11-05
 
 ### Añadido
@@ -131,7 +144,8 @@ Primera versión publicada.
 - Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
-[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.7.0...HEAD
+[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.8.0...HEAD
+[1.8.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.4.0...v1.5.0

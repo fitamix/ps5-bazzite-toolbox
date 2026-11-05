@@ -38,6 +38,7 @@ si prefieres hacerlo a mano sin instalar nada.
 - [Ajustes de la consola](#ajustes-de-la-consola) (cada bloque en detalle, con sus comandos)
 - [PortProton y Steam](#portproton-y-steam)
 - [Cambiar de versión de la imagen y volver atrás](#cambiar-de-versión-de-la-imagen-y-volver-atrás)
+- [Copia de seguridad de tu carpeta personal](#copia-de-seguridad-de-tu-carpeta-personal)
 - [Ficheros: qué usa y dónde guarda cada cosa](#ficheros-qué-usa-y-dónde-guarda-cada-cosa)
 - [Versiones de la caja de herramientas](#versiones-de-la-caja-de-herramientas)
 - [Cosas que se hacen a mano](#cosas-que-se-hacen-a-mano)
@@ -96,6 +97,7 @@ lo hay, un comando del sistema que hace lo mismo.
 | 17 | Imagen: instalar otra versión de GitHub, volver a como estaba antes de actualizar (en pruebas) o guardar una copia | `--update [v1.8.4]`, `--rollback` | ver [Cambiar de versión](#cambiar-de-versión-de-la-imagen-y-volver-atrás) |
 | 18 | Actualizar esta caja de herramientas (muestra las novedades y pregunta) | `--self-update [v1.1.0]` | — |
 | 19 | Instalarla como comando y en el menú de aplicaciones, o desinstalarla | `--install`, `--uninstall` | — |
+| 20 | Copia de seguridad de tu carpeta personal: guardar (eligiendo qué) o recuperar, también desde otro disco | `--backup`, `--restore [carpeta]` | ver [Copia de seguridad](#copia-de-seguridad-de-tu-carpeta-personal) |
 | — | Versión y ayuda | `--version`, `--help` | — |
 
 ## Diagnóstico
@@ -678,6 +680,57 @@ también deja el kernel actual en la partición de arranque, en `anterior-toolbo
 cualquier ordenador la lee: conecta la memoria USB al ordenador, copia los ficheros de `anterior-toolbox/` a la raíz
 de la partición, arranca la PS5 con el cargador y termina la vuelta con la opción 17 → 2. Lo explica su `LEEME.txt`.
 
+## Copia de seguridad de tu carpeta personal
+
+La opción 20 guarda tu carpeta personal (`/var/home/<usuario>`) en otro disco, el NAS o cualquier carpeta, y la
+recupera aquí o en otra instalación: un disco nuevo, la imagen bootc… Ahí está casi todo lo tuyo: juegos de Steam y
+sus partidas, PortProton y sus prefijos, EmuDeck, ES-DE, los plugins de Decky, los Flatpaks instalados para tu
+usuario y la configuración de cada programa y de esta caja.
+
+**Guardar** (20 → 1, `--backup`):
+
+1. Eliges dónde: te ofrece los discos montados y el NAS (con su espacio libre) o escribes una carpeta. La copia va
+   en `ps5-copia-<usuario>/` dentro de ella.
+2. Eliges qué. Mide tu carpeta y lista las carpetas de más de 100 MB y, dentro de ellas, los sitios que conviene
+   decidir aparte: juegos de Steam, prefijos de Proton y de PortProton, juegos instalados dentro de cada prefijo,
+   juegos de PS3 de RPCS3, `~/Games`, descargas… Marcas o desmarcas con su número, y con `a N` entras en la carpeta
+   N para elegir dentro. Vienen desmarcadas las que se rehacen solas: cachés, papelera, sombreadores de Steam y la
+   caché de RPCS3. Las carpetas pequeñas y los ficheros sueltos van siempre.
+3. Avisa de lo que quedaría cojo: los juegos de PortProton cuyo `.exe` queda fuera, y los enlaces a otros discos o
+   al NAS (las ROMs de EmuDeck), que se guardan **como enlace**, sin copiar lo que hay al otro lado.
+4. Comprueba que cabe, copia y verifica.
+
+| Destino | Formato | Por qué |
+|---|---|---|
+| Disco Linux (ext4, btrfs, xfs) | carpeta normal con `rsync`; repetir la copia solo pasa lo que ha cambiado | se puede abrir y recuperar fichero a fichero |
+| NAS (SMB), exFAT, NTFS | un `.tar.zst` por carpeta, comprobado al terminar | SMB y exFAT no guardan enlaces ni permisos de Linux |
+| FAT32 | no se puede | no admite ficheros de más de 4 GB |
+
+Además de tu carpeta guarda, en `sistema/`, lo que una instalación nueva no tiene: el servicio que arranca Decky
+(`plugin_loader.service`) y la lista de Flatpaks del sistema (Brave, Heroic…). No necesita `sudo`.
+
+**Recuperar** (20 → 2, `--restore [carpeta]`): le das la carpeta de la copia, o **la de otra instalación**: el disco
+de tu instalación anterior enchufado, su carpeta personal o la raíz del disco (`/run/media/<usuario>/<disco>`; la
+encuentra también dentro de una instalación bootc). Eliges qué traer, comprueba el espacio, cierra Steam si está
+abierto y copia. Sobrescribe los ficheros que se llamen igual y no borra nada más. Después:
+
+- reinstala el servicio de Decky y los Flatpaks del sistema que falten (desde Flathub; con `sudo` y preguntando);
+- lista los enlaces que apuntan a sitios que ahora no están: los del NAS vuelven a funcionar al montarlo con el
+  bloque [`nas`](#nas), que usa tus datos guardados;
+- ofrece aplicar tus ajustes guardados (opción 15), que vienen en `~/.config/ps5-bazzite-toolbox.conf`.
+
+Para que los juegos salgan en Steam directamente, recupera con el **mismo nombre de usuario** (las rutas de Steam,
+PortProton y los enlaces la llevan dentro) y con Steam cerrado. Mejor hazlo por SSH o en una consola de texto
+(Ctrl+Alt+F3): desde el escritorio, KDE puede volver a escribir algunos de sus ajustes al cerrar la sesión.
+
+A mano, lo mismo (con Steam cerrado; `--exclude` por cada carpeta que no quieras):
+
+```sh
+rsync -aHAX --one-file-system --info=progress2 --exclude=/.cache ~/ /run/media/$USER/DISCO/ps5-copia/      # guardar
+flatpak list --system --app --columns=application > /run/media/$USER/DISCO/flatpak-sistema.txt
+rsync -aHAX --info=progress2 /run/media/$USER/DISCO/ps5-copia/ ~/                                          # recuperar
+```
+
 ## Ficheros: qué usa y dónde guarda cada cosa
 
 La caja de herramientas no deja nada fuera de estos sitios. «Desinstalar» (opción 19) solo quita el comando, su
@@ -697,6 +750,7 @@ acceso en el menú y su copia anterior; lo demás se queda, y aquí está cómo 
 | `/var/lib/ps5-bazzite-toolbox/imagen/` | las copias de la imagen ([arriba](#volver-atrás-en-pruebas)) | opción 17 | opción 17 al hacer otra copia, o `sudo rm -rf` |
 | `/efi/anterior-toolbox/` | el kernel de antes de la última actualización, con su `LEEME.txt` | opción 17 → 1 | `sudo rm -rf /efi/anterior-toolbox` |
 | `<tu carpeta de versiones>/<versión>/` | el paquete de una versión instalada desde GitHub, con su `.sha256` y `NOTAS.md`, si aceptas guardarlo | opción 17 → 1 | `rm -rf` |
+| `<destino>/ps5-copia-<usuario>/` | la copia de tu carpeta personal: `casa/` (la carpeta o los `.tar.zst`), `sistema/` (servicio de Decky, Flatpaks, lo que dejaste fuera, tamaños) y `ps5-copia.info` (fecha, usuario, imagen, formato; solo existe si la copia terminó) | opción 20 → 1, `--backup` | `rm -rf` |
 
 ### Informes que ofrece guardar
 

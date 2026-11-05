@@ -6,7 +6,8 @@
 #    graphical session) and the state of the settings; saves a full report (no passwords) to send for help.
 #  - Screen and graphical session: get the picture back, restart the session, start in desktop/game mode.
 #  - PortProton and Steam: add or remove a Windows game (PortProton + Desktop + Steam + "PortProton" collection),
-#    sync the collection; global PortProton defaults (setup block "portproton"). Tools: space taken by each folder.
+#    sync the collection; global PortProton defaults (setup block "portproton"). Tools: space taken by each folder,
+#    a backup of the home folder (picking what goes) that restores here or on another install.
 #  - Settings (setup): blocks that adapt the image (language, boot options, Wi-Fi, updates, VRAM, fans, warm
 #    reboot, HDMI fix, disk, Brave, Edge, NAS, zram swap size, the GPU's 40 compute units). Each explains what it changes, why and how to undo it, and asks.
 #    Answers are kept in ~/.config/ps5-bazzite-toolbox.conf; running it again only offers what is pending.
@@ -30,12 +31,14 @@
 #   bash ps5-bazzite-toolbox.sh --pp-collection [--dry-run|--yes]   # sync Steam's "PortProton" collection
 #   bash ps5-bazzite-toolbox.sh --space [DIR]           # space taken by each folder in DIR (also the "espacio" command)
 #   bash ps5-bazzite-toolbox.sh --self-update [v1.1.0]  # update this toolbox from its GitHub releases
+#   bash ps5-bazzite-toolbox.sh --backup                # save your home folder (or what you pick) to another disk, the NAS, a folder
+#   bash ps5-bazzite-toolbox.sh --restore [DIR]         # bring a copy back, or another install's home folder (another disk)
 #   bash ps5-bazzite-toolbox.sh --install | --uninstall # command ~/.local/bin/ps5-bazzite-toolbox + applications menu
 #   bash ps5-bazzite-toolbox.sh --version
 # Setup blocks: locale cmdline wifi updates vram gpu40 zram fans warmreboot hdmi bt disk brave edge nas bios media esde portproton atajos
 set -uo pipefail
 
-TOOLBOX_VERSION=1.7.0                    # bump on every release (see CHANGELOG.md and release.sh)
+TOOLBOX_VERSION=1.8.0                    # bump on every release (see CHANGELOG.md and release.sh)
 TOOLBOX_REPO=fitamix/ps5-bazzite-toolbox
 TOOLBOX_BIN=$HOME/.local/bin/ps5-bazzite-toolbox                      # where --install puts it
 TOOLBOX_DESKTOP=$HOME/.local/share/applications/ps5-bazzite-toolbox.desktop
@@ -57,6 +60,9 @@ while [ $# -gt 0 ]; do
         --rollback) MODE=rollback; shift ;;
         --screen) MODE=screen; shift ;;
         --self-update) MODE=self-update; UPDATE_TAG=''
+                  if [ $# -gt 1 ] && [[ $2 != -* ]]; then UPDATE_TAG=$2; shift; fi; shift ;;
+        --backup) MODE=backup; shift ;;
+        --restore) MODE=restore; UPDATE_TAG=''
                   if [ $# -gt 1 ] && [[ $2 != -* ]]; then UPDATE_TAG=$2; shift; fi; shift ;;
         --install) MODE=install; shift ;;
         --uninstall) MODE=uninstall; shift ;;
@@ -3149,6 +3155,382 @@ screen_kick() {
     sudo chvt 2 && sleep 3 && sudo chvt "$vt"
 }
 
+# ======================================== backup of the home folder ========================================
+# Saves your home folder, all of it or what you pick, to another disk, the NAS or any folder, and brings it back here
+# or on another system (a new install, bootc). What a new install lacks and lives outside it is saved too: Decky's
+# service and the list of system Flatpaks. Links that leave the home folder (the ROMs on the NAS) are saved as links,
+# not their contents: they work again once the NAS is mounted (block nas).
+# On a Linux disk (ext4, btrfs, xfs) the copy is a plain folder updated with rsync (a second run only copies what
+# changed); on the NAS or exFAT, one .tar.zst per folder (SMB and exFAT can't keep links and permissions).
+# Recovering also works straight from another system's disk (its home folder, or the root of a mounted disk).
+BK_INFO=ps5-copia.info
+BK_TO=${BK_TO:-$HOME}                    # where a restore writes (only changed to test it)
+BK_P=() BK_ON=() BK_SZ=() BK_DS=()       # the list being picked: path (relative), on 1/0, bytes, description
+
+hsize() { awk -v b="${1:-0}" 'BEGIN { split("B KB MB GB TB", u); i = 1; while (b >= 1000 && i < 5) { b /= 1024; i++ }
+                                   f = (i > 3 && b < 10) ? "%.1f %s" : "%d %s"; printf f, b, u[i] }' | tr . ,; }
+bk_du() { du -sbx -- "$1" 2>/dev/null | cut -f1; }
+bk_esc() { sed 's/[][\\*?]/\\&/g' <<<"$1"; }   # a literal path as an rsync pattern
+
+bk_known() {                             # bk_known ROOT -> "path<TAB>1|0<TAB>why" for the places worth their own line
+    local r=$1 p dl
+    bk_k() { [ -d "$r/$1" ] && [ ! -L "$r/$1" ] && printf '%s\t%s\t%s\n' "$1" "$2" "$3"; }
+    bk_k .cache 0 "cachés de los programas: se rehacen solas"
+    bk_k .local/share/Trash 0 "la papelera"
+    bk_k .local/share/Steam/steamapps/common 1 "juegos de Steam instalados (sin ellos, Steam los vuelve a descargar)"
+    bk_k .local/share/Steam/steamapps/compatdata 1 "prefijos de Proton de Steam (partidas de algunos juegos)"
+    bk_k .local/share/Steam/steamapps/shadercache 0 "sombreadores de Steam: se rehacen"
+    bk_k .config/rpcs3/dev_hdd1 0 "caché de RPCS3: se rehace"
+    bk_k Emulation/storage/rpcs3/dev_hdd0/game 1 "juegos de PS3 instalados en RPCS3"
+    bk_k Games 1 "juegos (portables, de Heroic…): sin ellos, sus accesos de Steam y PortProton no abren"
+    bk_k Games/Heroic 1 "juegos instalados con Heroic"
+    for p in "$r"/.var/app/ru.linux_gaming.PortProton/data/prefixes/*/ "$r"/.local/share/ps5-bazzite-toolbox/aislado/data/prefixes/*/; do
+        [ -d "$p" ] || continue; p=${p%/}; p=${p#"$r"/}
+        bk_k "$p" 1 "prefijo de PortProton ${p##*/} (programas y partidas de sus juegos)"
+        bk_k "$p/drive_c/Games" 1 "juegos instalados en el prefijo ${p##*/}"
+    done
+    dl=$(xdg-user-dir DOWNLOAD 2>/dev/null); dl=${dl#"$HOME"/}
+    [ -n "$dl" ] && [ "$dl" != "$HOME" ] && bk_k "$dl" 1 "descargas"
+    true
+}
+
+bk_scan() {                              # bk_scan ROOT [ONLY-THESE] -> fills BK_*: big top folders + the known places inside them
+    local r=$1 only=${2:-} p sz small=0 n=0 rest=0 kp kon kds
+    BK_P=() BK_ON=() BK_SZ=() BK_DS=()
+    echo "Midiendo lo que ocupa cada carpeta de $r (la primera vez puede tardar un par de minutos)…"
+    local known; known=$(bk_known "$r")
+    while IFS=$'\t' read -r sz p; do
+        p=${p#"$r"/}
+        if [ "$sz" -lt $((100 << 20)) ] && { [ "$sz" -lt $((1 << 20)) ] || ! awk -F'\t' -v p="$p" '$1 == p { f = 1 } END { exit !f }' <<<"$known"; }; then rest=$((rest + sz)); small=$((small + 1)); continue; fi
+        BK_P+=("$p") BK_ON+=(1) BK_SZ+=("$sz") BK_DS+=("")
+        while IFS=$'\t' read -r kp kon kds; do
+            [ "$kp" = "$p" ] && { BK_ON[-1]=$kon; BK_DS[-1]=$kds; continue; }
+            [[ $kp == "$p"/* ]] || continue
+            sz=$(bk_du "$r/$kp"); [ "${sz:-0}" -ge $((1 << 20)) ] || continue     # empty ones only make the list longer
+            BK_P+=("$kp") BK_ON+=("$kon") BK_SZ+=("$sz") BK_DS+=("$kds")
+        done <<<"$known"
+    done < <(find "$r" -mindepth 1 -maxdepth 1 -type d ! -name lost+found -exec du -sbx {} + 2>/dev/null | sort -rn)
+    BK_REST=$rest BK_SMALL=$small
+    if [ -n "$only" ]; then              # a copy: what it holds, as it was picked then
+        for n in "${!BK_P[@]}"; do grep -qxF "${BK_P[$n]}" "$only" && BK_ON[n]=1 || BK_ON[n]=0; done
+    fi
+}
+
+bk_parent_off() {                        # bk_parent_off N -> 0 if a folder holding item N is not saved
+    local i
+    for i in "${!BK_P[@]}"; do [ "$i" != "$1" ] && [ "${BK_ON[$i]}" = 0 ] && [[ ${BK_P[$1]} == "${BK_P[$i]}"/* ]] && return 0; done
+    return 1
+}
+bk_excluded() {                          # the paths left out, the outermost only
+    local n
+    for n in "${!BK_P[@]}"; do [ "${BK_ON[$n]}" = 0 ] && ! bk_parent_off "$n" && printf '%s\n' "${BK_P[$n]}"; done
+}
+bk_total() {                             # bytes picked: the top folders saved, minus what is left out inside them
+    local n t=${BK_REST:-0}
+    for n in "${!BK_P[@]}"; do
+        [[ ${BK_P[$n]} == */* ]] && continue
+        [ "${BK_ON[$n]}" = 1 ] && t=$((t + BK_SZ[n]))
+    done
+    while read -r p; do [ -n "$p" ] && [[ $p == */* ]] && for n in "${!BK_P[@]}"; do [ "${BK_P[$n]}" = "$p" ] && t=$((t - BK_SZ[n])); done; done < <(bk_excluded)
+    echo "$t"
+}
+
+bk_pick() {                              # bk_pick ROOT WHAT -> the user marks what goes; 1 if cancelled
+    local r=$1 what=$2 a n i d c
+    while :; do
+        printf '\n  %s (marca o desmarca con su número):\n' "$what"
+        for n in "${!BK_P[@]}"; do
+            d=0; for i in "${!BK_P[@]}"; do [[ ${BK_P[$n]} == "${BK_P[$i]}"/* ]] && d=$((d + 1)); done; c='[x]'; [ "${BK_ON[$n]}" = 0 ] && c='[ ]'; bk_parent_off "$n" && c=' - '
+            printf '  %3d %*s%s %8s  %s%s\n' $((n + 1)) $((d * 2)) '' "$c" "$(hsize "${BK_SZ[$n]}")" "${BK_P[$n]}" \
+                "${BK_DS[$n]:+  — ${BK_DS[$n]}}"
+        done
+        [ "${BK_SMALL:-0}" = 0 ] || printf '      [x] %8s  %s carpetas pequeñas y los ficheros sueltos (van siempre)\n' "$(hsize "$BK_REST")" "$BK_SMALL"
+        printf '  Total marcado: %s\n' "$(hsize "$(bk_total)")"
+        read -rp "  Números (p. ej. 1 4), a N = elegir dentro de la carpeta N, Intro = seguir, 0 = cancelar: " a
+        case $a in
+            '') return 0 ;;
+            0) return 1 ;;
+            a\ *|A\ *) n=$(( ${a#* } - 1 ))
+                [ "$n" -ge 0 ] 2>/dev/null && [ -n "${BK_P[$n]:-}" ] || { echo "  No hay carpeta ${a#* }"; continue; }
+                bk_open "$r" "$n" ;;
+            *) for i in $a; do
+                   [[ $i =~ ^[0-9]+$ ]] && [ -n "${BK_P[$((i - 1))]:-}" ] || { echo "  No hay carpeta $i"; continue; }
+                   BK_ON[i - 1]=$((1 - BK_ON[i - 1]))
+               done ;;
+        esac
+    done
+}
+bk_open() {                              # bk_open ROOT N -> the folders inside item N (over 10 MB) get their own lines after it
+    local r=$1 n=$2 p sz new=() on=() szs=() ds=() i
+    while IFS=$'\t' read -r sz p; do
+        p=${p#"$r"/}; [ "$sz" -lt $((10 << 20)) ] && continue
+        for i in "${BK_P[@]}"; do [ "$i" = "$p" ] && continue 2; done
+        new+=("$p") on+=("${BK_ON[$n]}") szs+=("$sz") ds+=("")
+    done < <(find "$r/${BK_P[$n]}" -mindepth 1 -maxdepth 1 -type d -exec du -sbx {} + 2>/dev/null | sort -rn)
+    [ ${#new[@]} -gt 0 ] || { echo "  No tiene carpetas de más de 10 MB que no estén ya en la lista."; return; }
+    BK_P=("${BK_P[@]:0:n+1}" "${new[@]}" "${BK_P[@]:n+1}")
+    BK_ON=("${BK_ON[@]:0:n+1}" "${on[@]}" "${BK_ON[@]:n+1}")
+    BK_SZ=("${BK_SZ[@]:0:n+1}" "${szs[@]}" "${BK_SZ[@]:n+1}")
+    BK_DS=("${BK_DS[@]:0:n+1}" "${ds[@]}" "${BK_DS[@]:n+1}")
+}
+
+bk_links() {                             # bk_links ROOT -> "link<TAB>target" for links into another disk or the NAS
+    find "$1" -xdev -type l \( -lname '/var/mnt/*' -o -lname '/mnt/*' -o -lname '/run/media/*' -o -lname '/media/*' \) \
+        -printf '%P\t%l\n' 2>/dev/null
+}
+bk_orphans() {                           # PortProton shortcuts whose game would be left out (from the list in $1)
+    local f exe p
+    for f in "$BK_SRC_ROOT"/PortProton/*.desktop "$BK_SRC_ROOT"/.var/app/ru.linux_gaming.PortProton/*.desktop; do
+        [ -f "$f" ] || continue
+        exe=$(sed -n 's/^Exec=.*PortProton "\(.*\)"$/\1/p' "$f" | head -1); [ -n "$exe" ] || continue
+        exe=${exe#"$HOME"/}
+        while read -r p; do [ -n "$p" ] && [[ $exe == "$p"/* ]] && { printf '%s\n' "$(basename "$f" .desktop)"; break; }; done <"$1"
+    done | sort -u
+}
+
+bk_dest_pick() {                         # asks where the copy goes -> BK_DEST (a folder)
+    local c=() m a n
+    while read -r m; do [ -n "$m" ] && c+=("$m"); done < <(
+        { findmnt -rno TARGET -t ext4,btrfs,xfs,exfat,ntfs,ntfs3,f2fs | grep -E "^/run/media/|^/var/mnt/|^/mnt/"
+          awk '$3 == "cifs" || $3 == "nfs" || $3 == "nfs4" { print $2 }' /etc/fstab; } 2>/dev/null | sort -u)
+    echo "  ¿Dónde la guardo? Se crea dentro la carpeta ps5-copia-$U."
+    for n in "${!c[@]}"; do
+        printf '  %d) %s  (%s libres, %s)\n' $((n + 1)) "${c[$n]}" "$(df -h --output=avail "${c[$n]}" 2>/dev/null | tail -1 | tr -d ' ')" \
+            "$(findmnt -no FSTYPE -T "${c[$n]}" 2>/dev/null | tail -1)"
+    done
+    read -e -rp "  Número, u otra carpeta (Intro = cancelar): " a
+    [ -n "$a" ] || return 1
+    if [[ $a =~ ^[0-9]+$ ]] && [ -n "${c[$((a - 1))]:-}" ]; then a=${c[$((a - 1))]}; fi
+    a=${a/#\~/$HOME}
+    timeout 20 test -d "$a" || { echo "  No existe o no responde: $a"; return 1; }
+    BK_DEST=$(realpath "$a")/ps5-copia-$U
+}
+
+bk_mode() {                              # bk_mode DIR -> rsync (Linux filesystem) | tar (SMB, exFAT, NTFS) | no (FAT)
+    case $(findmnt -no FSTYPE -T "$1" 2>/dev/null | tail -1) in
+        ext4|ext3|btrfs|xfs|f2fs) echo rsync ;;
+        vfat|msdos) echo no ;;
+        *) echo tar ;;
+    esac
+}
+
+bk_save() {
+    local mode free need ex list a p rc=0 n
+    echo
+    echo "${B}Copia de seguridad de tu carpeta personal ($HOME)${N}"
+    section
+    say "Copia tu carpeta personal, entera o lo que elijas, a otro disco, al NAS o a una carpeta, para recuperarla"
+    say "aquí o en otra instalación (la opción 20 → recuperar). Se guardan también el servicio de Decky y la lista de"
+    say "Flatpaks del sistema. Los enlaces que salen de tu carpeta (ROMs en el NAS) se guardan como enlace."
+    say "POR QUÉ: para cambiar de disco o de instalación (p. ej. a bootc) sin perder juegos, partidas ni ajustes."
+    say "No cambia nada en tu carpeta. DESHACER: borra la carpeta de la copia."
+    bk_dest_pick || return 1
+    mode=$(bk_mode "$(dirname "$BK_DEST")")
+    [ "$mode" != no ] || { echo "  Ese disco es FAT: no admite ficheros de más de 4 GB. Usa otro (ext4 o exFAT) o el NAS."; return 1; }
+    case $BK_DEST/ in "$HOME"/*) [ "$(stat -c %d "$(dirname "$BK_DEST")")" != "$(stat -c %d "$HOME")" ] ||
+        { echo "  La copia no puede ir dentro de tu propia carpeta, en el mismo disco."; return 1; } ;; esac
+    BK_SRC_ROOT=$HOME
+    bk_scan "$HOME" || return 1
+    bk_pick "$HOME" "Qué se guarda de $HOME" || return 1
+    list=$(mktemp); bk_excluded >"$list"
+    a=$(bk_orphans "$list")
+    [ -z "$a" ] || { echo "  Ojo: estos juegos de PortProton quedan fuera de la copia (al recuperarla no abrirán hasta que copies sus ficheros):"
+                     sed 's/^/    /' <<<"$a"; }
+    echo "  Buscando enlaces a otros discos o al NAS…"
+    p=$(bk_links "$HOME" | head -20)
+    [ -z "$p" ] || { echo "  Enlaces a otros discos o al NAS: se guarda el enlace, no lo que hay al otro lado (al recuperar, el enlace vuelve):"
+                     sed 's/\t/ -> /; s/^/    /' <<<"$p"; }
+    need=$(bk_total); free=$(df -B1 --output=avail "$(dirname "$BK_DEST")" | tail -1)
+    [ "$mode" = rsync ] && [ -d "$BK_DEST/casa" ] && free=$((free + $(bk_du "$BK_DEST/casa")))   # an update replaces the old copy
+    echo "  Copia: $(hsize "$need") en $BK_DEST ($([ "$mode" = rsync ] && echo "carpeta normal; si ya había una, solo copia lo que ha cambiado" || echo "un .tar.zst por carpeta"))."
+    if [ "$need" -gt "$free" ]; then
+        echo "  ${Y}No cabe: hay $(hsize "$free") libres.${N} Desmarca algo (los juegos ocupan lo que más) o elige otro sitio."
+        rm -f "$list"; return 1
+    fi
+    pgrep -u "$U" -x steam >/dev/null && echo "  Steam está abierto: mejor ciérralo, para que sus ficheros no cambien mientras se copian."
+    yesno "  ¿Hago la copia?" S || { rm -f "$list"; return 1; }
+    mkdir -p "$BK_DEST/sistema" || { rm -f "$list"; return 1; }
+    rm -f "$BK_DEST/$BK_INFO"               # until it ends, the copy is not complete
+    cp -f "$list" "$BK_DEST/sistema/fuera.txt"
+    flatpak list --system --app --columns=application,origin 2>/dev/null >"$BK_DEST/sistema/flatpak-sistema.txt"
+    flatpak list --user --app --columns=application,origin 2>/dev/null >"$BK_DEST/sistema/flatpak-usuario.txt"
+    [ -f /etc/systemd/system/plugin_loader.service ] && cp -f /etc/systemd/system/plugin_loader.service "$BK_DEST/sistema/"
+    if [ "$mode" = rsync ]; then
+        ex=$(mktemp); while read -r p; do [ -n "$p" ] && printf '/%s\n' "$(bk_esc "$p")"; done <"$list" >"$ex"
+        rsync -aHAX --one-file-system --delete --exclude-from="$ex" --info=progress2 "$HOME"/ "$BK_DEST/casa/" || rc=$?
+        if [ "$rc" = 0 ]; then
+            echo "  Comprobando la copia (compara de nuevo con tu carpeta)…"
+            n=$(rsync -aHAXn --one-file-system --delete --exclude-from="$ex" --out-format='%n' "$HOME"/ "$BK_DEST/casa/" | grep -vc '/$')
+            [ "$n" = 0 ] && echo "  ${G}✔${N} La copia es igual a tu carpeta." ||
+                echo "  ${Y}!${N} $n ficheros han cambiado mientras se copiaba (algo estaba abierto); repite la copia para ponerlos al día."
+        fi
+        rm -f "$ex"
+    else
+        mkdir -p "$BK_DEST/casa"; rm -f "$BK_DEST"/casa/*.tar.zst
+        local top=() i
+        for i in "${!BK_P[@]}"; do [[ ${BK_P[$i]} == */* ]] || [ "${BK_ON[$i]}" = 0 ] || top+=("${BK_P[$i]}"); done
+        { for i in "${!BK_P[@]}"; do [[ ${BK_P[$i]} == */* ]] || printf '%s\t%s\n' "${BK_P[$i]}" "${BK_SZ[$i]}"; done
+          printf '_resto\t%s\n' "${BK_REST:-0}"; } >"$BK_DEST/sistema/tamanos.txt"   # unpacked sizes, for the space check
+        bk_tar() {                       # bk_tar NAME paths... -> casa/NAME.tar.zst, leaving out what is unmarked
+            local name=$1; shift
+            local x=(); while read -r p; do [ -n "$p" ] && x+=(--exclude="$p"); done <"$list"
+            echo "  → $name"
+            tar -C "$HOME" --one-file-system --anchored --no-wildcards "${x[@]}" -I 'zstd -1 -T0' -cf "$BK_DEST/casa/$name.tar.zst" -- "$@" &&
+                zstd -tq "$BK_DEST/casa/$name.tar.zst"
+        }
+        for p in "${top[@]}"; do bk_tar "$(tr '/' '%' <<<"$p")" "$p" || rc=$?; done
+        local small=() q
+        while IFS= read -r p; do           # loose files, links and the small folders that got no line of their own
+            for q in "${BK_P[@]}"; do [ "$q" = "$p" ] && continue 2; done
+            small+=("$p")
+        done < <(find "$HOME" -mindepth 1 -maxdepth 1 -printf '%P\n')
+        [ ${#small[@]} -eq 0 ] || bk_tar _resto "${small[@]}" || rc=$?
+    fi
+    { echo "fecha=$(date '+%F %T')"; echo "usuario=$U"; echo "uid=$(id -u)"; echo "casa=$HOME"; echo "modo=$mode"
+      echo "imagen=${VERSION:-?}"; echo "kernel=$(uname -r)"; echo "toolbox=$TOOLBOX_VERSION"; echo "equipo=$(hostname)"
+      echo "tamano=$need"; echo "resultado=$rc"; } >"$BK_DEST/$BK_INFO"
+    rm -f "$list"
+    if [ "$rc" = 0 ]; then echo "  ${G}Copia hecha${N} en $BK_DEST. Para recuperarla: opción 20 → recuperar, y esa carpeta."
+    else echo "  ${R}La copia ha terminado con errores (código $rc).${N} Lo que ha fallado sale arriba; repítela."; fi
+    return "$rc"
+}
+
+bk_find() {                              # bk_find PATH -> BK_KIND (copy|home) BK_SRC (the folder) BK_SRC_ROOT (system root, for home)
+    local p=$1 h
+    if [ -f "$p/$BK_INFO" ]; then BK_KIND=copy BK_SRC=$p; return 0; fi
+    if [ -f "$p/ps5-copia-$U/$BK_INFO" ]; then BK_KIND=copy BK_SRC=$p/ps5-copia-$U; return 0; fi
+    for h in "$p/var/home/$U" "$p/home/$U" "$p"/ostree/deploy/*/var/home/"$U"; do
+        [ -d "$h/.config" ] && { BK_KIND=home BK_SRC=$h BK_SYS=$p; return 0; }
+    done
+    [ -d "$p/.config" ] && { BK_KIND=home BK_SRC=$p BK_SYS=''; return 0; }
+    return 1
+}
+
+bk_restore() {
+    local a p list rc=0 n mode
+    echo
+    echo "${B}Recuperar tu carpeta personal${N}"
+    section
+    say "Trae a $BK_TO lo que elijas de una copia (opción 20 → guardar) o de la carpeta personal de otro disco"
+    say "(p. ej. el de tu instalación anterior, enchufado ahora). Sobrescribe los ficheros que se llamen igual; lo"
+    say "demás de tu carpeta se queda. Después ofrece reinstalar Decky y los Flatpaks del sistema y aplicar tus ajustes."
+    say "POR QUÉ: para tener en esta instalación tus juegos, partidas y ajustes como estaban."
+    say "DESHACER: no se deshace solo; si dudas, haz antes una copia de esta carpeta."
+    a=${1:-}
+    if [ -z "$a" ]; then
+        echo "  Copias encontradas en los discos montados y el NAS:"
+        timeout 20 find /run/media/"$U" /var/mnt /mnt -maxdepth 3 -name "$BK_INFO" 2>/dev/null | sed 's|/[^/]*$||; s/^/    /'
+        read -e -rp "  Carpeta de la copia, o la carpeta personal o el disco de otra instalación (Intro = cancelar): " a
+        [ -n "$a" ] || return 1
+    fi
+    a=${a/#\~/$HOME}; a=${a%/}
+    bk_find "$a" || { echo "  Ahí no hay una copia ($BK_INFO) ni una carpeta personal de $U."; return 1; }
+    p=$(realpath "$BK_SRC")
+    [ "$p" != "$(realpath "$BK_TO")" ] || { echo "  Esa es la carpeta en la que estás."; return 1; }
+    if [ "$BK_KIND" = copy ]; then
+        mode=$(sed -n 's/^modo=//p' "$BK_SRC/$BK_INFO")
+        echo "  Copia del $(sed -n 's/^fecha=//p' "$BK_SRC/$BK_INFO") ($(sed -n 's/^equipo=//p' "$BK_SRC/$BK_INFO"), imagen v$(sed -n 's/^imagen=//p' "$BK_SRC/$BK_INFO"), $mode)."
+        [ "$(sed -n 's/^resultado=//p' "$BK_SRC/$BK_INFO")" = 0 ] || echo "  ${Y}!${N} Esa copia terminó con errores: puede faltar algo."
+        a=$(sed -n 's/^usuario=//p' "$BK_SRC/$BK_INFO")
+    else
+        mode=rsync; a=$(stat -c %U "$BK_SRC" 2>/dev/null)
+        echo "  Carpeta personal de otra instalación: $BK_SRC"
+    fi
+    p=$(sed -n 's/^casa=//p' "$BK_SRC/$BK_INFO" 2>/dev/null)
+    if [ -n "$p" ] && [ "$p" != "$HOME" ]; then
+        echo "  ${Y}!${N} Era de $p y ahora estás en $HOME: los enlaces y ajustes con la ruta"
+        echo "    vieja no funcionarán. Lo normal es usar el mismo nombre de usuario en la instalación nueva."
+        yesno "  ¿Seguir igualmente?" N || return 1
+    fi
+    if [ "$mode" = tar ]; then           # a copy in .tar.zst: one line per saved folder
+        BK_P=() BK_ON=() BK_SZ=() BK_DS=() BK_REST=0 BK_SMALL=0
+        for p in "$BK_SRC"/casa/*.tar.zst; do
+            [ -f "$p" ] || continue; p=${p##*/}; p=${p%.tar.zst}
+            local sz; sz=$(awk -F'\t' -v p="$(tr '%' '/' <<<"$p")" '$1 == p { print $2 }' "$BK_SRC/sistema/tamanos.txt" 2>/dev/null)
+            BK_P+=("$(tr '%' '/' <<<"$p")") BK_ON+=(1) BK_SZ+=("${sz:-$(stat -c %s "$BK_SRC/casa/$p.tar.zst")}")
+            if [ "$p" = _resto ]; then BK_DS+=("carpetas pequeñas y ficheros sueltos"); else BK_DS+=(""); fi
+        done
+        bk_pick "$BK_SRC" "Qué se recupera" || return 1
+    else
+        local root=$BK_SRC; [ "$BK_KIND" = copy ] && root=$BK_SRC/casa
+        bk_scan "$root"
+        bk_pick "$root" "Qué se recupera" || return 1
+    fi
+    n=$(bk_total); a=$(df -B1 --output=avail "$BK_TO" | tail -1)
+    [ "$n" -lt "$a" ] || { echo "  ${Y}No cabe:${N} hacen falta $(hsize "$n") y hay $(hsize "$a") libres."; return 1; }
+    if pgrep -u "$U" -x steam >/dev/null; then
+        echo "  Steam está abierto: hay que cerrarlo, o reescribirá sus ficheros al salir."
+        yesno "  ¿Lo cierro?" S && { steam -shutdown >/dev/null 2>&1 & sleep 10; pkill -u "$U" -x steam; }
+    fi
+    [ -z "${SSH_CONNECTION:-}" ] && [ -n "${WAYLAND_DISPLAY:-}${DISPLAY:-}" ] &&
+        echo "  Ojo: lo lanzas desde la sesión gráfica. KDE puede volver a guardar algunos de sus ajustes al cerrar sesión; si"
+    [ -z "${SSH_CONNECTION:-}" ] && [ -n "${WAYLAND_DISPLAY:-}${DISPLAY:-}" ] &&
+        echo "  quieres que queden exactamente los de la copia, hazlo por SSH o en una consola de texto (Ctrl+Alt+F3)."
+    echo "  Se recuperan $(hsize "$n") en $BK_TO."
+    yesno "  ¿Sigo?" S || return 1
+    list=$(mktemp); bk_excluded >"$list"
+    if [ "$mode" = tar ]; then
+        for n in "${!BK_P[@]}"; do
+            [ "${BK_ON[$n]}" = 1 ] || continue
+            echo "  ← ${BK_P[$n]}"
+            tar -C "$BK_TO" -I zstd -xf "$BK_SRC/casa/$(tr '/' '%' <<<"${BK_P[$n]}").tar.zst" || rc=$?
+        done
+    else
+        local ex; ex=$(mktemp); while read -r p; do [ -n "$p" ] && printf '/%s\n' "$(bk_esc "$p")"; done <"$list" >"$ex"
+        rsync -aHAX --one-file-system --exclude-from="$ex" --info=progress2 "$root"/ "$BK_TO"/ || rc=$?
+        rm -f "$ex"
+    fi
+    rm -f "$list"
+    [ "$rc" = 0 ] && echo "  ${G}✔${N} Recuperado." || echo "  ${R}✘${N} Ha habido errores (código $rc): salen arriba."
+    if command -v selinuxenabled >/dev/null && selinuxenabled && yesno "  ¿Repongo las etiquetas de SELinux de lo recuperado (restorecon)?" S && need_sudo; then
+        sudo restorecon -RF "$BK_TO"
+    fi
+    bk_restore_system
+    p=$(bk_links "$BK_TO" | while IFS=$'\t' read -r l t; do [ -e "$BK_TO/$l" ] || echo "$l -> $t"; done | head -20)
+    [ -z "$p" ] || { echo "  Estos enlaces apuntan a sitios que ahora no están (el NAS sin montar, otro disco):"; sed 's/^/    /' <<<"$p"
+                     echo "  Los del NAS funcionan en cuanto se monte: bloque nas de los ajustes (opción 16 → nas)."; }
+    if yesno "  ¿Aplico ahora tus ajustes guardados (la opción 15, uno a uno, preguntando)?" S; then
+        # shellcheck disable=SC1090
+        need_sudo && { . "$CONF"; STATUS_ONLY=0 ALL=0 ONLY=''; setup_run; }
+    fi
+    echo "  Reinicia la consola (o al menos la sesión) para que todo lea lo recuperado."
+    return "$rc"
+}
+
+bk_restore_system() {                    # Decky's service and the system Flatpaks, from the copy or the other disk
+    local svc='' fl='' miss a
+    if [ "$BK_KIND" = copy ]; then
+        [ -f "$BK_SRC/sistema/plugin_loader.service" ] && svc=$BK_SRC/sistema/plugin_loader.service
+        [ -s "$BK_SRC/sistema/flatpak-sistema.txt" ] && fl=$(cut -f1 "$BK_SRC/sistema/flatpak-sistema.txt")
+    elif [ -n "${BK_SYS:-}" ]; then
+        [ -f "$BK_SYS/etc/systemd/system/plugin_loader.service" ] && svc=$BK_SYS/etc/systemd/system/plugin_loader.service
+        fl=$(for a in "$BK_SYS"/var/lib/flatpak/app/*.* "$BK_SYS"/ostree/deploy/*/var/lib/flatpak/app/*.*; do [ -d "$a" ] && echo "${a##*/}"; done)
+    fi
+    if [ -n "$svc" ] && [ -d "$BK_TO/homebrew/services" ] && ! systemctl is-enabled -q plugin_loader 2>/dev/null; then
+        echo "  Decky: sus plugins ya están en ~/homebrew, pero falta el servicio que lo arranca con Steam."
+        if yesno "  ¿Instalo el servicio de Decky (/etc/systemd/system/plugin_loader.service)?" S && need_sudo; then
+            sudo cp "$svc" /etc/systemd/system/plugin_loader.service && sudo systemctl daemon-reload &&
+                sudo systemctl enable --now plugin_loader && echo "  ${G}✔${N} Decky activo (sale en Steam al reiniciarlo)."
+        fi
+    fi
+    miss=$(for a in $fl; do flatpak info --system "$a" >/dev/null 2>&1 || echo "$a"; done)
+    if [ -n "$miss" ]; then
+        echo "  Flatpaks del sistema que tenías y aquí faltan: $(echo $miss)"
+        if yesno "  ¿Los instalo desde Flathub (hace falta red)?" S && need_sudo; then
+            # shellcheck disable=SC2086
+            sudo flatpak install --system -y --noninteractive flathub $miss
+        fi
+    fi
+}
+
+bk_menu() {
+    local c
+    echo "  1) Guardar una copia de tu carpeta personal (en otro disco, el NAS o una carpeta)"
+    echo "  2) Recuperar una copia, o la carpeta personal de otra instalación (otro disco enchufado)"
+    read -rp "Elige (0 = cancelar): " c
+    case $c in 1) bk_save ;; 2) bk_restore ;; esac
+}
+
 # --- menu ----------------------------------------------------------------------------------------------------
 menu() {
     local c a notice_done=''
@@ -3182,6 +3564,7 @@ menu() {
   17) Imagen: instalar otra versión de GitHub (más nueva o anterior), o volver a como estaba antes de actualizar
   18) Actualizar esta caja de herramientas (muestra las novedades y pregunta)
   19) Instalarla como comando «ps5-bazzite-toolbox» y en el menú de aplicaciones, o desinstalarla
+  20) Copia de seguridad de tu carpeta personal: guardar (eligiendo qué) o recuperar, también de otro disco
    0) Salir
 MENU
         read -rp "Elige: " c
@@ -3207,6 +3590,7 @@ MENU
                 [ -n "$a" ] && { STATUS_ONLY=0 ALL=0 ONLY=${a//,/ }; setup_run; ONLY=''; } ;;
             17) img_menu ;;
             18) self_update && { echo "Saliendo para que abras la versión nueva."; return 0; } ;;
+            20) bk_menu ;;
             19) if [ "$TOOLBOX_SELF" = "$TOOLBOX_BIN" ]; then uninstall_self && return 0; else install_self; fi ;;
             0|q|'') return 0 ;;
             *) echo "Opción no válida" ;;
@@ -3223,6 +3607,8 @@ case $MODE in                            # these need no root
     pp-collection) pp_collection "${ARGS[@]}"; exit ;;
     space) space_report "${ARGS[@]}"; exit ;;
     self-update) self_update "$UPDATE_TAG"; exit ;;
+    backup) bk_save; exit ;;
+    restore) bk_restore "$UPDATE_TAG"; exit ;;
 esac
 case $MODE in menu|install|uninstall) ;; *) need_sudo || exit 1 ;; esac   # the menu asks per option
 case $MODE in
