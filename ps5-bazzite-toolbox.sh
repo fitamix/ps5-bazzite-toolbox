@@ -129,6 +129,7 @@ POLKIT_RULE=/etc/polkit-1/rules.d/50-ps5-no-kde-smart.rules
 MONWEB_PORT=${MONWEB_PORT:-8765}
 MONWEB_PY=$HOME/.local/share/ps5-bazzite-toolbox/monitor-web.py
 MONWEB_UNIT=$HOME/.config/systemd/user/ps5-monitor-web.service
+MONWEB_CSV_DIR=${MONWEB_CSV_DIR:-$HOME}  # where the page saves a session's CSV when you say so
 BRAVE_FLAGS=$HOME/.var/app/com.brave.Browser/config/brave-flags.conf
 EDGE_FLAGS=$HOME/.var/app/com.microsoft.Edge/config/edge-flags.conf
 BLOCKS="locale cmdline wifi updates vram gpu40 zram fans warmreboot hdmi bt disk firewall brave edge nas bios media esde portproton atajos monitorweb"
@@ -1040,17 +1041,22 @@ EOF
 # --- monitorweb ----------------------------------------------------------------------------------
 # The live monitor (option 4) in a phone's browser, always reachable at http://<console>:8765 with nothing to start:
 # a small Python server, a user service (no root) and a firewall rule for the home network only. It only measures
-# while a page asks for it ("Empezar"); unwatched for 30 s it stops by itself. The script is kept here as text.
+# while a page asks for it ("Empezar"); unwatched for 30 s it stops by itself, and then the page asks whether to
+# keep the session's CSV on the console. The script is kept here as text.
 monweb_script() { cat <<'__MONWEB__'
 #!/usr/bin/env python3
 # PS5 Bazzite toolbox — the live monitor (menu option 4) in a phone's browser: http://<PS5 address>:PORT
 # Waiting it does nothing (blocked on the socket). "Empezar" on the page starts a sample every 2 s; with no page
-# asking for 30 s (phone locked, tab closed) it stops by itself. Read-only: it shows numbers, it changes nothing.
+# asking for 30 s (phone locked, tab closed) it stops by itself. Once stopped, the page asks whether to keep the
+# session's CSV on the console (--csv-dir, default the home folder, ps5-mem-DATE.csv); nothing is saved unasked.
+# Read-only: besides that file it changes nothing.
 # Only answers private addresses (home network); the firewall rule of the toolbox's block "monitorweb" does the same.
 import glob, ipaddress, json, os, re, subprocess, sys, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = int(sys.argv[sys.argv.index("--port") + 1]) if "--port" in sys.argv else 8765
+CSV_DIR = sys.argv[sys.argv.index("--csv-dir") + 1] if "--csv-dir" in sys.argv else os.path.expanduser("~")
+MIN_SAVE = 5                                   # samples (10 s) before a session is worth a file
 EVERY, IDLE_STOP, KEEP = 2, 30, 1800          # seconds per sample, stop after this long unwatched, samples kept (1 h)
 P_GPUMEM = re.compile(r"ENOMEM|Not enough memory|Failed to pin|ring [a-z_0-9.]+ (timeout|reset)|page fault", re.I)
 P_VMREF = "__vm_enough_memory"                 # a program refused address space (e.g. RPCS3): not the GPU
@@ -1119,6 +1125,7 @@ class Monitor:
     def __init__(self):
         self.lock = threading.Lock(); self.running = False; self.thread = None
         self.samples = []; self.total = 0; self.seen = 0.0; self.start = ""; self.errors = []; self.vmref = 0; self.first = 0
+        self.saved = ""; self.stamp = ""; self.discarded = False
 
     def info(self):
         m = meminfo()
@@ -1131,11 +1138,26 @@ class Monitor:
             self.seen = time.time()
             if self.running: return
             self.running = True; self.samples = []; self.total = 0; self.errors = []; self.vmref = 0; self.first += 1
-            self.start = time.strftime("%Y-%m-%d %H:%M:%S")
+            self.start = time.strftime("%Y-%m-%d %H:%M:%S"); self.stamp = time.strftime("%Y%m%d-%H%M%S"); self.saved = ""; self.discarded = False
             self.thread = threading.Thread(target=self.loop, daemon=True); self.thread.start()
 
     def end(self):
         with self.lock: self.running = False
+
+    def discard(self):
+        with self.lock: self.discarded = True
+
+    def save(self):                           # the session's CSV on the console, when the page says so
+        with self.lock:
+            if self.running or len(self.samples) < MIN_SAVE or self.saved: return
+        path = os.path.join(CSV_DIR, f"ps5-mem-{self.stamp}.csv")
+        try:
+            os.makedirs(CSV_DIR, exist_ok=True)
+            with open(path + ".tmp", "w") as f: f.write(self.csv())
+            os.replace(path + ".tmp", path)
+            with self.lock: self.saved = path
+        except OSError as e:
+            with self.lock: self.saved = f"no se pudo guardar: {e}"
 
     def loop(self):
         prev, n, top, rtop = cpu_times(), 0, [], ["?", 0]
@@ -1195,7 +1217,8 @@ class Monitor:
             if self.running: self.seen = time.time()
             base = self.total - len(self.samples); off = since - base
             reset = off < 0 or off > len(self.samples)
-            return {"running": self.running, "session": self.first, "start": self.start, "info": info,
+            return {"running": self.running, "session": self.first, "start": self.start, "info": info, "saved": self.saved,
+                    "ask": not self.running and len(self.samples) >= MIN_SAVE and not self.saved and not self.discarded,
                     "total": self.total, "reset": reset, "samples": self.samples if reset else self.samples[off:],
                     "summary": self.summary(info), "errors": self.errors}
 
@@ -1232,9 +1255,6 @@ class H(BaseHTTPRequestHandler):
         if path == "/data":
             m = re.search(r"since=(-?\d+)", q)
             return self.send(200, json.dumps(MON.data(int(m.group(1)) if m else 0)), "application/json")
-        if path == "/csv":
-            return self.send(200, MON.csv(), "text/csv; charset=utf-8",
-                             [("Content-Disposition", f'attachment; filename="ps5-mem-{time.strftime("%Y%m%d-%H%M%S")}.csv"')])
         if path == "/manifest.json":
             return self.send(200, json.dumps({"name": "Monitor PS5", "short_name": "Monitor PS5", "start_url": "/",
                                               "display": "standalone", "background_color": "#101418", "theme_color": "#101418"}),
@@ -1245,6 +1265,8 @@ class H(BaseHTTPRequestHandler):
         if not self.ok_client(): return self.send(403, "", "text/plain")
         if self.path == "/start": MON.begin()
         elif self.path == "/stop": MON.end()
+        elif self.path == "/save": MON.save()
+        elif self.path == "/discard": MON.discard()
         else: return self.send(404, "", "text/plain")
         self.send(200, "{}", "application/json")
 
@@ -1264,9 +1286,12 @@ button.stop{background:#30363d}.grid{display:grid;grid-template-columns:1fr 1fr;
 ul{margin:6px 0 0;padding-left:18px}li{margin:3px 0}.mu{color:var(--mu)}
 </style></head><body>
 <h1>Monitor PS5</h1><div class="sub" id="sub">conectando…</div>
-<div class="row"><button id="go">Empezar</button><a class="btn" id="csv" href="/csv" style="display:none;background:#30363d">CSV</a></div>
+<div class="row"><button id="go">Empezar</button></div>
+<div class="card full" id="ask" style="display:none;margin-bottom:12px"><div style="margin-bottom:8px">¿Guardar las medidas de esta sesión en la PS5 (CSV)?</div>
+<div class="row" style="margin:0"><button id="yes">Guardar</button><button id="no" class="stop">No</button></div></div>
 <div class="grid" id="tiles"></div>
 <div class="card full" style="margin-top:8px"><div class="k">Más VRAM</div><div id="top" class="mu">—</div></div>
+<div class="mu" id="saved" style="margin:0 2px 8px;font-size:13px"></div>
 <div class="card full" style="margin-top:8px"><div class="k">Picos y veredicto</div><div id="sum" class="mu">Pulsa Empezar y juega: aquí saldrá qué te limita.</div></div>
 <script>
 const T=[["cpu","CPU","%"],["gpu","GPU","%"],["vram","VRAM","GB"],["gtt","GTT","GB"],["ram","RAM","GB"],["swap","Swap","GB"],["tcpu","Temp. CPU","°C"],["tgpu","Temp. GPU","°C"]];
@@ -1288,7 +1313,7 @@ function spark(k){const c=$("c_"+k),w=c.width=c.clientWidth*devicePixelRatio,h=c
  x.strokeStyle=getComputedStyle(document.body).getPropertyValue("--acc");x.lineWidth=2*devicePixelRatio;x.stroke()}
 function draw(){const x=S[S.length-1];
  $("sub").textContent=`${info.host||"PS5"} · ${running?"midiendo cada 2 s desde "+(window._start||""):S.length?"parado ("+S.length+" medidas)":"en espera"}`;
- $("go").textContent=running?"Parar":"Empezar";$("go").className=running?"stop":"";$("csv").style.display=S.length?"":"none";
+ $("go").textContent=running?"Parar":"Empezar";$("go").className=running?"stop":"";
  if(!x)return;T.forEach(([k])=>{const e=$("v_"+k);e.innerHTML=text(k,x);e.className="v "+cls(k,x);spark(k)});
  $("top").innerHTML=x.top.length?x.top.map(([c,m])=>`${c} <b>${(m/1024).toFixed(1)} GB</b>`).join(" · ")+`<br><span class="mu">más RAM: ${x.ramtop[0]} ${(x.ramtop[1]/1024).toFixed(1)} GB</span>`:"ningún programa usa la GPU"}
 function summary(s,err){if(!s||!s.vram&&s.vram!==0){return}
@@ -1302,8 +1327,12 @@ function summary(s,err){if(!s||!s.vram&&s.vram!==0){return}
 async function poll(){try{const same=session&&got,r=await fetch("/data?since="+(same?got:-1)),d=await r.json();
  info=d.info;running=d.running;window._start=(d.start||"").slice(11);
  if(d.session!=session||d.reset||!same){session=d.session;S=d.samples}else S=S.concat(d.samples).slice(-1800);
- got=d.total;draw();summary(d.summary,d.errors)}catch(e){$("sub").textContent="sin conexión con la PS5…"}
+ got=d.total;draw();summary(d.summary,d.errors);
+ $("ask").style.display=d.ask?"":"none";
+ $("saved").textContent=d.saved?(d.saved.startsWith("/")?"Guardado en la PS5: "+d.saved:d.saved):""}catch(e){$("sub").textContent="sin conexión con la PS5…"}
  clearTimeout(timer);if(document.visibilityState=="visible")timer=setTimeout(poll,running?2000:5000)}
+$("yes").onclick=async()=>{await fetch("/save",{method:"POST"});setTimeout(poll,300)};
+$("no").onclick=async()=>{await fetch("/discard",{method:"POST"});setTimeout(poll,300)};
 $("go").onclick=async()=>{await fetch(running?"/stop":"/start",{method:"POST"});setTimeout(poll,300)};
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState=="visible")poll()});poll();
 </script></body></html>"""
@@ -1323,7 +1352,8 @@ desc_monitorweb() {
     section
     say "El monitor en directo (opción 4) en el navegador del móvil: http://$(lan_ip || echo '<IP de la consola>'):$MONWEB_PORT"
     say "Guárdalo en la pantalla de inicio. «Empezar» mide cada 2 s (CPU, GPU, VRAM, RAM, swap, temperaturas,"
-    say "qué gasta más, picos y qué te limita) y deja bajar el CSV; sin nadie mirando 30 s, para solo."
+    say "qué gasta más, picos y qué te limita); sin nadie mirando 30 s, para solo. Al parar pregunta si guardar"
+    say "las medidas en la PS5 ($MONWEB_CSV_DIR/ps5-mem-FECHA.csv)."
     say "Instala $MONWEB_PY y el servicio de tu usuario ps5-monitor-web (arranca con la sesión, sin root), y abre"
     say "el puerto $MONWEB_PORT en el cortafuegos solo para tu red ($(lan_net)). Solo enseña datos; no tiene clave:"
     say "cualquiera en tu red que sepa la dirección lo puede ver. Esperando gasta ~25 MB de RAM y nada de CPU."
@@ -1345,7 +1375,7 @@ apply_monitorweb() {
 Description=Monitor de la PS5 en el navegador (ps5-bazzite-toolbox, bloque monitorweb)
 
 [Service]
-ExecStart=/usr/bin/python3 $MONWEB_PY --port $MONWEB_PORT
+ExecStart=/usr/bin/python3 $MONWEB_PY --port $MONWEB_PORT --csv-dir $MONWEB_CSV_DIR
 Restart=on-failure
 Nice=10
 NoNewPrivileges=yes

@@ -11,8 +11,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
   una zona mínima y no admite cambios. El bloque encuentra esos servicios por el módulo que les falta, los quita de
   la zona y reinicia firewalld. El diagnóstico lo avisa, y `monitorweb` lo pide antes de abrir su puerto.
 - **Monitor en el móvil** (bloque de ajustes `monitorweb`, no recomendado por defecto): el monitor en directo de la
-  opción 4 siempre disponible en `http://<consola>:8765`, sin SSH. «Empezar» mide cada 2 s, con gráficas, picos,
-  veredicto y descarga del CSV; sin nadie mirando 30 s, para solo. Servicio de tu usuario (sin root), ~25 MB de RAM
+  opción 4 siempre disponible en `http://<consola>:8765`, sin SSH. «Empezar» mide cada 2 s, con gráficas, picos y
+  veredicto; sin nadie mirando 30 s, para solo, y al parar pregunta si guardar las medidas en la PS5 (CSV). Servicio de tu usuario (sin root), ~25 MB de RAM
   esperando; el cortafuegos abre el puerto solo para tu red. Sin clave. La opción 4 dice la dirección si está activo.
 - **Instalaciones bootc** (la forma de la imagen desde la v2.5). La caja las reconoce y saca su versión de la imagen.
   La opción 17 (`--update`, `--rollback`) pasa a ser actualizar (`bootc upgrade`), volver a la anterior
