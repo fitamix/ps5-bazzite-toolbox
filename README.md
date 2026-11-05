@@ -169,6 +169,7 @@ pregunta con una respuesta recomendada (`[S/n]` = sí por defecto, `[s/N]` = no)
 | [`hdmi`](#hdmi) | Recupera la imagen tras un reinicio en caliente | sí, si usas el reinicio en caliente | no |
 | [`bt`](#bt) | Recarga el Bluetooth si arranca sin adaptador (PS5 original) | sí | no |
 | [`disk`](#disk) | Quita la consulta SMART de KDE que bloquea discos USB | sí | no |
+| [`firewall`](#firewall) | Arregla el cortafuegos, que arranca «fallido» por un módulo que falta en el kernel | sí | no |
 | [`brave`](#brave) | Brave sin pedir la contraseña de la Cartera de KDE | no | no |
 | [`edge`](#edge) | Microsoft Edge sin pedir la contraseña de la Cartera de KDE | no | no |
 | [`nas`](#nas) | Monta un NAS por SMB y enlaza las ROMs de EmuDeck | sí, si ya diste sus datos | no |
@@ -392,6 +393,28 @@ kwriteconfig6 --file kded6rc --group Module-smart --key autoload false
 ```
 
 **Deshacer:** `sudo rm /etc/polkit-1/rules.d/50-ps5-no-kde-smart.rules; sudo systemctl restart polkit; sudo systemctl enable --now smartd`.
+
+### `firewall`
+
+**Qué cambia:** quita de la zona del cortafuegos los servicios cuyo módulo no trae el kernel de la PS5 y reinicia
+firewalld. En la imagen es `samba-client` (buscar equipos Windows por su nombre), que usa `nf_conntrack_netbios_ns`.
+**Por qué:** sin ese módulo, firewalld no puede montar sus reglas («Could not process rule: No such file or
+directory»), se queda **fallido** con una zona mínima (`public`: solo SSH) y rechaza cualquier cambio permanente
+(`RUNNING_BUT_FAILED`). Se ve con `sudo firewall-cmd --state` (`failed`). La caja encuentra esos servicios mirando el
+módulo de cada uno en `/usr/lib/firewalld`, así que sirve también si otra versión trae otro distinto. Con la zona
+`FedoraWorkstation` funcionando quedan abiertos a tu red los puertos 1025-65535, como en Bazzite de escritorio (KDE
+Connect, la transmisión de Steam, el [monitor web](#monitorweb)). El NAS montado por su IP no necesita `samba-client`.
+
+```sh
+sudo firewall-cmd --state                                                     # failed = le pasa esto
+sudo firewall-offline-cmd --zone=FedoraWorkstation --remove-service-from-zone=samba-client
+sudo systemctl restart firewalld && sudo firewall-cmd --state                 # running
+# más cerrado, en vez de lo anterior: sudo firewall-offline-cmd --set-default-zone=public
+```
+
+`firewall-offline-cmd` cambia los ficheros sin pasar por firewalld, por eso funciona con él fallido; su
+`--remove-service` es otra cosa (compatibilidad con `lokkit`).
+**Deshacer:** `sudo rm /etc/firewalld/zones/FedoraWorkstation.xml; sudo systemctl restart firewalld`.
 
 ### `brave`
 
@@ -826,6 +849,7 @@ queda ahí para repetir.
 | `/usr/local/sbin/ps5-hdmi-kick`, `/etc/systemd/system/ps5-hdmi-kick.service` | `hdmi` | — |
 | `/usr/local/sbin/ps5-bt-guard`, `/etc/systemd/system/ps5-bt-guard.service` | `bt` | — |
 | `/etc/polkit-1/rules.d/50-ps5-no-kde-smart.rules`, `~/.config/kded6rc` | `disk` | — |
+| `/etc/firewalld/zones/<zona>.xml` (la zona sin los servicios cuyo módulo falta) | `firewall` | — |
 | `~/.var/app/com.brave.Browser/config/brave-flags.conf` | `brave` | — |
 | `~/.var/app/com.microsoft.Edge/config/edge-flags.conf` | `edge` | — |
 | `/etc/fstab` (una línea), `/etc/samba/nas-<usuario>.cred` (contraseña del NAS, solo root), `/var/mnt/nas`, `~/.local/share/flatpak/overrides/global` | `nas` | — |

@@ -6,6 +6,10 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 ## [Sin publicar]
 
 ### Añadido
+- Bloque de ajustes **`firewall`** (recomendado): el cortafuegos de la imagen arranca **fallido** porque la zona
+  `FedoraWorkstation` usa `samba-client`, cuyo módulo (`nf_conntrack_netbios_ns`) no trae el kernel de la PS5: va con
+  una zona mínima y no admite cambios. El bloque encuentra esos servicios por el módulo que les falta, los quita de
+  la zona y reinicia firewalld. El diagnóstico lo avisa, y `monitorweb` lo pide antes de abrir su puerto.
 - **Monitor en el móvil** (bloque de ajustes `monitorweb`, no recomendado por defecto): el monitor en directo de la
   opción 4 siempre disponible en `http://<consola>:8765`, sin SSH. «Empezar» mide cada 2 s, con gráficas, picos,
   veredicto y descarga del CSV; sin nadie mirando 30 s, para solo. Servicio de tu usuario (sin root), ~25 MB de RAM

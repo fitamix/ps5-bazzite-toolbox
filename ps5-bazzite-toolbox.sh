@@ -9,7 +9,7 @@
 #    sync the collection; global PortProton defaults (setup block "portproton"). Tools: space taken by each folder,
 #    a backup of the home folder (picking what goes) that restores here or on another install.
 #  - Settings (setup): blocks that adapt the image (language, boot options, Wi-Fi, updates, VRAM, fans, warm
-#    reboot, HDMI fix, disk, Brave, Edge, NAS, the monitor in a phone's browser, zram swap size, the GPU's 40 compute units). Each explains what it changes, why and how to undo it, and asks.
+#    reboot, HDMI fix, disk, firewall, Brave, Edge, NAS, the monitor in a phone's browser, zram swap size, the GPU's 40 compute units). Each explains what it changes, why and how to undo it, and asks.
 #    Answers are kept in ~/.config/ps5-bazzite-toolbox.conf; running it again only offers what is pending.
 #
 #   bash ps5-bazzite-toolbox.sh                         # menu (the first time it offers to install itself as the
@@ -35,7 +35,7 @@
 #   bash ps5-bazzite-toolbox.sh --restore [DIR]         # bring a copy back, or another install's home folder (another disk)
 #   bash ps5-bazzite-toolbox.sh --install | --uninstall # command ~/.local/bin/ps5-bazzite-toolbox + applications menu
 #   bash ps5-bazzite-toolbox.sh --version
-# Setup blocks: locale cmdline wifi updates vram gpu40 zram fans warmreboot hdmi bt disk brave edge nas bios media esde portproton atajos monitorweb
+# Setup blocks: locale cmdline wifi updates vram gpu40 zram fans warmreboot hdmi bt disk firewall brave edge nas bios media esde portproton atajos monitorweb
 set -uo pipefail
 
 TOOLBOX_VERSION=1.9.0                    # bump on every release (see CHANGELOG.md and release.sh)
@@ -131,7 +131,7 @@ MONWEB_PY=$HOME/.local/share/ps5-bazzite-toolbox/monitor-web.py
 MONWEB_UNIT=$HOME/.config/systemd/user/ps5-monitor-web.service
 BRAVE_FLAGS=$HOME/.var/app/com.brave.Browser/config/brave-flags.conf
 EDGE_FLAGS=$HOME/.var/app/com.microsoft.Edge/config/edge-flags.conf
-BLOCKS="locale cmdline wifi updates vram gpu40 zram fans warmreboot hdmi bt disk brave edge nas bios media esde portproton atajos monitorweb"
+BLOCKS="locale cmdline wifi updates vram gpu40 zram fans warmreboot hdmi bt disk firewall brave edge nas bios media esde portproton atajos monitorweb"
 
 # ======================================== settings (setup) ========================================
 # --- saved answers -------------------------------------------------------------------------------
@@ -677,6 +677,67 @@ EOF
     sudo systemctl disable --now smartd.service 2>/dev/null
     command -v kwriteconfig6 >/dev/null && kwriteconfig6 --file kded6rc --group Module-smart --key autoload false
     return 0
+}
+
+# --- firewall ------------------------------------------------------------------------------------
+# Bazzite's zone FedoraWorkstation has samba-client, whose NetBIOS conntrack helper (nf_conntrack_netbios_ns) the PS5
+# kernel lacks: firewalld can't build its rules ("Could not process rule: No such file or directory"), falls back to
+# a minimal zone and refuses every permanent change (RUNNING_BUT_FAILED). This finds such services in the default
+# zone by their helper's module and takes them out of the zone (firewall-offline-cmd works while firewalld failed).
+fw_zone() { sed -n 's/^DefaultZone=//p' /etc/firewalld/firewalld.conf 2>/dev/null | tail -1; }   # the configured one, not the fallback
+fw_xml() {                               # fw_xml zones|services|helpers NAME -> the file firewalld reads (/etc first)
+    local f; for f in "/etc/firewalld/$1/$2.xml" "/usr/lib/firewalld/$1/$2.xml"; do sudo test -f "$f" && { echo "$f"; return 0; }; done
+    return 1
+}
+fw_helpers() {                           # fw_helpers SERVICE -> its conntrack helpers, also through <include service=…>
+    local f s; f=$(fw_xml services "$1") || return 0
+    sudo sed -n 's/.*<helper name="\([^"]*\)".*/\1/p' "$f"
+    for s in $(sudo sed -n 's/.*<include service="\([^"]*\)".*/\1/p' "$f"); do [ "$s" != "$1" ] && fw_helpers "$s"; done
+}
+fw_bad() {                               # services of the default zone whose helper module this kernel hasn't got
+    local z f s h hf mod; z=$(fw_zone); f=$(fw_xml zones "$z") || return 0
+    for s in $(sudo sed -n 's/.*<service name="\([^"]*\)".*/\1/p' "$f"); do
+        for h in $(fw_helpers "$s"); do
+            hf=$(fw_xml helpers "$h") || continue
+            mod=$(sudo sed -n 's/.*module="\([^"]*\)".*/\1/p' "$hf" | head -1)
+            [ -n "$mod" ] && ! modinfo -n "$mod" >/dev/null 2>&1 && { echo "$s ($mod)"; break; }
+        done
+    done
+}
+fw_state() { sudo firewall-cmd --state 2>/dev/null; }
+desc_firewall() {
+    local bad; bad=$(fw_bad)
+    section
+    say "Arregla el cortafuegos (firewalld), que arranca «fallido»: funciona con una zona mínima en vez de la suya"
+    say "($(fw_zone)) y no admite cambios (abrir un puerto da RUNNING_BUT_FAILED)."
+    if [ -n "$bad" ]; then
+        say "Causa: la zona $(fw_zone) usa $(echo $bad), y el kernel de la PS5 no trae ese módulo. Lo quita de la zona"
+        say "(firewall-offline-cmd --zone=$(fw_zone) --remove-service-from-zone=…) y reinicia firewalld."
+        say "samba-client sirve para encontrar equipos Windows por su nombre; el NAS por su IP no lo necesita."
+    else
+        say "No encuentro la causa conocida (un servicio cuyo módulo falta): lo mira firewall-offline-cmd --check-config."
+    fi
+    [ "$(fw_zone)" = FedoraWorkstation ] && say "Con la zona funcionando quedan abiertos a tu red los puertos 1025-65535, como en Bazzite de escritorio" &&
+        say "(KDE Connect, transmisión de Steam, el monitor web). Más cerrado: sudo firewall-offline-cmd --set-default-zone=public."
+    say "POR QUÉ: con el cortafuegos fallido, lo que abran otros ajustes o programas no se guarda."
+    say "DESHACER: sudo rm /etc/firewalld/zones/$(fw_zone).xml; sudo systemctl restart firewalld"
+}
+check_firewall() {
+    systemctl is-active -q firewalld 2>/dev/null || return 2
+    [ "$(fw_state)" = running ]
+}
+apply_firewall() {
+    local z s bad; z=$(fw_zone); bad=$(fw_bad)
+    if [ -z "$bad" ]; then
+        sudo firewall-offline-cmd --check-config; echo "  No sé arreglarlo solo: revisa lo de arriba y sudo tail -40 /var/log/firewalld."
+        return 1
+    fi
+    for s in $(awk '{ print $1 }' <<<"$bad"); do
+        sudo firewall-offline-cmd --zone="$z" --remove-service-from-zone="$s" >/dev/null || return 1
+    done
+    sudo systemctl restart firewalld && sleep 2
+    [ "$(fw_state)" = running ] && say "Cortafuegos funcionando, zona $(sudo firewall-cmd --get-default-zone)." ||
+        { echo "  Sigue fallido: sudo tail -40 /var/log/firewalld"; return 1; }
 }
 
 # --- brave ---------------------------------------------------------------------------------------
@@ -1293,6 +1354,10 @@ NoNewPrivileges=yes
 WantedBy=default.target
 EOF
     systemctl --user daemon-reload && systemctl --user enable ps5-monitor-web && systemctl --user restart ps5-monitor-web || return 1
+    if monweb_fw && [ "$(fw_state)" != running ]; then
+        echo "  El cortafuegos está fallido y no admite abrir el puerto: aplica antes el bloque firewall (opción 16 → firewall)."
+        return 1
+    fi
     if monweb_fw; then
         sudo firewall-cmd --permanent --add-rich-rule="$(monweb_rule)" >/dev/null && sudo firewall-cmd --reload >/dev/null || return 1
     fi
@@ -1596,6 +1661,10 @@ check_k "Dispositivos USB desconectados" "$P_USB" warn
 for m in $(awk '$3 == "cifs" { print $2 }' /etc/fstab 2>/dev/null); do
     if timeout 20 ls "$m" >/dev/null 2>&1; then ok "NAS en $m accesible"; else bad "NAS en $m no responde (¿apagado o sin red?)"; fi
 done
+if systemctl is-active -q firewalld 2>/dev/null; then
+    if [ "$(fw_state)" = running ]; then ok "Cortafuegos funcionando (zona $(sudo firewall-cmd --get-default-zone 2>/dev/null))"
+    else fw_b=$(fw_bad); bad "Cortafuegos fallido: va con una zona mínima y no admite cambios${fw_b:+ (la zona $(fw_zone) usa $(echo $fw_b))}; bloque firewall"; fi
+fi
 info "Avisos 'Salina poller' (ruido del parche USB, no es un fallo): $(kcount "$P_SALINA")"
 
 # --- settings (the setup blocks' own checks) ------------------------------------------------------
