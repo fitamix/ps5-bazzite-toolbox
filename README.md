@@ -557,6 +557,8 @@ no se mueve). Si Dolphin estaba abierto, ciérralo y ábrelo. No aplica si la ca
 
 ### `monitorweb`
 
+<p align="center"><img src="docs/monitor-web.png" alt="El monitor web en el navegador de un móvil" width="320"></p>
+
 **Qué cambia:** el monitor en directo de la [opción 4](#diagnóstico) pasa a estar siempre disponible en el navegador
 del móvil, en `http://<IP de la consola>:8765` (la caja te dice la dirección; guárdala en la pantalla de inicio).
 «Empezar» mide cada 2 s CPU (media y el hilo más cargado), GPU, VRAM, GTT, RAM, swap y temperaturas, con su gráfica,

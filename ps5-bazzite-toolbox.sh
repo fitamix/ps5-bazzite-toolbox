@@ -1275,11 +1275,11 @@ PAGE = r"""<!doctype html><html lang="es"><head><meta charset="utf-8">
 <link rel="manifest" href="/manifest.json"><title>Monitor PS5</title>
 <style>
 :root{--bg:#101418;--card:#1a2027;--line:#2a323b;--tx:#e6ebf0;--mu:#8b98a5;--ok:#3fb950;--warn:#d29922;--bad:#f85149;--acc:#58a6ff}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.4 system-ui,-apple-system,sans-serif;padding:12px 12px 40px}
+*{box-sizing:border-box}html,body{overflow-x:hidden}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.4 system-ui,-apple-system,sans-serif;padding:12px 12px 40px}
 h1{font-size:18px;margin:4px 0 2px}.sub{color:var(--mu);font-size:13px;margin-bottom:12px}
 .row{display:flex;gap:8px;margin-bottom:12px}button,.btn{flex:1;border:0;border-radius:10px;padding:12px;font:600 16px system-ui;color:#fff;background:var(--acc);text-align:center;text-decoration:none}
-button.stop{background:#30363d}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px}
+button.stop{background:#30363d}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;min-width:0;overflow-wrap:anywhere}
 .k{color:var(--mu);font-size:12px;text-transform:uppercase;letter-spacing:.04em}.v{font-size:22px;font-weight:700;margin:2px 0}
 .v small{font-size:13px;color:var(--mu);font-weight:500}canvas{width:100%;height:42px;display:block}
 .ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}.full{grid-column:1/-1}
@@ -1304,7 +1304,7 @@ function cls(k,x){const vt=info.vt||1;if(k=="vram")return x.vram/vt>=.9?"bad":x.
  if(k=="swap")return info.st&&x.swap>=info.st-64?"bad":"ok";return"ok"}
 function text(k,x){switch(k){case"cpu":return`${x.cpu}% <small>hilo ${x.cpumax}%</small>`;case"gpu":return`${x.gpu}%`;
  case"vram":return`${g(x.vram)} <small>/ ${g(info.vt)}</small>`;case"gtt":return`${g(x.gtt)} <small>/ ${g(info.gt)}</small>`;
- case"ram":return`${g(x.ram)} <small>/ ${g(info.rt)}</small>`;case"swap":return`${g(x.swap)} <small>/ ${g(info.st)}${info.zram?` · en RAM ${g(x.zram)}`:""}</small>`;
+ case"ram":return`${g(x.ram)} <small>/ ${g(info.rt)}</small>`;case"swap":return`${g(x.swap)} <small>/ ${g(info.st)}</small>${info.zram?`<br><small>ocupa ${g(x.zram)} de RAM</small>`:""}`;
  default:return x[k]==null?"—":`${x[k]}°`}}
 function max(k){return {cpu:100,gpu:100,vram:info.vt,gtt:info.gt,ram:info.rt,swap:info.st||1,tcpu:100,tgpu:100}[k]||1}
 function spark(k){const c=$("c_"+k),w=c.width=c.clientWidth*devicePixelRatio,h=c.height=42*devicePixelRatio,x=c.getContext("2d");
