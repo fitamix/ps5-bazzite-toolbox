@@ -19,7 +19,7 @@ Todo está en español. No es un proyecto oficial de la imagen ni de sus autores
 | | |
 |---|---|
 | Consola | PS5 original «fat» (chip Wi-Fi/Bluetooth IW620), firmware 4.50 |
-| Jailbreak | [Y2JB](https://github.com/Gezine/Y2JB) |
+| Jailbreak | [Y2JB](https://github.com/Gezine/Y2JB) con [ps5-y2jb-autoloader](https://github.com/itsPLK/ps5-y2jb-autoloader) |
 | Cargador de Linux | `ps5-linux-loader-v3.5.elf` ([ps5-linux-loader](https://github.com/ps5-linux/ps5-linux-loader)) |
 | Envío del cargador | [PS5 Payload Manager](https://github.com/itsPLK/ps5-payload-manager) |
 | Disco | SSD externo Lexar ES3 de 1 TB por USB 3.2 (10 Gb/s, USB `21c4:0003`; va estable con `usb-storage.quirks=21c4:0003:um`, que pone el bloque `cmdline`) |
