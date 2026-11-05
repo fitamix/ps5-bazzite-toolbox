@@ -5,6 +5,12 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+## [1.9.0] - 2026-11-05
+
+Lo marcado **EN PRUEBAS** aún no se ha probado en una consola de verdad: el modo bootc (no había ninguna instalación
+bootc a mano) y montar otro disco al recuperar. En una instalación Legacy y sin otro disco no cambia nada. Si lo
+pruebas, cuenta cómo te ha ido.
+
 ### Añadido
 - Bloque de ajustes **`firewall`** (recomendado): el cortafuegos de la imagen arranca **fallido** porque la zona
   `FedoraWorkstation` usa `samba-client`, cuyo módulo (`nf_conntrack_netbios_ns`) no trae el kernel de la PS5: va con
@@ -12,14 +18,14 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
   la zona y reinicia firewalld. El diagnóstico lo avisa, y `monitorweb` lo pide antes de abrir su puerto.
 - **Monitor en el móvil** (bloque de ajustes `monitorweb`, no recomendado por defecto): el monitor en directo de la
   opción 4 siempre disponible en `http://<consola>:8765`, sin SSH. «Empezar» mide cada 2 s, con gráficas, picos y
-  veredicto; sin nadie mirando 30 s, para solo, y al parar pregunta si guardar las medidas en la PS5 (CSV). Servicio de tu usuario (sin root), ~25 MB de RAM
-  esperando; el cortafuegos abre el puerto solo para tu red. Sin clave. La opción 4 dice la dirección si está activo.
-- **Instalaciones bootc** (la forma de la imagen desde la v2.5). La caja las reconoce y saca su versión de la imagen.
+  veredicto; sin nadie mirando 30 s, para solo, y al parar pregunta si guardar las medidas en la PS5 (CSV, en
+  `~/.local/share/ps5-bazzite-toolbox/monitor/`). Servicio de tu usuario (sin root), ~25 MB de RAM esperando; el cortafuegos abre el puerto solo para tu red. Sin clave. La opción 4 dice la dirección si está activo.
+- **Instalaciones bootc** (**EN PRUEBAS**; la forma de la imagen desde la v2.5). La caja las reconoce y saca su versión de la imagen.
   La opción 17 (`--update`, `--rollback`) pasa a ser actualizar (`bootc upgrade`), volver a la anterior
   (`bootc rollback`) o cambiar de canal o versión (`bootc switch`), explicando y preguntando, y en la v2.5 ofrece
   antes el arreglo del autor sin el que no se puede actualizar. El bloque `updates` no aplica en bootc: bloquearía
   las actualizaciones buenas.
-- **Recuperar desde otro disco, sin montarlo a mano** (opción 20 → 2): lista las copias y los discos Linux
+- **Recuperar desde otro disco, sin montarlo a mano** (opción 20 → 2; **EN PRUEBAS**): lista las copias y los discos Linux
   enchufados, monta el elegido solo lectura y lo desmonta al terminar. Si es un disco USB que su sistema usaba sin
   UAS (el Lexar ES3), pone ese ajuste ahora para que la copia no dé errores.
 
@@ -162,7 +168,8 @@ Primera versión publicada.
 - Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
-[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.8.0...HEAD
+[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.9.0...HEAD
+[1.9.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.5.0...v1.6.0

@@ -2506,7 +2506,8 @@ bootc_menu() {                           # bootc_menu [upgrade|rollback|switch [
     need_sudo || return 1
     ref=$(bootc_ref)
     echo
-    echo "${B}Imagen bootc${N}: el sistema entero es una imagen; bootc la actualiza y guarda la anterior en el disco."
+    echo "${B}Imagen bootc${N} ${Y}[EN PRUEBAS]${N}: el sistema entero es una imagen; bootc la actualiza y guarda la anterior."
+    echo "  Esta parte de la caja aún no se ha probado en una consola bootc: si algo falla, sudo bootc status y cuéntalo."
     echo "  Sigue: ${ref:-?}  (stable = las versiones estables, cada semana; vX.Y = esa versión fija)"
     sudo bootc status 2>/dev/null | grep -E '^(●|  )?(Booted|Staged|Rollback)|image:|Version' | sed 's/^/  /' | head -12
     if [ -z "$c" ]; then
@@ -3979,7 +3980,7 @@ bk_restore() {                           # bk_restore [DIR] -> picks where from 
         for n in "${!c[@]}"; do
             IFS=$'\t' read -r d a rc <<<"${c[$n]}"
             if [ "$d" = copy ]; then printf '  %d) copia en %s (%s)\n' $((n + 1)) "$a" "$(sed -n 's/^fecha=//p' "$a/$BK_INFO")"
-            else printf '  %d) disco %s %s\n' $((n + 1)) "$a" "$rc"; fi
+            else printf '  %d) disco %s %s [EN PRUEBAS]\n' $((n + 1)) "$a" "$rc"; fi
         done
         [ ${#c[@]} -gt 0 ] || echo "  (no encuentro copias ni otros discos Linux enchufados)"
         read -e -rp "  Número, o escribe una carpeta (Intro = cancelar): " a

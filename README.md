@@ -668,7 +668,8 @@ valor cuando el `.ppdb` del juego no dice nada.
 
 ## Cambiar de versión de la imagen y volver atrás
 
-> **En una instalación bootc** (desde la v2.5, grabando la imagen bootc) todo esto lo hace `bootc` y la opción 17
+> **En una instalación bootc** (desde la v2.5, grabando la imagen bootc; **en pruebas**: aún no se ha probado en una
+> consola bootc de verdad) todo esto lo hace `bootc` y la opción 17
 > solo lo explica y pregunta: **actualizar** (`sudo bootc upgrade`, la siguiente del canal que sigues), **volver a la
 > anterior** (`sudo bootc rollback`) o **cambiar de canal o fijar una versión** (`sudo bootc switch
 > ghcr.io/vivalavent/ps5-bazzite-bootc:stable` o `:v2.5.1`; lista las versiones bootc de GitHub). Lo nuevo entra al
@@ -776,7 +777,7 @@ usuario y la configuración de cada programa y de esta caja.
 Además de tu carpeta guarda, en `sistema/`, lo que una instalación nueva no tiene: el servicio que arranca Decky
 (`plugin_loader.service`) y la lista de Flatpaks del sistema (Brave, Heroic…). No necesita `sudo`.
 
-**De dónde recuperar.** Sin carpeta, lista las copias que encuentra en los discos montados y el NAS, y **los discos
+**De dónde recuperar** (montar otro disco: **en pruebas**). Sin carpeta, lista las copias que encuentra en los discos montados y el NAS, y **los discos
 Linux enchufados** que no son el del sistema, montados o no. Si eliges un disco, lo monta **solo lectura** (y lo
 desmonta al terminar) y encuentra dentro tu carpeta, también en una instalación bootc. Si es un disco USB que su
 sistema usaba sin UAS (`usb-storage.quirks=…:u…`, como el Lexar ES3), te lo dice y lo pone igual ahora, hasta que
