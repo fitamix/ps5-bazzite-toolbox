@@ -9,7 +9,7 @@
 #    sync the collection; global PortProton defaults (setup block "portproton"). Tools: space taken by each folder,
 #    a backup of the home folder (picking what goes) that restores here or on another install.
 #  - Settings (setup): blocks that adapt the image (language, boot options, Wi-Fi, updates, VRAM, fans, warm
-#    reboot, HDMI fix, disk, Brave, Edge, NAS, zram swap size, the GPU's 40 compute units). Each explains what it changes, why and how to undo it, and asks.
+#    reboot, HDMI fix, disk, Brave, Edge, NAS, the monitor in a phone's browser, zram swap size, the GPU's 40 compute units). Each explains what it changes, why and how to undo it, and asks.
 #    Answers are kept in ~/.config/ps5-bazzite-toolbox.conf; running it again only offers what is pending.
 #
 #   bash ps5-bazzite-toolbox.sh                         # menu (the first time it offers to install itself as the
@@ -35,7 +35,7 @@
 #   bash ps5-bazzite-toolbox.sh --restore [DIR]         # bring a copy back, or another install's home folder (another disk)
 #   bash ps5-bazzite-toolbox.sh --install | --uninstall # command ~/.local/bin/ps5-bazzite-toolbox + applications menu
 #   bash ps5-bazzite-toolbox.sh --version
-# Setup blocks: locale cmdline wifi updates vram gpu40 zram fans warmreboot hdmi bt disk brave edge nas bios media esde portproton atajos
+# Setup blocks: locale cmdline wifi updates vram gpu40 zram fans warmreboot hdmi bt disk brave edge nas bios media esde portproton atajos monitorweb
 set -uo pipefail
 
 TOOLBOX_VERSION=1.9.0                    # bump on every release (see CHANGELOG.md and release.sh)
@@ -126,9 +126,12 @@ PERFCONF=/etc/ps5-bazzite-deck/perf.conf
 TOOLS_REPO=https://github.com/ps5-linux/ps5-linux-tools
 TOOLS_COMMIT=f1fa98a                     # the revision reviewed on 2026-10-27
 POLKIT_RULE=/etc/polkit-1/rules.d/50-ps5-no-kde-smart.rules
+MONWEB_PORT=${MONWEB_PORT:-8765}
+MONWEB_PY=$HOME/.local/share/ps5-bazzite-toolbox/monitor-web.py
+MONWEB_UNIT=$HOME/.config/systemd/user/ps5-monitor-web.service
 BRAVE_FLAGS=$HOME/.var/app/com.brave.Browser/config/brave-flags.conf
 EDGE_FLAGS=$HOME/.var/app/com.microsoft.Edge/config/edge-flags.conf
-BLOCKS="locale cmdline wifi updates vram gpu40 zram fans warmreboot hdmi bt disk brave edge nas bios media esde portproton atajos"
+BLOCKS="locale cmdline wifi updates vram gpu40 zram fans warmreboot hdmi bt disk brave edge nas bios media esde portproton atajos monitorweb"
 
 # ======================================== settings (setup) ========================================
 # --- saved answers -------------------------------------------------------------------------------
@@ -973,6 +976,331 @@ EOF
     say "Ajustes globales de PortProton: $PP_DEFAULTS (los juegos abiertos los cogen al volver a abrirlos)."
 }
 
+# --- monitorweb ----------------------------------------------------------------------------------
+# The live monitor (option 4) in a phone's browser, always reachable at http://<console>:8765 with nothing to start:
+# a small Python server, a user service (no root) and a firewall rule for the home network only. It only measures
+# while a page asks for it ("Empezar"); unwatched for 30 s it stops by itself. The script is kept here as text.
+monweb_script() { cat <<'__MONWEB__'
+#!/usr/bin/env python3
+# PS5 Bazzite toolbox — the live monitor (menu option 4) in a phone's browser: http://<PS5 address>:PORT
+# Waiting it does nothing (blocked on the socket). "Empezar" on the page starts a sample every 2 s; with no page
+# asking for 30 s (phone locked, tab closed) it stops by itself. Read-only: it shows numbers, it changes nothing.
+# Only answers private addresses (home network); the firewall rule of the toolbox's block "monitorweb" does the same.
+import glob, ipaddress, json, os, re, subprocess, sys, threading, time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+PORT = int(sys.argv[sys.argv.index("--port") + 1]) if "--port" in sys.argv else 8765
+EVERY, IDLE_STOP, KEEP = 2, 30, 1800          # seconds per sample, stop after this long unwatched, samples kept (1 h)
+P_GPUMEM = re.compile(r"ENOMEM|Not enough memory|Failed to pin|ring [a-z_0-9.]+ (timeout|reset)|page fault", re.I)
+P_VMREF = "__vm_enough_memory"                 # a program refused address space (e.g. RPCS3): not the GPU
+
+def rd(path, default=""):
+    try:
+        with open(path) as f: return f.read().strip()
+    except OSError: return default
+
+def num(path):
+    try: return int(rd(path, "0").split()[0])
+    except (ValueError, IndexError): return 0
+
+DEV = next((d for d in sorted(glob.glob("/sys/class/drm/card*/device")) if os.path.exists(d + "/mem_info_vram_total")), "")
+
+def hwmon(name, label="temp1_input"):
+    for h in glob.glob("/sys/class/hwmon/hwmon*"):
+        if rd(h + "/name") == name: return h + "/" + label
+    return ""
+T_GPU, T_CPU = hwmon("amdgpu"), hwmon("k10temp")
+
+def meminfo():
+    m = {}
+    for l in rd("/proc/meminfo").splitlines():
+        k, v = l.split(":", 1); m[k] = int(v.split()[0]) // 1024
+    return m
+
+def cpu_times():
+    out = {}
+    for l in rd("/proc/stat").splitlines():
+        if l.startswith("cpu"):
+            f = l.split(); v = list(map(int, f[1:9])); out[f[0]] = (sum(v), v[3] + v[4])
+    return out
+
+def cpu_load(a, b):                           # average and the busiest thread, in %
+    avg, mx = 0, 0
+    for k, (t, i) in b.items():
+        if k not in a: continue
+        dt = t - a[k][0]; p = 100 * (dt - (i - a[k][1])) / dt if dt > 0 else 0
+        if k == "cpu": avg = p
+        else: mx = max(mx, p)
+    return round(avg), round(mx)
+
+def gpu_top(n=3):                             # programs by VRAM (amdgpu's per-client counters), MiB
+    seen, per = set(), {}
+    for fi in glob.glob("/proc/[0-9]*/fdinfo/*"):
+        try:
+            with open(fi) as f: t = f.read()
+        except OSError: continue
+        if "drm-memory-vram" not in t: continue
+        cid = re.search(r"drm-client-id:\s*(\d+)", t); v = re.search(r"drm-memory-vram:\s*(\d+)", t)
+        if not cid or not v or cid.group(1) in seen: continue
+        seen.add(cid.group(1)); pid = fi.split("/")[2]
+        c = rd(f"/proc/{pid}/comm", "?"); per[c] = per.get(c, 0) + int(v.group(1)) / 1024
+    return sorted(([c, round(m)] for c, m in per.items()), key=lambda x: -x[1])[:n]
+
+def ram_top():                                # the process with the most RAM
+    best = (0, "?")
+    for s in glob.glob("/proc/[0-9]*/statm"):
+        try: r = int(rd(s, "0 0").split()[1]) * 4096
+        except (ValueError, IndexError): continue
+        if r > best[0]: best = (r, rd(s[:-5] + "comm", "?"))
+    return [best[1], round(best[0] / 2**20)]
+
+class Monitor:
+    def __init__(self):
+        self.lock = threading.Lock(); self.running = False; self.thread = None
+        self.samples = []; self.total = 0; self.seen = 0.0; self.start = ""; self.errors = []; self.vmref = 0; self.first = 0
+
+    def info(self):
+        m = meminfo()
+        return {"vt": num(DEV + "/mem_info_vram_total") >> 20 if DEV else 0, "gt": num(DEV + "/mem_info_gtt_total") >> 20 if DEV else 0,
+                "rt": m.get("MemTotal", 0), "st": m.get("SwapTotal", 0), "threads": os.cpu_count(),
+                "zram": bool(glob.glob("/sys/block/zram*")), "host": os.uname().nodename}
+
+    def begin(self):
+        with self.lock:
+            self.seen = time.time()
+            if self.running: return
+            self.running = True; self.samples = []; self.total = 0; self.errors = []; self.vmref = 0; self.first += 1
+            self.start = time.strftime("%Y-%m-%d %H:%M:%S")
+            self.thread = threading.Thread(target=self.loop, daemon=True); self.thread.start()
+
+    def end(self):
+        with self.lock: self.running = False
+
+    def loop(self):
+        prev, n, top, rtop = cpu_times(), 0, [], ["?", 0]
+        while True:
+            time.sleep(EVERY)
+            with self.lock:
+                if not self.running: return
+                if time.time() - self.seen > IDLE_STOP: self.running = False; return
+            m = meminfo(); cur = cpu_times(); ca, cm = cpu_load(prev, cur); prev = cur
+            if n % 3 == 0:                    # the heavier looks every 6 s
+                top, rtop = gpu_top(), ram_top()
+                try:
+                    log = subprocess.run(["journalctl", "-k", "--since", self.start, "--no-pager", "-o", "cat"],
+                                         capture_output=True, text=True, timeout=10).stdout.splitlines()
+                    errs = [l for l in log if P_GPUMEM.search(l) and P_VMREF not in l]
+                    vm = sum(1 for l in log if P_VMREF in l)
+                except (OSError, subprocess.SubprocessError): errs, vm = self.errors, self.vmref
+            n += 1
+            zr = sum(int(rd(z, "0 0 0").split()[2]) for z in glob.glob("/sys/block/zram*/mm_stat")) // 2**20
+            s = {"t": time.strftime("%H:%M:%S"), "cpu": ca, "cpumax": cm, "gpu": num(DEV + "/gpu_busy_percent") if DEV else 0,
+                 "vram": num(DEV + "/mem_info_vram_used") >> 20 if DEV else 0, "gtt": num(DEV + "/mem_info_gtt_used") >> 20 if DEV else 0,
+                 "ram": m.get("MemTotal", 0) - m.get("MemAvailable", 0), "avail": m.get("MemAvailable", 0),
+                 "swap": m.get("SwapTotal", 0) - m.get("SwapFree", 0), "zram": zr,
+                 "tgpu": num(T_GPU) // 1000 if T_GPU else None, "tcpu": num(T_CPU) // 1000 if T_CPU else None,
+                 "top": top, "ramtop": rtop, "errors": len(errs)}
+            with self.lock:
+                self.samples.append(s); self.total += 1; self.samples = self.samples[-KEEP:]; self.errors = errs[-5:]; self.vmref = vm
+
+    def summary(self, info):                 # the peaks and the same verdict as the terminal monitor
+        S = self.samples
+        if not S: return {}
+        pk = lambda k: max((x[k] or 0) for x in S)
+        n = len(S); minav = min(x["avail"] for x in S); s0 = S[0]["swap"]
+        v = []
+        ram_short = minav < 512 or pk("swap") > s0 + 512
+        vram_full = info["vt"] > 0 and pk("vram") * 100 / info["vt"] >= 90
+        if info["st"] > 0 and pk("swap") >= info["st"] - 64:
+            v.append("La swap se llenó: si el juego pide más memoria, el sistema lo cierra. Agrándala (ajuste zram).")
+        if ram_short and vram_full:
+            v.append("Van justas las dos (VRAM llena y Linux tirando de swap): baja texturas o calidad en el juego.")
+        elif ram_short:
+            v.append("Se acabó la RAM, no la VRAM: baja la VRAM a su pico + 1 GB (ajuste vram) y las texturas del juego.")
+        elif vram_full:
+            v.append("La VRAM se llenó y a Linux le sobra RAM: sube la VRAM (ajuste vram) o baja la resolución.")
+        if sum(1 for x in S if x["gpu"] >= 95) * 2 >= n:
+            v.append("La GPU va al máximo casi siempre: ella marca los FPS. Baja resolución o calidad, o usa reescalado.")
+        elif sum(1 for x in S if x["cpumax"] >= 95 and x["gpu"] < 85) * 10 >= n * 3:
+            v.append("Un hilo de la CPU va lleno mientras la GPU espera: baja distancia de visión, multitudes o físicas.")
+        return {"vram": pk("vram"), "gtt": pk("gtt"), "ram": pk("ram"), "minavail": minav, "swap": pk("swap"), "swap0": s0,
+                "zram": pk("zram"), "cpu": pk("cpu"), "cpuavg": round(sum(x["cpu"] for x in S) / n),
+                "gpu": pk("gpu"), "gpuavg": round(sum(x["gpu"] for x in S) / n), "tgpu": pk("tgpu"), "tcpu": pk("tcpu"),
+                "verdict": v, "vmref": self.vmref}
+
+    def data(self, since):                   # since = how many samples of this session the page already has
+        info = self.info()
+        with self.lock:
+            if self.running: self.seen = time.time()
+            base = self.total - len(self.samples); off = since - base
+            reset = off < 0 or off > len(self.samples)
+            return {"running": self.running, "session": self.first, "start": self.start, "info": info,
+                    "total": self.total, "reset": reset, "samples": self.samples if reset else self.samples[off:],
+                    "summary": self.summary(info), "errors": self.errors}
+
+    def csv(self):
+        head = "hora,cpu_pct,cpu_hilo_max_pct,gpu_pct,vram_usada_mb,gtt_mb,ram_usada_mb,ram_disponible_mb,swap_usada_mb,zram_en_ram_mb,temp_cpu_c,temp_gpu_c,errores_gpu,top_vram,top_ram"
+        with self.lock: S = list(self.samples)
+        rows = [head] + [",".join(map(str, [x["t"], x["cpu"], x["cpumax"], x["gpu"], x["vram"], x["gtt"], x["ram"], x["avail"],
+                        x["swap"], x["zram"], x["tcpu"] if x["tcpu"] is not None else "", x["tgpu"] if x["tgpu"] is not None else "",
+                        x["errors"], '"' + " ".join(f"{c} {m}M" for c, m in x["top"]) + '"', f'"{x["ramtop"][0]} {x["ramtop"][1]}M"'])) for x in S]
+        return "\n".join(rows) + "\n"
+
+MON = Monitor()
+
+class H(BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+
+    def ok_client(self):
+        try: a = ipaddress.ip_address(self.client_address[0])
+        except ValueError: return False
+        if a.version == 6 and a.ipv4_mapped: a = a.ipv4_mapped
+        return a.is_private or a.is_loopback
+
+    def send(self, code, body, ctype, extra=()):
+        b = body.encode() if isinstance(body, str) else body
+        self.send_response(code); self.send_header("Content-Type", ctype); self.send_header("Content-Length", str(len(b)))
+        self.send_header("Cache-Control", "no-store")
+        for k, v in extra: self.send_header(k, v)
+        self.end_headers(); self.wfile.write(b)
+
+    def do_GET(self):
+        if not self.ok_client(): return self.send(403, "Solo desde tu red de casa.\n", "text/plain; charset=utf-8")
+        path, _, q = self.path.partition("?")
+        if path == "/": return self.send(200, PAGE, "text/html; charset=utf-8")
+        if path == "/data":
+            m = re.search(r"since=(-?\d+)", q)
+            return self.send(200, json.dumps(MON.data(int(m.group(1)) if m else 0)), "application/json")
+        if path == "/csv":
+            return self.send(200, MON.csv(), "text/csv; charset=utf-8",
+                             [("Content-Disposition", f'attachment; filename="ps5-mem-{time.strftime("%Y%m%d-%H%M%S")}.csv"')])
+        if path == "/manifest.json":
+            return self.send(200, json.dumps({"name": "Monitor PS5", "short_name": "Monitor PS5", "start_url": "/",
+                                              "display": "standalone", "background_color": "#101418", "theme_color": "#101418"}),
+                             "application/manifest+json")
+        self.send(404, "No existe.\n", "text/plain; charset=utf-8")
+
+    def do_POST(self):
+        if not self.ok_client(): return self.send(403, "", "text/plain")
+        if self.path == "/start": MON.begin()
+        elif self.path == "/stop": MON.end()
+        else: return self.send(404, "", "text/plain")
+        self.send(200, "{}", "application/json")
+
+PAGE = r"""<!doctype html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101418">
+<link rel="manifest" href="/manifest.json"><title>Monitor PS5</title>
+<style>
+:root{--bg:#101418;--card:#1a2027;--line:#2a323b;--tx:#e6ebf0;--mu:#8b98a5;--ok:#3fb950;--warn:#d29922;--bad:#f85149;--acc:#58a6ff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.4 system-ui,-apple-system,sans-serif;padding:12px 12px 40px}
+h1{font-size:18px;margin:4px 0 2px}.sub{color:var(--mu);font-size:13px;margin-bottom:12px}
+.row{display:flex;gap:8px;margin-bottom:12px}button,.btn{flex:1;border:0;border-radius:10px;padding:12px;font:600 16px system-ui;color:#fff;background:var(--acc);text-align:center;text-decoration:none}
+button.stop{background:#30363d}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px}
+.k{color:var(--mu);font-size:12px;text-transform:uppercase;letter-spacing:.04em}.v{font-size:22px;font-weight:700;margin:2px 0}
+.v small{font-size:13px;color:var(--mu);font-weight:500}canvas{width:100%;height:42px;display:block}
+.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}.full{grid-column:1/-1}
+ul{margin:6px 0 0;padding-left:18px}li{margin:3px 0}.mu{color:var(--mu)}
+</style></head><body>
+<h1>Monitor PS5</h1><div class="sub" id="sub">conectando…</div>
+<div class="row"><button id="go">Empezar</button><a class="btn" id="csv" href="/csv" style="display:none;background:#30363d">CSV</a></div>
+<div class="grid" id="tiles"></div>
+<div class="card full" style="margin-top:8px"><div class="k">Más VRAM</div><div id="top" class="mu">—</div></div>
+<div class="card full" style="margin-top:8px"><div class="k">Picos y veredicto</div><div id="sum" class="mu">Pulsa Empezar y juega: aquí saldrá qué te limita.</div></div>
+<script>
+const T=[["cpu","CPU","%"],["gpu","GPU","%"],["vram","VRAM","GB"],["gtt","GTT","GB"],["ram","RAM","GB"],["swap","Swap","GB"],["tcpu","Temp. CPU","°C"],["tgpu","Temp. GPU","°C"]];
+let S=[],got=0,info={},running=false,session=0,timer=null;
+const g=b=>(b/1024).toFixed(1), $=id=>document.getElementById(id);
+$("tiles").innerHTML=T.map(([k,n])=>`<div class="card"><div class="k">${n}</div><div class="v" id="v_${k}">—</div><canvas id="c_${k}"></canvas></div>`).join("");
+function cls(k,x){const vt=info.vt||1;if(k=="vram")return x.vram/vt>=.9?"bad":x.vram/vt>=.8?"warn":"ok";
+ if(k=="ram")return x.avail<512?"bad":x.avail<1024?"warn":"ok";if(k=="gpu")return x.gpu>=95?"warn":"ok";
+ if(k=="cpu")return x.cpumax>=95?"warn":"ok";if(k=="tgpu"||k=="tcpu")return (x[k]||0)>=90?"bad":(x[k]||0)>=80?"warn":"ok";
+ if(k=="swap")return info.st&&x.swap>=info.st-64?"bad":"ok";return"ok"}
+function text(k,x){switch(k){case"cpu":return`${x.cpu}% <small>hilo ${x.cpumax}%</small>`;case"gpu":return`${x.gpu}%`;
+ case"vram":return`${g(x.vram)} <small>/ ${g(info.vt)}</small>`;case"gtt":return`${g(x.gtt)} <small>/ ${g(info.gt)}</small>`;
+ case"ram":return`${g(x.ram)} <small>/ ${g(info.rt)}</small>`;case"swap":return`${g(x.swap)} <small>/ ${g(info.st)}${info.zram?` · en RAM ${g(x.zram)}`:""}</small>`;
+ default:return x[k]==null?"—":`${x[k]}°`}}
+function max(k){return {cpu:100,gpu:100,vram:info.vt,gtt:info.gt,ram:info.rt,swap:info.st||1,tcpu:100,tgpu:100}[k]||1}
+function spark(k){const c=$("c_"+k),w=c.width=c.clientWidth*devicePixelRatio,h=c.height=42*devicePixelRatio,x=c.getContext("2d");
+ const d=S.slice(-150),m=max(k);x.clearRect(0,0,w,h);if(d.length<2)return;x.beginPath();
+ d.forEach((s,i)=>{const px=i*w/(d.length-1),py=h-(Math.min(s[k]||0,m)/m)*(h-4)-2;i?x.lineTo(px,py):x.moveTo(px,py)});
+ x.strokeStyle=getComputedStyle(document.body).getPropertyValue("--acc");x.lineWidth=2*devicePixelRatio;x.stroke()}
+function draw(){const x=S[S.length-1];
+ $("sub").textContent=`${info.host||"PS5"} · ${running?"midiendo cada 2 s desde "+(window._start||""):S.length?"parado ("+S.length+" medidas)":"en espera"}`;
+ $("go").textContent=running?"Parar":"Empezar";$("go").className=running?"stop":"";$("csv").style.display=S.length?"":"none";
+ if(!x)return;T.forEach(([k])=>{const e=$("v_"+k);e.innerHTML=text(k,x);e.className="v "+cls(k,x);spark(k)});
+ $("top").innerHTML=x.top.length?x.top.map(([c,m])=>`${c} <b>${(m/1024).toFixed(1)} GB</b>`).join(" · ")+`<br><span class="mu">más RAM: ${x.ramtop[0]} ${(x.ramtop[1]/1024).toFixed(1)} GB</span>`:"ningún programa usa la GPU"}
+function summary(s,err){if(!s||!s.vram&&s.vram!==0){return}
+ let h=`<ul><li>VRAM ${g(s.vram)} de ${g(info.vt)} GB · GTT ${g(s.gtt)} GB</li><li>RAM ${g(s.ram)} de ${g(info.rt)} GB (libre como mínimo ${g(s.minavail)})</li>
+ <li>Swap ${g(s.swap)} GB (al empezar ${g(s.swap0)})</li><li>CPU ${s.cpuavg}% de media, ${s.cpu}% máx. · GPU ${s.gpuavg}% de media, ${s.gpu}% máx.</li>
+ <li>Temperatura CPU ${s.tcpu||"?"}° · GPU ${s.tgpu||"?"}°</li></ul>`;
+ if(err&&err.length)h+=`<div class="bad" style="margin-top:6px">Errores de memoria de la GPU:</div><ul class="bad">${err.map(e=>`<li>${e.replace(/</g,"&lt;")}</li>`).join("")}</ul>`;
+ if(s.vmref)h+=`<div class="mu" style="margin-top:6px">${s.vmref} reservas de memoria rechazadas (no son de la GPU; los emuladores lo hacen y siguen).</div>`;
+ h+=s.verdict.length?`<ul>${s.verdict.map(v=>`<li class="warn">${v}</li>`).join("")}</ul>`:`<div class="ok" style="margin-top:6px">Sin aprietos por ahora.</div>`;
+ $("sum").innerHTML=h}
+async function poll(){try{const same=session&&got,r=await fetch("/data?since="+(same?got:-1)),d=await r.json();
+ info=d.info;running=d.running;window._start=(d.start||"").slice(11);
+ if(d.session!=session||d.reset||!same){session=d.session;S=d.samples}else S=S.concat(d.samples).slice(-1800);
+ got=d.total;draw();summary(d.summary,d.errors)}catch(e){$("sub").textContent="sin conexión con la PS5…"}
+ clearTimeout(timer);if(document.visibilityState=="visible")timer=setTimeout(poll,running?2000:5000)}
+$("go").onclick=async()=>{await fetch(running?"/stop":"/start",{method:"POST"});setTimeout(poll,300)};
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState=="visible")poll()});poll();
+</script></body></html>"""
+
+if __name__ == "__main__":
+    srv = ThreadingHTTPServer(("0.0.0.0", PORT), H); srv.daemon_threads = True
+    print(f"Monitor PS5 en http://<dirección de la consola>:{PORT}", flush=True)
+    srv.serve_forever()
+__MONWEB__
+}
+lan_dev() { ip route show default 2>/dev/null | awk '{ for (i = 1; i < NF; i++) if ($i == "dev") { print $(i + 1); exit } }'; }
+lan_net() { ip -o -4 route show dev "$(lan_dev)" scope link 2>/dev/null | awk '{ print $1; exit }'; }
+lan_ip() { ip -o -4 addr show dev "$(lan_dev)" 2>/dev/null | awk '{ sub(/\/.*/, "", $4); print $4; exit }'; }
+monweb_rule() { printf 'rule family="ipv4" source address="%s" port port="%s" protocol="tcp" accept' "$(lan_net)" "$MONWEB_PORT"; }
+monweb_fw() { systemctl is-active -q firewalld; }
+desc_monitorweb() {
+    section
+    say "El monitor en directo (opción 4) en el navegador del móvil: http://$(lan_ip || echo '<IP de la consola>'):$MONWEB_PORT"
+    say "Guárdalo en la pantalla de inicio. «Empezar» mide cada 2 s (CPU, GPU, VRAM, RAM, swap, temperaturas,"
+    say "qué gasta más, picos y qué te limita) y deja bajar el CSV; sin nadie mirando 30 s, para solo."
+    say "Instala $MONWEB_PY y el servicio de tu usuario ps5-monitor-web (arranca con la sesión, sin root), y abre"
+    say "el puerto $MONWEB_PORT en el cortafuegos solo para tu red ($(lan_net)). Solo enseña datos; no tiene clave:"
+    say "cualquiera en tu red que sepa la dirección lo puede ver. Esperando gasta ~25 MB de RAM y nada de CPU."
+    say "POR QUÉ: ver cómo va un juego desde el móvil, sin SSH ni abrir nada en la consola."
+    say "DESHACER: systemctl --user disable --now ps5-monitor-web; rm $MONWEB_UNIT $MONWEB_PY;"
+    say "  sudo firewall-cmd --permanent --remove-rich-rule='$(monweb_rule)'; sudo firewall-cmd --reload"
+}
+check_monitorweb() {
+    command -v python3 >/dev/null || return 2
+    cmp -s <(monweb_script) "$MONWEB_PY" || return 1          # missing, or an older toolbox's version
+    systemctl --user is-enabled -q ps5-monitor-web 2>/dev/null && systemctl --user is-active -q ps5-monitor-web || return 1
+    ! monweb_fw || sudo firewall-cmd --query-rich-rule="$(monweb_rule)" >/dev/null 2>&1
+}
+apply_monitorweb() {
+    mkdir -p "$(dirname "$MONWEB_PY")" "$(dirname "$MONWEB_UNIT")" || return 1
+    monweb_script >"$MONWEB_PY" || return 1
+    cat >"$MONWEB_UNIT" <<EOF || return 1
+[Unit]
+Description=Monitor de la PS5 en el navegador (ps5-bazzite-toolbox, bloque monitorweb)
+
+[Service]
+ExecStart=/usr/bin/python3 $MONWEB_PY --port $MONWEB_PORT
+Restart=on-failure
+Nice=10
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=default.target
+EOF
+    systemctl --user daemon-reload && systemctl --user enable ps5-monitor-web && systemctl --user restart ps5-monitor-web || return 1
+    if monweb_fw; then
+        sudo firewall-cmd --permanent --add-rich-rule="$(monweb_rule)" >/dev/null && sudo firewall-cmd --reload >/dev/null || return 1
+    fi
+    sleep 1
+    curl -fs -o /dev/null "http://127.0.0.1:$MONWEB_PORT/" || { echo "  El servicio no responde: journalctl --user -u ps5-monitor-web"; return 1; }
+    say "Ábrelo en el móvil (conectado a tu wifi): http://$(lan_ip):$MONWEB_PORT"
+}
+
 # --- atajos --------------------------------------------------------------------------------------
 # Desktop shortcuts that call this toolbox, so they follow it when it is updated.
 TOOLBOX_SELF=$(realpath "$0" 2>/dev/null)
@@ -1068,7 +1396,8 @@ default_for() {
     case $1 in
         warmreboot) echo N ;;
         hdmi) warm_on && echo S || echo N ;;
-        brave|edge) echo N ;;            # loses the browser's saved logins: only if the wallet prompt bothers you
+        brave|edge) echo N ;;
+        monitorweb) echo N ;;            # a server always listening: only if you want it            # loses the browser's saved logins: only if the wallet prompt bothers you
         nas) [ -n "${NAS_IP:-}" ] && echo S || echo N ;;
         bios|media) echo N ;;            # a choice, not a fix: only if you want them shared from the NAS
         gpu40) echo N ;;                 # silicon lottery: only if you want to try it
@@ -1421,6 +1750,7 @@ mem_watch() {
     st=$(awk '/^SwapTotal:/ { print int($2 / 1024) }' /proc/meminfo)
     echo "Memoria en directo: VRAM $((vt / 1024)) GB, RAM de Linux $(awk -v r="$rt" 'BEGIN { printf "%.1f", r / 1024 }') GB, swap $(awk -v s="$st" 'BEGIN { printf "%.1f", s / 1024 }') GB$(ls /sys/block/zram* >/dev/null 2>&1 && echo ' (zram: comprimida en la RAM)')."
     echo "Ctrl+C para parar y ver los picos (al final puedes guardar cada medida en un CSV)."
+    systemctl --user is-active -q ps5-monitor-web 2>/dev/null && echo "También en el móvil: http://$(lan_ip):$MONWEB_PORT"
     echo "CPU: media de los $(nproc) hilos y, entre paréntesis, el hilo más cargado. temp: CPU/GPU."
     printf '%-8s %-10s %-5s %-15s %-13s %-14s %-21s %-8s %s\n' hora CPU GPU VRAM GTT RAM "swap (en RAM)" temp "más VRAM"
     cpu0=$(grep '^cpu' /proc/stat)

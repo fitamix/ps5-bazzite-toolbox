@@ -177,6 +177,7 @@ pregunta con una respuesta recomendada (`[S/n]` = sí por defecto, `[s/N]` = no)
 | [`esde`](#esde) | Arregla el `es_systems.xml` que deja EmuDeck | sí | no |
 | [`portproton`](#portproton) | Sincronización rápida y trazado de rayos para todos los juegos de PortProton | sí | no |
 | [`atajos`](#atajos) | Botón derecho de Dolphin, comando `espacio` y acceso «Colección PortProton» | sí | no |
+| [`monitorweb`](#monitorweb) | El monitor en directo en el navegador del móvil, siempre disponible | no | no |
 
 Los comandos de cada bloque son lo que hace la caja, con los valores por defecto; cámbialos por los tuyos.
 
@@ -531,6 +532,35 @@ no se mueve). Si Dolphin estaba abierto, ciérralo y ábrelo. No aplica si la ca
 **Deshacer:**
 `rm ~/.local/share/kio/servicemenus/ps5-bazzite-toolbox-*.desktop "$(xdg-user-dir DESKTOP)/portproton-collection.desktop"; sudo rm /usr/local/bin/espacio`.
 
+### `monitorweb`
+
+**Qué cambia:** el monitor en directo de la [opción 4](#diagnóstico) pasa a estar siempre disponible en el navegador
+del móvil, en `http://<IP de la consola>:8765` (la caja te dice la dirección; guárdala en la pantalla de inicio).
+«Empezar» mide cada 2 s CPU (media y el hilo más cargado), GPU, VRAM, GTT, RAM, swap y temperaturas, con su gráfica,
+los programas que más VRAM usan, los errores de memoria de la GPU, los picos y el mismo veredicto que la opción 4
+(si falta VRAM o RAM, si te limita la GPU o un hilo de la CPU); «CSV» baja todas las medidas. Si nadie mira la página
+durante 30 s (móvil bloqueado, pestaña cerrada), deja de medir sola.
+**Por qué:** ver cómo va un juego mientras juegas, sin SSH ni abrir nada en la consola.
+**Cómo:** un servidor en Python (el de la consola, sin instalar nada) como servicio de tu usuario, sin root: arranca
+con la sesión, también en el modo juego. Esperando no hace nada (unos 25 MB de RAM); midiendo, un 1 % de un hilo.
+Solo enseña datos y solo contesta a direcciones de redes privadas; el cortafuegos abre el puerto solo para tu red.
+**No tiene clave**: cualquiera conectado a tu red que sepa la dirección lo puede ver. No se recomienda por defecto.
+La CPU y la GPU de la PS5 son el mismo chip: sus dos temperaturas salen casi siempre iguales.
+
+```sh
+# el script es el que lleva dentro la caja (búscalo entre __MONWEB__): ~/.local/share/ps5-bazzite-toolbox/monitor-web.py
+mkdir -p ~/.config/systemd/user
+printf '[Unit]\nDescription=Monitor PS5\n[Service]\nExecStart=/usr/bin/python3 %%h/.local/share/ps5-bazzite-toolbox/monitor-web.py --port 8765\nRestart=on-failure\nNice=10\n[Install]\nWantedBy=default.target\n' \
+  > ~/.config/systemd/user/ps5-monitor-web.service
+systemctl --user daemon-reload && systemctl --user enable --now ps5-monitor-web
+sudo firewall-cmd --permanent --add-rich-rule='rule family="ipv4" source address="192.168.1.0/24" port port="8765" protocol="tcp" accept'
+sudo firewall-cmd --reload                     # cambia 192.168.1.0/24 por tu red: ip -4 route
+```
+
+**Deshacer:** `systemctl --user disable --now ps5-monitor-web; rm ~/.config/systemd/user/ps5-monitor-web.service
+~/.local/share/ps5-bazzite-toolbox/monitor-web.py`, y la misma orden `firewall-cmd` con `--remove-rich-rule` y
+`--reload`.
+
 ## PortProton y Steam
 
 En Dolphin (tras el bloque `atajos`), botón derecho sobre un `.exe`: **«Instalar en PortProton y Steam»**,
@@ -803,6 +833,7 @@ queda ahí para repetir.
 | `~/ES-DE/custom_systems/es_systems.xml` | `esde` | `es_systems.xml.bak-<fecha>` |
 | `~/.var/app/ru.linux_gaming.PortProton/data/user.conf` | `portproton` | `user.conf.bak-<fecha>` |
 | `~/.local/share/kio/servicemenus/ps5-bazzite-toolbox-*.desktop`, `/usr/local/bin/espacio`, `portproton-collection.desktop` en el escritorio | `atajos` | — |
+| `~/.local/share/ps5-bazzite-toolbox/monitor-web.py`, `~/.config/systemd/user/ps5-monitor-web.service`, una regla del cortafuegos (puerto 8765, solo tu red) | `monitorweb` | — |
 | `/etc/sddm.conf.d/zzz-ps5-session.conf` | opciones 8 y 9 | — |
 
 ### Lo que toca al instalar o quitar un juego (opciones 10 y 11)
