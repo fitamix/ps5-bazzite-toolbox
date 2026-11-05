@@ -38,7 +38,7 @@
 # Setup blocks: locale cmdline wifi updates vram gpu40 zram fans warmreboot hdmi bt disk brave edge nas bios media esde portproton atajos
 set -uo pipefail
 
-TOOLBOX_VERSION=1.8.0                    # bump on every release (see CHANGELOG.md and release.sh)
+TOOLBOX_VERSION=1.9.0                    # bump on every release (see CHANGELOG.md and release.sh)
 TOOLBOX_REPO=fitamix/ps5-bazzite-toolbox
 TOOLBOX_BIN=$HOME/.local/bin/ps5-bazzite-toolbox                      # where --install puts it
 TOOLBOX_DESKTOP=$HOME/.local/share/applications/ps5-bazzite-toolbox.desktop
@@ -79,6 +79,13 @@ if [ -z "$MODE" ]; then if [ -t 0 ]; then MODE=menu; else MODE=check; fi; fi
 U=$(id -un)
 if [ -t 1 ]; then G=$'\e[32m' Y=$'\e[33m' R=$'\e[31m' B=$'\e[1m' N=$'\e[0m'; else G='' Y='' R='' B='' N=''; fi
 VERSION=$(awk 'NR == 1 { sub(/^v/, "", $1); print $1 }' /etc/ps5-bazzite-deck-version 2>/dev/null)
+# A bootc install (from v2.5: the whole system is one image; bootc updates it and keeps the previous one) writes
+# "<build> (bootc, ps5-bazzite-deck vX.Y)" there: its version is the deck= of the image's own VERSION file.
+IS_BOOTC=0; [ -e /run/ostree-booted ] && IS_BOOTC=1
+if [ $IS_BOOTC = 1 ]; then
+    v=$(sed -n 's/^deck=v\{0,1\}\([0-9][0-9.]*\).*/\1/p' /usr/share/ps5-bazzite-bootc/VERSION 2>/dev/null); v=${v%.}
+    [ -n "$v" ] && VERSION=$v
+fi
 ver_ge() { [ -n "$VERSION" ] && printf '%s\n%s\n' "$1" "$VERSION" | sort -V -C; }   # image version >= $1
 # Reports, the monitor's CSV and the image update's log are written to a temporary file; at the end the toolbox
 # asks whether to keep it and where (Enter = the current folder). Nothing is left behind unasked.
@@ -197,10 +204,14 @@ apply_locale() {
 }
 
 # --- cmdline -------------------------------------------------------------------------------------
+quirk_for() {                            # quirk_for VID:PID -> the letters a drive known here needs (1 if none)
+    case $1 in 21c4:0003) echo um ;;     # Lexar ES3: UAS errors and resets
+               *) return 1 ;; esac
+}
 want_quirk() {                           # quirk letters for the boot drive: saved answer, else a guess
     [ -n "${USB_QUIRK+x}" ] && { echo "$USB_QUIRK"; return; }
     local u; u=$(root_usb) || return 0
-    case ${u%% *} in 21c4:0003) echo um; return ;; esac        # Lexar ES3: UAS errors and resets
+    quirk_for "${u%% *}" && return
     [ "${u#* }" = uas ] && [ "$(usb_errors)" -gt 0 ] && echo u
 }
 desc_cmdline() {
@@ -279,9 +290,11 @@ desc_updates() {
     say "POR QUÉ: la imagen no es ostree (ujust update y rpm-ostree no sirven) y esos paquetes llevan"
     say "parches para la PS5: un dnf upgrade los sustituiría por los normales y podría no arrancar."
     say "Las actualizaciones de la imagen se hacen con su propio update.sh (ver el README del autor)."
+    say "En una instalación bootc no aplica: ahí las actualizaciones son las del autor (opción 17) y se deshacen."
     say "DESHACER: sudo systemctl unmask uupd.timer rpm-ostreed-automatic.timer; borra 90-ps5-hold.conf."
 }
 check_updates() {
+    [ $IS_BOOTC = 1 ] && return 2        # bootc updates are the image's own, whole and undoable: never block them
     [ "$(systemctl is-enabled uupd.timer 2>/dev/null)" = masked ] &&
         [ "$(systemctl is-enabled rpm-ostreed-automatic.timer 2>/dev/null)" = masked ] &&
         grep -qs '^excludepkgs=kernel\*,mesa-\*,linux-firmware\*,gamescope\*' /etc/dnf/libdnf5.conf.d/90-ps5-hold.conf || return 1     # grep says 2 for a missing file: that is pending, not "doesn't apply"
@@ -1655,6 +1668,7 @@ offer_install() {                        # once, from the menu: run from a downl
 
 update_image() {
     local want=${1:-} tmp n i c tag date kind type url sha title src lfile lsha def='' dir log rc online=1 d
+    if [ $IS_BOOTC = 1 ]; then if [ -n "$want" ]; then bootc_menu switch "$want"; else bootc_menu upgrade; fi; return; fi
     command -v python3 >/dev/null || { echo "Falta python3." >&2; return 1; }
     tmp=$(mktemp -d)
     echo "==> Consultando las versiones de $REPO en GitHub…"
@@ -1973,6 +1987,7 @@ img_snap_take() {                        # img_snap_take [BUNDLE_DIR [NOTE [PATH
 }
 img_rollback() {
     local list n i c d v k dt cur_k f st
+    [ $IS_BOOTC = 1 ] && { bootc_menu rollback; return; }
     need_sudo || return 1
     list=$(img_snap_list)
     if [ -z "$list" ]; then
@@ -2036,7 +2051,67 @@ img_rollback() {
     yesno "¿Apagar ahora?" N && sudo poweroff
     return 0
 }
+# --- bootc: the image is updated, rolled back and switched by bootc itself -----------------------------------------
+BOOTC_IMG=ghcr.io/vivalavent/ps5-bazzite-bootc
+bootc_ref() { sudo bootc status --format=json 2>/dev/null | jq -r '.spec.image.image // .status.booted.image.image.image // empty'; }
+bootc_after() {
+    echo "  Al reiniciar, la PS5 pasa primero por su sistema: luego lanza el cargador bazzite-bootc-loader como siempre."
+    echo "  Si la nueva no te convence: opción 17 → volver a la anterior (sudo bootc rollback)."
+}
+bootc_v25_fix() {                        # v2.5's image breaks every update (its notes for v2.5.1): offer the author's fix
+    [ "$VERSION" = 2.5 ] || return 0
+    grep -qs 'No greenboot rollbacks' /etc/systemd/system/greenboot-set-rollback-trigger.service && return 0
+    section
+    say "La v2.5 tiene un fallo: toda actualización termina en «Failed to start ostree-finalize-staged.service»."
+    say "El arreglo del autor (notas de la v2.5.1) cambia el servicio greenboot-set-rollback-trigger por uno que"
+    say "no hace nada, una vez; las versiones siguientes lo respetan."
+    say "DESHACER: sudo rm /etc/systemd/system/greenboot-set-rollback-trigger.service; sudo systemctl daemon-reload"
+    yesno "¿Lo aplico ahora (hace falta para actualizar)?" S || return 1
+    sudo rm -f /etc/systemd/system/greenboot-set-rollback-trigger.service
+    printf '[Unit]\nDescription=No greenboot rollbacks on the PS5\n\n[Service]\nType=oneshot\nExecStart=/usr/bin/true\nRemainAfterExit=yes\n' |
+        sudo tee /etc/systemd/system/greenboot-set-rollback-trigger.service >/dev/null &&
+        sudo systemctl daemon-reload && sudo systemctl start ostree-finalize-staged.service && echo "  Listo para actualizar."
+}
+bootc_menu() {                           # bootc_menu [upgrade|rollback|switch [TAG]]
+    local c=${1:-} tag=${2:-} ref tags
+    need_sudo || return 1
+    ref=$(bootc_ref)
+    echo
+    echo "${B}Imagen bootc${N}: el sistema entero es una imagen; bootc la actualiza y guarda la anterior en el disco."
+    echo "  Sigue: ${ref:-?}  (stable = las versiones estables, cada semana; vX.Y = esa versión fija)"
+    sudo bootc status 2>/dev/null | grep -E '^(●|  )?(Booted|Staged|Rollback)|image:|Version' | sed 's/^/  /' | head -12
+    if [ -z "$c" ]; then
+        echo "  1) Actualizar: descarga la siguiente del canal que sigues (sudo bootc upgrade); entra al reiniciar"
+        echo "  2) Volver a la versión anterior (sudo bootc rollback); entra al reiniciar"
+        echo "  3) Cambiar de canal o fijar una versión (sudo bootc switch $BOOTC_IMG:<etiqueta>)"
+        read -rp "Elige (0 = cancelar): " c
+        case $c in 1) c=upgrade ;; 2) c=rollback ;; 3) c=switch ;; *) return 0 ;; esac
+    fi
+    case $c in
+        upgrade) bootc_v25_fix || return 1
+                 sudo bootc upgrade && bootc_after ;;
+        rollback) section
+                  say "Al reiniciar arranca la versión que había antes de la última actualización o cambio; la de"
+                  say "ahora se queda como «anterior», así que esto también se deshace igual. Tus ficheros no cambian."
+                  yesno "¿Vuelvo a la anterior?" S && sudo bootc rollback && bootc_after ;;
+        switch) if [ -z "$tag" ]; then
+                    tags=$(curl -fsSL --retry 2 "https://api.github.com/repos/$REPO/releases?per_page=100" 2>/dev/null |
+                        jq -r '.[] | .tag_name + (if .prerelease then " (preliminar)" else "" end)' 2>/dev/null |
+                        awk '{ v = $1; sub(/^v/, "", v); split(v, a, "."); if (a[1] > 2 || (a[1] == 2 && a[2] >= 5)) print "  " $0 }')
+                    echo "  Etiquetas: stable (recomendada) o una versión de bootc:"; echo "${tags:-  (sin red: no puedo listarlas)}"
+                    read -rp "  ¿Cuál? (Intro = stable): " tag; tag=${tag:-stable}
+                fi
+                bootc_v25_fix || return 1
+                section
+                say "Cambia la imagen que sigue esta consola a $BOOTC_IMG:$tag y la descarga; entra al reiniciar."
+                say "Con una versión fija (vX.Y) ya no recibe las semanales: vuelve con «stable»."
+                say "DESHACER: opción 17 → volver a la anterior, o cambiar otra vez."
+                yesno "¿Cambio a $tag?" S && sudo bootc switch "$BOOTC_IMG:$tag" && bootc_after ;;
+    esac
+}
+
 img_menu() {
+    [ $IS_BOOTC = 1 ] && { bootc_menu; return; }
     local c n; n=$(img_snap_list | wc -l)
     echo "  1) Instalar una versión de GitHub (la más nueva u otra, también anterior)"
     echo "  2) Volver a como estaba la imagen antes de una actualización ($n copia(s) guardada(s)) [EN PRUEBAS]"
@@ -3406,7 +3481,96 @@ bk_find() {                              # bk_find PATH -> BK_KIND (copy|home) B
     return 1
 }
 
-bk_restore() {
+# --- the other disk: listed, mounted read-only and, if its system needed one, given its USB quirk ----------------
+BK_MDEV='' BK_MSUDO=0                    # what bk_mount mounted, to unmount it at the end
+bk_disks() {                             # Linux partitions of the other disks: dev, size, fs, label, model, bus, mount point
+    lsblk -Jpo NAME,FSTYPE,SIZE,LABEL,MOUNTPOINT,MODEL,TRAN 2>/dev/null | jq -r '
+        .blockdevices[] | select([.children[]?.mountpoint // empty | select(test("^/(sysroot|var|boot|efi|var/home)?$"))] | length == 0)
+        | . as $d | .children[]? | select((.fstype // "") | test("^(ext4|btrfs|xfs)$"))
+        | [.name, .size, .fstype, (.label // "-"), (($d.model // "-") | sub("\\s+$"; "")), ($d.tran // "-"), (.mountpoint // "")] | @tsv'
+}
+bk_mount() {                             # bk_mount DEV -> BK_MP, mounted read-only (as you with udisks; else with sudo)
+    local out
+    BK_MP=$(lsblk -no MOUNTPOINT "$1" 2>/dev/null | head -1); [ -n "$BK_MP" ] && return 0
+    if out=$(udisksctl mount -b "$1" -o ro --no-user-interaction 2>&1); then
+        BK_MP=$(sed -n 's/^Mounted .* at \(.*\)$/\1/p' <<<"$out"); BK_MP=${BK_MP%.}; BK_MDEV=$1 BK_MSUDO=0
+    else
+        need_sudo || return 1
+        BK_MP=/mnt/ps5-origen; sudo mkdir -p "$BK_MP" && sudo mount -o ro "$1" "$BK_MP" || return 1
+        BK_MDEV=$1 BK_MSUDO=1
+    fi
+    echo "  Montado (solo lectura) en $BK_MP."
+}
+bk_umount() {
+    [ -n "$BK_MDEV" ] || return 0
+    if [ "$BK_MSUDO" = 1 ]; then sudo umount "$BK_MP"; else udisksctl unmount -b "$BK_MDEV" --no-user-interaction >/dev/null; fi &&
+        echo "  Desmontado $BK_MDEV."
+    BK_MDEV=''
+}
+bk_usb_quirk() {                         # bk_usb_quirk DEV -> if the drive's own system used it without UAS, the same now
+    local dev=$1 disk props vp drv q uuid cur i
+    disk=/dev/$(lsblk -no PKNAME "$dev" 2>/dev/null | head -1)
+    props=$(udevadm info -q property -n "$disk" 2>/dev/null)
+    grep -q '^ID_BUS=usb' <<<"$props" || return 0
+    vp=$(sed -n 's/^ID_VENDOR_ID=//p' <<<"$props"):$(sed -n 's/^ID_MODEL_ID=//p' <<<"$props")
+    drv=$(sed -n 's/^ID_USB_DRIVER=//p' <<<"$props")
+    [ "$drv" = uas ] || return 0         # already without UAS: quirk on, or a plain usb-storage drive
+    q=$(sed -n "s/^USB_QUIRK=//p" "$BK_SRC/.config/ps5-bazzite-toolbox.conf" 2>/dev/null | tail -1 | tr -d "'\"")
+    [ -n "$q" ] || q=$(quirk_for "$vp") || return 0
+    [[ $q == *u* ]] || return 0
+    section
+    say "Este disco ($vp) va ahora con UAS, y su sistema lo usaba con usb-storage.quirks=$vp:$q: con UAS daba"
+    say "errores y atascos, justo lo que no quieres en una copia larga. Lo pongo para este disco hasta que reinicies"
+    say "(no cambia el arranque de nadie) y lo vuelves a enchufar."
+    yesno "¿Lo pongo?" S || return 0
+    need_sudo || return 1
+    uuid=$(lsblk -no UUID "$dev" 2>/dev/null)
+    bk_umount
+    cur=$(cat /sys/module/usb_storage/parameters/quirks 2>/dev/null)
+    [[ ,$cur, == *",$vp:"* ]] || printf '%s' "${cur:+$cur,}$vp:$q" | sudo tee /sys/module/usb_storage/parameters/quirks >/dev/null || return 1
+    read -rp "  Desenchufa el disco, vuelve a enchufarlo y pulsa Intro… " _
+    for i in $(seq 60); do
+        dev=$(lsblk -rnpo NAME,UUID 2>/dev/null | awk -v u="$uuid" '$2 == u { print $1; exit }'); [ -n "$dev" ] && break; sleep 1
+    done
+    [ -n "$dev" ] || { echo "  No vuelve a aparecer el disco."; return 1; }
+    disk=/dev/$(lsblk -no PKNAME "$dev" | head -1)
+    drv=$(udevadm info -q property -n "$disk" 2>/dev/null | sed -n 's/^ID_USB_DRIVER=//p')
+    [ "$drv" = usb-storage ] && echo "  ${G}✔${N} Ahora va sin UAS." || echo "  ${Y}!${N} Sigue con $drv: puede dar errores."
+    BK_DEV=$dev
+}
+
+bk_restore() {                           # bk_restore [DIR] -> picks where from (a copy, another disk), then bk_restore_do
+    local a=${1:-} c=() d n rc
+    BK_DEV=''
+    if [ -z "$a" ]; then
+        echo
+        echo "${B}Recuperar tu carpeta personal${N}: ¿de dónde?"
+        while read -r d; do [ -n "$d" ] && c+=("copy	${d%/*}"); done < <(timeout 20 find /run/media/"$U" /var/mnt /mnt -maxdepth 3 -name "$BK_INFO" 2>/dev/null)
+        while IFS=$'\t' read -r d n; do [ -n "$d" ] && c+=("disk	$d	$n"); done < <(bk_disks | awk -F'\t' '{ print $1 "\t" $2 " " $3 " «" $4 "» " $5 " (" $6 ")" ($7 ? " en " $7 : ", sin montar") }')
+        for n in "${!c[@]}"; do
+            IFS=$'\t' read -r d a rc <<<"${c[$n]}"
+            if [ "$d" = copy ]; then printf '  %d) copia en %s (%s)\n' $((n + 1)) "$a" "$(sed -n 's/^fecha=//p' "$a/$BK_INFO")"
+            else printf '  %d) disco %s %s\n' $((n + 1)) "$a" "$rc"; fi
+        done
+        [ ${#c[@]} -gt 0 ] || echo "  (no encuentro copias ni otros discos Linux enchufados)"
+        read -e -rp "  Número, o escribe una carpeta (Intro = cancelar): " a
+        [ -n "$a" ] || return 1
+        if [[ $a =~ ^[0-9]+$ ]] && [ -n "${c[$((a - 1))]:-}" ]; then
+            IFS=$'\t' read -r d a _ <<<"${c[$((a - 1))]}"
+            if [ "$d" = disk ]; then
+                BK_DEV=$a; bk_mount "$a" || return 1
+                bk_find "$BK_MP" && bk_usb_quirk "$BK_DEV"
+                [ -n "$BK_MDEV" ] || { bk_mount "$BK_DEV" || return 1; }   # unmounted for the quirk: again
+                a=$BK_MP
+            fi
+        fi
+    fi
+    bk_restore_do "$a"; rc=$?
+    bk_umount
+    return $rc
+}
+
+bk_restore_do() {
     local a p list rc=0 n mode
     echo
     echo "${B}Recuperar tu carpeta personal${N}"
@@ -3416,14 +3580,7 @@ bk_restore() {
     say "demás de tu carpeta se queda. Después ofrece reinstalar Decky y los Flatpaks del sistema y aplicar tus ajustes."
     say "POR QUÉ: para tener en esta instalación tus juegos, partidas y ajustes como estaban."
     say "DESHACER: no se deshace solo; si dudas, haz antes una copia de esta carpeta."
-    a=${1:-}
-    if [ -z "$a" ]; then
-        echo "  Copias encontradas en los discos montados y el NAS:"
-        timeout 20 find /run/media/"$U" /var/mnt /mnt -maxdepth 3 -name "$BK_INFO" 2>/dev/null | sed 's|/[^/]*$||; s/^/    /'
-        read -e -rp "  Carpeta de la copia, o la carpeta personal o el disco de otra instalación (Intro = cancelar): " a
-        [ -n "$a" ] || return 1
-    fi
-    a=${a/#\~/$HOME}; a=${a%/}
+    a=${1/#\~/$HOME}; a=${a%/}
     bk_find "$a" || { echo "  Ahí no hay una copia ($BK_INFO) ni una carpeta personal de $U."; return 1; }
     p=$(realpath "$BK_SRC")
     [ "$p" != "$(realpath "$BK_TO")" ] || { echo "  Esa es la carpeta en la que estás."; return 1; }
@@ -3535,8 +3692,8 @@ bk_menu() {
 menu() {
     local c a notice_done=''
     while :; do
-        printf '\n%sPS5 Bazzite Deck — caja de herramientas v%s%s (imagen %s, kernel %s)\n' \
-            "$B" "$TOOLBOX_VERSION" "$N" "${VERSION:+v$VERSION}" "$(uname -r)"
+        printf '\n%sPS5 Bazzite Deck — caja de herramientas v%s%s (imagen %s%s, kernel %s)\n' \
+            "$B" "$TOOLBOX_VERSION" "$N" "${VERSION:+v$VERSION}" "$([ $IS_BOOTC = 1 ] && echo ' bootc')" "$(uname -r)"
         [ -n "$notice_done" ] || { offer_install; toolbox_notice; notice_done=1; }
         cat <<'MENU'
  Diagnóstico (solo mira, no cambia nada)

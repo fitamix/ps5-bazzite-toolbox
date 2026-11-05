@@ -5,6 +5,16 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+### Añadido
+- **Instalaciones bootc** (la forma de la imagen desde la v2.5). La caja las reconoce y saca su versión de la imagen.
+  La opción 17 (`--update`, `--rollback`) pasa a ser actualizar (`bootc upgrade`), volver a la anterior
+  (`bootc rollback`) o cambiar de canal o versión (`bootc switch`), explicando y preguntando, y en la v2.5 ofrece
+  antes el arreglo del autor sin el que no se puede actualizar. El bloque `updates` no aplica en bootc: bloquearía
+  las actualizaciones buenas.
+- **Recuperar desde otro disco, sin montarlo a mano** (opción 20 → 2): lista las copias y los discos Linux
+  enchufados, monta el elegido solo lectura y lo desmonta al terminar. Si es un disco USB que su sistema usaba sin
+  UAS (el Lexar ES3), pone ese ajuste ahora para que la copia no dé errores.
+
 ## [1.8.0] - 2026-11-05
 
 ### Añadido

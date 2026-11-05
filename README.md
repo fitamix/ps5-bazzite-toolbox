@@ -245,7 +245,7 @@ sudo sed -i 's| module_blacklist=moal||' /efi/cmdline.txt     # solo con la imag
 firmware y gamescope.
 **Por qué:** esos paquetes llevan parches de la PS5; actualizarlos rompe la imagen. La imagen se actualiza con su
 propio actualizador ([opción 17](#cambiar-de-versión-de-la-imagen-y-volver-atrás)), no con `ujust update` ni
-`rpm-ostree` (no es una imagen ostree).
+`rpm-ostree` (no es una imagen ostree). **En bootc no aplica**: ahí las actualizaciones son las del autor y se deshacen.
 
 ```sh
 sudo systemctl mask --now uupd.timer rpm-ostreed-automatic.timer
@@ -610,7 +610,16 @@ valor cuando el `.ppdb` del juego no dice nada.
 
 ## Cambiar de versión de la imagen y volver atrás
 
-**Opción 17** (`--update [versión]`, `--rollback`). Primero pregunta qué quieres hacer:
+> **En una instalación bootc** (desde la v2.5, grabando la imagen bootc) todo esto lo hace `bootc` y la opción 17
+> solo lo explica y pregunta: **actualizar** (`sudo bootc upgrade`, la siguiente del canal que sigues), **volver a la
+> anterior** (`sudo bootc rollback`) o **cambiar de canal o fijar una versión** (`sudo bootc switch
+> ghcr.io/vivalavent/ps5-bazzite-bootc:stable` o `:v2.5.1`; lista las versiones bootc de GitHub). Lo nuevo entra al
+> reiniciar, y bootc guarda siempre la anterior. En la v2.5 ofrece antes el arreglo del autor sin el que no se puede
+> actualizar (`ostree-finalize-staged`). La caja sabe que es bootc por `/run/ostree-booted`, y su versión por
+> `/usr/share/ps5-bazzite-bootc/VERSION`. Lo de abajo es para Legacy.
+
+**Opción 17** (`--update [versión]`, `--rollback`). En una instalación **Legacy** (la de antes de la v2.5, que se
+actualiza en el sitio) primero pregunta qué quieres hacer:
 
 1. **Instalar una versión de GitHub.** Lista las publicadas (estables, preliminares y «rápidas» que solo cambian el
    kernel), enseña sus novedades y avisa si es preliminar o anterior a la tuya. Comprueba el espacio, descarga,
@@ -708,6 +717,13 @@ usuario y la configuración de cada programa y de esta caja.
 
 Además de tu carpeta guarda, en `sistema/`, lo que una instalación nueva no tiene: el servicio que arranca Decky
 (`plugin_loader.service`) y la lista de Flatpaks del sistema (Brave, Heroic…). No necesita `sudo`.
+
+**De dónde recuperar.** Sin carpeta, lista las copias que encuentra en los discos montados y el NAS, y **los discos
+Linux enchufados** que no son el del sistema, montados o no. Si eliges un disco, lo monta **solo lectura** (y lo
+desmonta al terminar) y encuentra dentro tu carpeta, también en una instalación bootc. Si es un disco USB que su
+sistema usaba sin UAS (`usb-storage.quirks=…:u…`, como el Lexar ES3), te lo dice y lo pone igual ahora, hasta que
+reinicies, para que la copia larga no dé errores: lo desenchufas, lo enchufas y sigue. A mano:
+`echo 21c4:0003:um | sudo tee /sys/module/usb_storage/parameters/quirks` antes de enchufarlo.
 
 **Recuperar** (20 → 2, `--restore [carpeta]`): le das la carpeta de la copia, o **la de otra instalación**: el disco
 de tu instalación anterior enchufado, su carpeta personal o la raíz del disco (`/run/media/<usuario>/<disco>`; la
