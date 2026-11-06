@@ -11,6 +11,12 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
   `--framegen Juego.exe`: activarla (×2, calidad 0.5, modelo de calidad, probado en Gears of War E-Day), cambiar el
   multiplicador, la calidad o el modelo, o quitarla. Explica el retraso del mando que añade. Nunca activada por defecto.
 
+### Cambiado
+
+- **bootc [EN PRUEBAS]:** el arreglo de «Failed to start ostree-finalize-staged.service» se ofrece también en
+  consolas instaladas con las imágenes v2.5.1 y v2.6.1 que lo tengan (servicio de greenboot enmascarado), no solo en
+  la v2.5, como dicen las notas de la v2.6.2.
+
 ## [1.9.0] - 2026-11-05
 
 Lo marcado **EN PRUEBAS** aún no se ha probado en una consola de verdad: el modo bootc (no había ninguna instalación
