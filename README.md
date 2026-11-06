@@ -83,7 +83,7 @@ lo hay, un comando del sistema que hace lo mismo.
 | 9 | Pasar al modo juego ahora y arrancar siempre en él | `--session gamemode` | `sudo rm /etc/sddm.conf.d/zzz-ps5-session.conf` y reiniciar la sesión |
 | **PortProton y Steam** | | | |
 | 10 | Instalar un juego de Windows (normal o aislado), probarlo y añadirlo a Steam | `--add-game [Juego.exe]` | — |
-| 11 | Mis juegos: cambiar su aislamiento o desinstalarlos | `--games`, `--change-level Juego.exe`, `--remove-game [Juego.exe\|"Nombre"]` | — |
+| 11 | Mis juegos: cambiar su aislamiento, la generación de fotogramas, o desinstalarlos | `--games`, `--change-level Juego.exe`, `--framegen Juego.exe`, `--remove-game [Juego.exe\|"Nombre"]` | — |
 | 12 | Sincronizar la colección «PortProton» de Steam (cierra Steam) | `--pp-collection [--dry-run\|--yes]` | — |
 | — | Lanzar un juego como lo dejó la opción 10 (lo usan Steam y el escritorio) | `--run Juego.exe` | — |
 | **Utilidades** | | | |
@@ -646,8 +646,25 @@ Después, pregunta en cada paso:
 4. Lo mete en la colección «PortProton» de Steam.
 
 **Mis juegos** (opción 11, `--games`): una sola lista, por nombre, de tus juegos de PortProton con su nivel (normal,
-aislado con red o sin red), también los que instalaste antes de esta versión; elige uno para cambiar su aislamiento
-o desinstalarlo.
+aislado con red o sin red), también los que instalaste antes de esta versión; elige uno para cambiar su aislamiento,
+su generación de fotogramas o desinstalarlo.
+
+**Generación de fotogramas** (en «Mis juegos» o `--framegen Juego.exe`): la de Lossless Scaling que trae PortProton
+(lsfg-vk, que descarga la primera vez). Inventa un fotograma entre cada dos reales: el juego se ve al doble de fps
+(×2) o al triple (×3). Activarla escribe en el `.ppdb` del juego:
+
+| Línea | Valor | Por qué |
+|---|---|---|
+| `PW_USE_LS_FRAME_GEN` | `1` | La activa |
+| `LSFG_MULTIPLIER` | `2` | ×3 solo si el juego da unos 40 fps reales y la pantalla va a 120 Hz |
+| `LSFG_FLOW_SCALE` | `0.5` | Resolución a la que calcula el movimiento. PortProton pone 0.1 (más fantasmas); con 1.0 la PS5 se queda sin GPU en juegos pesados y da tirones |
+| `LSFG_PERF_MODE` | `0` | Modelo de calidad (1 = rápido) |
+
+Desde ahí se cambia el multiplicador, la calidad (0.5, 0.75, 1.0) y el modelo, o se quita (borra esas líneas).
+Probado en Gears of War E-Day: de unos 25 fps reales a ~100 en pantalla, estables. El precio es que **el mando
+responde algo más tarde**, y se nota más cuantos menos fps reales dé el juego: no para juegos de reflejos, 2D o con
+mucho texto. Para verlo bien: pantalla a 120 Hz y sin límite de fps (menú rápido → Rendimiento). Un juego aislado
+sin red no puede descargar lsfg-vk la primera vez.
 
 **Desinstalar** (en «Mis juegos», `--remove-game` o en Dolphin). Pregunta por separado: quitarlo de Steam (con copia de `shortcuts.vdf`
 y sus carátulas), borrar sus accesos directos y su script, y borrar su carpeta del disco, que muestra con su tamaño y

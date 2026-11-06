@@ -5,6 +5,12 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+### Añadido
+
+- **Generación de fotogramas por juego** (Lossless Scaling de PortProton), en «Mis juegos» (opción 11) y con
+  `--framegen Juego.exe`: activarla (×2, calidad 0.5, modelo de calidad, probado en Gears of War E-Day), cambiar el
+  multiplicador, la calidad o el modelo, o quitarla. Explica el retraso del mando que añade. Nunca activada por defecto.
+
 ## [1.9.0] - 2026-11-05
 
 Lo marcado **EN PRUEBAS** aún no se ha probado en una consola de verdad: el modo bootc (no había ninguna instalación

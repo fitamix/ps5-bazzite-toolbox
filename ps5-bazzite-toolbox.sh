@@ -27,6 +27,7 @@
 #   bash ps5-bazzite-toolbox.sh --remove-game [Juego.exe|"Nombre"]   # remove it (Steam, PortProton, disk), asking each step
 #   bash ps5-bazzite-toolbox.sh --games                  # my games: change isolation or uninstall, from a list
 #   bash ps5-bazzite-toolbox.sh --change-level Juego.exe # change how an installed game runs (normal / isolated)
+#   bash ps5-bazzite-toolbox.sh --framegen Juego.exe     # frame generation (Lossless Scaling) for one game: on, off, tune
 #   bash ps5-bazzite-toolbox.sh --run Juego.exe          # start a game as --add-game left it (isolated or not); asks nothing
 #   bash ps5-bazzite-toolbox.sh --pp-collection [--dry-run|--yes]   # sync Steam's "PortProton" collection
 #   bash ps5-bazzite-toolbox.sh --space [DIR]           # space taken by each folder in DIR (also the "espacio" command)
@@ -67,7 +68,7 @@ while [ $# -gt 0 ]; do
         --install) MODE=install; shift ;;
         --uninstall) MODE=uninstall; shift ;;
         -V|--version) echo "ps5-bazzite-toolbox $TOOLBOX_VERSION"; exit 0 ;;
-        --add-game|--remove-game|--change-level|--games|--run|--pp-collection|--space)       # the rest of the line goes to that tool
+        --add-game|--remove-game|--change-level|--framegen|--games|--run|--pp-collection|--space)       # the rest of the line goes to that tool
                   MODE=${1#--}; shift; ARGS=("$@"); break ;;
         -h|--help) awk 'NR > 1 { if (!/^#/) exit; sub(/^# ?/, ""); print }' "$0"; exit 0 ;;
         *) echo "Opción desconocida: $1" >&2; exit 2 ;;
@@ -3514,6 +3515,58 @@ pp_change_level() {
         bash <(pp_add_game_script) --change "$exe"; rc=$?
     rm -f "$tmp"; return $rc
 }
+# Frame generation (Lossless Scaling) per game: PortProton 1.7.5+ has it built in (lsfg-vk, downloaded on first use)
+# and reads it from the game's .ppdb. Its own defaults (flow 0.1, fast model) look worse than ×2 at flow 0.5 with the
+# quality model, which kept Gears of War E-Day at ~100 fps on the PS5 (flow 1.0 ran out of GPU and stuttered).
+FG_DEFAULTS='PW_USE_LS_FRAME_GEN=1 LSFG_MULTIPLIER=2 LSFG_FLOW_SCALE=0.5 LSFG_PERF_MODE=0'
+ppdb_get() { sed -n "s/^export $2=\"\{0,1\}\([^\"]*\)\"\{0,1\}\$/\1/p" "$1" 2>/dev/null | tail -1; }
+ppdb_set() {                             # ppdb_set FILE VAR VALUE: replace its line, or add one
+    if grep -qs "^export $2=" "$1"; then sed -i "s|^export $2=.*|export $2=\"$3\"|" "$1"
+    else printf 'export %s="%s"\n' "$2" "$3" >>"$1"; fi
+}
+pp_framegen() {
+    local exe=${1:-} lv=${2:-} f kv a
+    [ -n "$exe" ] || { echo "Uso: --framegen Juego.exe" >&2; return 2; }
+    f="$exe.ppdb"
+    [ -f "$f" ] || { echo "No está $f: abre el juego una vez con PortProton (o instálalo con la opción 10)."; return 1; }
+    section
+    say "Generación de fotogramas (Lossless Scaling, la que trae PortProton): inventa un fotograma entre cada dos"
+    say "reales, así que ves el doble de fps (×2) o el triple (×3)."
+    say "POR QUÉ: en juegos pesados se ve mucho más fluido (Gears of War E-Day: de ~25 a ~100 fps en pantalla)."
+    say "PRECIO: el mando responde algo más tarde (más cuantos menos fps reales dé el juego), algo más de GPU y VRAM,"
+    say "y fantasmas en lo que se mueve rápido. No para juegos de reflejos, 2D o con mucho texto. Va mejor con"
+    say "40-60 fps reales y la pantalla a 120 Hz sin límite de fps (menú rápido → Rendimiento)."
+    say "La primera vez PortProton descarga lsfg-vk: necesita red."
+    say "DESHACER: aquí mismo, «Quitar» (borra esas líneas de ${f##*/})."
+    [ "$lv" = sin-red ] && say "Ojo: este juego va aislado SIN red; si lsfg-vk no está descargado ya, no podrá bajarlo."
+    while :; do
+        echo
+        if [ "$(ppdb_get "$f" PW_USE_LS_FRAME_GEN)" = 1 ]; then
+            echo "  Ahora: activada, ×$(ppdb_get "$f" LSFG_MULTIPLIER) calidad $(ppdb_get "$f" LSFG_FLOW_SCALE)" \
+                 "modelo $([ "$(ppdb_get "$f" LSFG_PERF_MODE)" = 1 ] && echo rápido || echo 'de calidad')"
+            echo "  1) Multiplicador ×2 / ×3   2) Calidad (0.5 / 0.75 / 1.0)   3) Modelo rápido / de calidad   4) Quitar   0) Volver"
+            read -rp "  Elige: " a
+            case $a in
+                1) read -rp "  Multiplicador (2 = el doble; 3 solo si el juego da ~40 fps reales) [2]: " a
+                   [[ ${a:-2} =~ ^[23]$ ]] && ppdb_set "$f" LSFG_MULTIPLIER "${a:-2}" ;;
+                2) say "Resolución a la que calcula el movimiento: más alta, menos fantasmas y más GPU." \
+                       "1.0 se le atraganta a la PS5 en juegos pesados (tirones); a 4K, 0.5."
+                   read -rp "  Calidad (0.5 / 0.75 / 1.0) [0.5]: " a
+                   [[ ${a:-0.5} =~ ^(0\.5|0\.75|1\.0)$ ]] && ppdb_set "$f" LSFG_FLOW_SCALE "${a:-0.5}" ;;
+                3) if [ "$(ppdb_get "$f" LSFG_PERF_MODE)" = 1 ]; then ppdb_set "$f" LSFG_PERF_MODE 0
+                   else ppdb_set "$f" LSFG_PERF_MODE 1; fi ;;
+                4) sed -i '/^export PW_USE_LS_FRAME_GEN=/d; /^export LSFG_/d' "$f"; echo "  Quitada." ;;
+                *) break ;;
+            esac
+        else
+            echo "  Ahora: desactivada."
+            ask "¿Activarla (×2, calidad 0.5, modelo de calidad)?" N || break
+            for kv in $FG_DEFAULTS; do ppdb_set "$f" "${kv%%=*}" "${kv#*=}"; done
+            echo "  Activada. Cuenta la próxima vez que abras el juego."
+        fi
+    done
+    return 0
+}
 # "Mis juegos": one list, by name, of the games installed with the toolbox (ISO_LIST, any level) and PortProton's
 # other games (normal: PortProton starts them unisolated). Changing the level of one of those adds it to ISO_LIST.
 pp_my_games() {
@@ -3540,11 +3593,12 @@ pp_my_games() {
     read -rp "¿Cuál? (número, Intro = volver): " a
     [[ $a =~ ^[0-9]+$ ]] && [ "$a" -ge 1 ] && [ "$a" -le ${#rows[@]} ] || return 0
     IFS=$'\t' read -r nm lv e <<<"${rows[$((a - 1))]}"
-    echo "$nm:  1) Cambiar aislamiento   2) Desinstalar   0) Volver"
+    echo "$nm:  1) Cambiar aislamiento   2) Desinstalar   3) Generación de fotogramas   0) Volver"
     read -rp "Elige: " c
     case $c in
         1) if [ -f "$e" ]; then pp_change_level "$e"; else echo "El .exe ya no está: solo se puede desinstalar."; fi ;;
         2) if [ -f "$e" ]; then pp_remove_game "$e"; else pp_remove_game "$nm"; fi ;;
+        3) if [ -f "$e" ]; then pp_framegen "$e" "$lv"; else echo "El .exe ya no está: solo se puede desinstalar."; fi ;;
     esac
     return 0
 }
@@ -4139,7 +4193,7 @@ menu() {
    9) Pasar al modo juego ahora y arrancar siempre en él (cierra lo abierto)
  PortProton y Steam
   10) Instalar un juego de Windows: elige su aislamiento, pruébalo y, si va bien, a Steam y a la colección
-  11) Mis juegos: cambiar su aislamiento o desinstalarlos (de Steam, PortProton y el disco)
+  11) Mis juegos: aislamiento, generación de fotogramas, o desinstalarlos (de Steam, PortProton y el disco)
   12) Sincronizar la colección «PortProton» de Steam (cierra Steam si está abierto)
  Utilidades
   13) Ver lo que ocupa cada carpeta (también: comando «espacio», o botón derecho en Dolphin)
@@ -4190,6 +4244,7 @@ case $MODE in                            # these need no root
     remove-game) pp_remove_game "${ARGS[@]}"; exit ;;
     run) pp_run_game "${ARGS[@]}"; exit ;;
     change-level) pp_change_level "${ARGS[@]}"; exit ;;
+    framegen) pp_framegen "${ARGS[@]}"; exit ;;
     games) pp_my_games; exit ;;
     pp-collection) pp_collection "${ARGS[@]}"; exit ;;
     space) space_report "${ARGS[@]}"; exit ;;
