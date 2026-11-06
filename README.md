@@ -691,7 +691,7 @@ valor cuando el `.ppdb` del juego no dice nada.
 > solo lo explica y pregunta: **actualizar** (`sudo bootc upgrade`, la siguiente del canal que sigues), **volver a la
 > anterior** (`sudo bootc rollback`) o **cambiar de canal o fijar una versión** (`sudo bootc switch
 > ghcr.io/vivalavent/ps5-bazzite-bootc:stable` o `:v2.5.1`; lista las versiones bootc de GitHub). Lo nuevo entra al
-> reiniciar, y bootc guarda siempre la anterior. En la v2.5 (y en las v2.5.1 o v2.6.1 que lo necesiten) ofrece antes el arreglo del autor sin el que no se puede
+> reiniciar, y bootc guarda siempre la anterior. En la v2.5 (y en las v2.5.1, v2.6.1 o v2.6.2 que lo necesiten) ofrece antes el arreglo del autor sin el que no se puede
 > actualizar (`ostree-finalize-staged`). La caja sabe que es bootc por `/run/ostree-booted`, y su versión por
 > `/usr/share/ps5-bazzite-bootc/VERSION`. Lo de abajo es para Legacy.
 

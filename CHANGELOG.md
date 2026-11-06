@@ -18,8 +18,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
   «¿Qué es cada cosa?» al final de la página.
 
 - **bootc [EN PRUEBAS]:** el arreglo de «Failed to start ostree-finalize-staged.service» se ofrece también en
-  consolas instaladas con las imágenes v2.5.1 y v2.6.1 que lo tengan (servicio de greenboot enmascarado), no solo en
-  la v2.5, como dicen las notas de la v2.6.2.
+  consolas instaladas con las imágenes v2.5.1, v2.6.1 y v2.6.2 que lo tengan (servicio de greenboot enmascarado), no
+  solo en la v2.5, como dicen las notas de la v2.6.3.
 
 ## [1.9.0] - 2026-11-05
 

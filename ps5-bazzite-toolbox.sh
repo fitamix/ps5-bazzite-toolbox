@@ -2505,14 +2505,14 @@ bootc_after() {
     echo "  Si la nueva no te convence: opción 17 → volver a la anterior (sudo bootc rollback)."
 }
 bootc_v25_fix() {                        # v2.5, and some installs from the v2.5.1/v2.6.1 images, can't stage updates
-    # (v2.6.2 notes): greenboot's rollback trigger is masked but still required. Offer the author's fix.
+    # (v2.6.3 notes): greenboot's rollback trigger is masked but still required. Offer the author's fix.
     [ "$VERSION" = 2.5 ] || [ "$(systemctl is-enabled greenboot-set-rollback-trigger.service 2>/dev/null)" = masked ] ||
         return 0
     grep -qs 'No greenboot rollbacks' /etc/systemd/system/greenboot-set-rollback-trigger.service && return 0
     section
-    say "Esta instalación tiene un fallo (v2.5, y algunas instaladas con las imágenes v2.5.1 y v2.6.1): toda"
+    say "Esta instalación tiene un fallo (v2.5, y algunas instaladas con las imágenes v2.5.1, v2.6.1 y v2.6.2): toda"
     say "actualización termina en «Failed to start ostree-finalize-staged.service»."
-    say "El arreglo del autor (notas de la v2.6.2) cambia el servicio greenboot-set-rollback-trigger por uno que"
+    say "El arreglo del autor (notas de la v2.6.3) cambia el servicio greenboot-set-rollback-trigger por uno que"
     say "no hace nada, una vez; las versiones siguientes lo respetan."
     say "DESHACER: sudo rm /etc/systemd/system/greenboot-set-rollback-trigger.service; sudo systemctl daemon-reload"
     yesno "¿Lo aplico ahora (hace falta para actualizar)?" S || return 1
