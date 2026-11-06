@@ -561,11 +561,11 @@ no se mueve). Si Dolphin estaba abierto, ciérralo y ábrelo. No aplica si la ca
 
 **Qué cambia:** el monitor en directo de la [opción 4](#diagnóstico) pasa a estar siempre disponible en el navegador
 del móvil, en `http://<IP de la consola>:8765` (la caja te dice la dirección; guárdala en la pantalla de inicio).
-«Empezar» mide cada 2 s CPU (media y el hilo más cargado), GPU, VRAM, GTT, RAM, swap y temperaturas, con su gráfica,
+«Empezar» mide cada 2 s CPU (media y el hilo más cargado), GPU, VRAM, GTT, RAM, swap y temperatura, con su gráfica,
 los programas que más VRAM usan, los errores de memoria de la GPU, los picos y el mismo veredicto que la opción 4
 (si falta VRAM o RAM, si te limita la GPU o un hilo de la CPU). Si nadie mira la página durante 30 s (móvil bloqueado,
 pestaña cerrada), deja de medir sola. Al parar, la página **pregunta si guardar las medidas en la PS5**, en la
-carpeta de la caja, `~/.local/share/ps5-bazzite-toolbox/monitor/ps5-mem-<fecha>.csv` (el mismo formato que la
+carpeta de la caja, `~/.local/share/ps5-bazzite-toolbox/monitor/ps5-mem-<fecha>.csv` (casi el mismo formato que la
 opción 4; `MONWEB_CSV_DIR` en la configuración cambia la carpeta); si
 dices que no, o no vuelves a abrirla antes de empezar otra, no queda nada.
 **Por qué:** ver cómo va un juego mientras juegas, sin SSH ni abrir nada en la consola.
@@ -573,7 +573,8 @@ dices que no, o no vuelves a abrirla antes de empezar otra, no queda nada.
 con la sesión, también en el modo juego. Esperando no hace nada (unos 25 MB de RAM); midiendo, un 1 % de un hilo.
 Solo enseña datos y solo contesta a direcciones de redes privadas; el cortafuegos abre el puerto solo para tu red.
 **No tiene clave**: cualquiera conectado a tu red que sepa la dirección lo puede ver. No se recomienda por defecto.
-La CPU y la GPU de la PS5 son el mismo chip: sus dos temperaturas salen casi siempre iguales.
+La CPU y la GPU de la PS5 son el mismo chip, con un solo sensor: enseña una sola temperatura. Cada recuadro explica
+qué es al pulsarlo o al pasar el ratón por encima (GTT, swap…), y abajo, «¿Qué es cada cosa?», todos juntos.
 
 ```sh
 # el script es el que lleva dentro la caja (búscalo entre __MONWEB__): ~/.local/share/ps5-bazzite-toolbox/monitor-web.py

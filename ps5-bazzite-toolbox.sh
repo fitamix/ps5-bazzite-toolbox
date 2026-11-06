@@ -1077,7 +1077,7 @@ def hwmon(name, label="temp1_input"):
     for h in glob.glob("/sys/class/hwmon/hwmon*"):
         if rd(h + "/name") == name: return h + "/" + label
     return ""
-T_GPU, T_CPU = hwmon("amdgpu"), hwmon("k10temp")
+T_CHIP = hwmon("k10temp") or hwmon("amdgpu")   # CPU and GPU are one chip: both sensors read the same
 
 def meminfo():
     m = {}
@@ -1182,7 +1182,7 @@ class Monitor:
                  "vram": num(DEV + "/mem_info_vram_used") >> 20 if DEV else 0, "gtt": num(DEV + "/mem_info_gtt_used") >> 20 if DEV else 0,
                  "ram": m.get("MemTotal", 0) - m.get("MemAvailable", 0), "avail": m.get("MemAvailable", 0),
                  "swap": m.get("SwapTotal", 0) - m.get("SwapFree", 0), "zram": zr,
-                 "tgpu": num(T_GPU) // 1000 if T_GPU else None, "tcpu": num(T_CPU) // 1000 if T_CPU else None,
+                 "temp": num(T_CHIP) // 1000 if T_CHIP else None,
                  "top": top, "ramtop": rtop, "errors": len(errs)}
             with self.lock:
                 self.samples.append(s); self.total += 1; self.samples = self.samples[-KEEP:]; self.errors = errs[-5:]; self.vmref = vm
@@ -1209,7 +1209,7 @@ class Monitor:
             v.append("Un hilo de la CPU va lleno mientras la GPU espera: baja distancia de visión, multitudes o físicas.")
         return {"vram": pk("vram"), "gtt": pk("gtt"), "ram": pk("ram"), "minavail": minav, "swap": pk("swap"), "swap0": s0,
                 "zram": pk("zram"), "cpu": pk("cpu"), "cpuavg": round(sum(x["cpu"] for x in S) / n),
-                "gpu": pk("gpu"), "gpuavg": round(sum(x["gpu"] for x in S) / n), "tgpu": pk("tgpu"), "tcpu": pk("tcpu"),
+                "gpu": pk("gpu"), "gpuavg": round(sum(x["gpu"] for x in S) / n), "temp": pk("temp"),
                 "verdict": v, "vmref": self.vmref}
 
     def data(self, since):                   # since = how many samples of this session the page already has
@@ -1224,10 +1224,10 @@ class Monitor:
                     "summary": self.summary(info), "errors": self.errors}
 
     def csv(self):
-        head = "hora,cpu_pct,cpu_hilo_max_pct,gpu_pct,vram_usada_mb,gtt_mb,ram_usada_mb,ram_disponible_mb,swap_usada_mb,zram_en_ram_mb,temp_cpu_c,temp_gpu_c,errores_gpu,top_vram,top_ram"
+        head = "hora,cpu_pct,cpu_hilo_max_pct,gpu_pct,vram_usada_mb,gtt_mb,ram_usada_mb,ram_disponible_mb,swap_usada_mb,zram_en_ram_mb,temp_c,errores_gpu,top_vram,top_ram"
         with self.lock: S = list(self.samples)
         rows = [head] + [",".join(map(str, [x["t"], x["cpu"], x["cpumax"], x["gpu"], x["vram"], x["gtt"], x["ram"], x["avail"],
-                        x["swap"], x["zram"], x["tcpu"] if x["tcpu"] is not None else "", x["tgpu"] if x["tgpu"] is not None else "",
+                        x["swap"], x["zram"], x["temp"] if x["temp"] is not None else "",
                         x["errors"], '"' + " ".join(f"{c} {m}M" for c, m in x["top"]) + '"', f'"{x["ramtop"][0]} {x["ramtop"][1]}M"'])) for x in S]
         return "\n".join(rows) + "\n"
 
@@ -1285,29 +1285,45 @@ button.stop{background:#30363d}.grid{display:grid;grid-template-columns:repeat(2
 .v small{font-size:13px;color:var(--mu);font-weight:500}canvas{width:100%;height:42px;display:block}
 .ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}.full{grid-column:1/-1}
 ul{margin:6px 0 0;padding-left:18px}li{margin:3px 0}.mu{color:var(--mu)}
+.card[title]{cursor:help}.help{display:none;color:var(--mu);font-size:13px;margin-top:6px}.card.open .help{display:block}
+.k .q{opacity:.6}details summary{cursor:pointer}dl{margin:6px 0 0}dt{font-weight:600;margin-top:8px}dd{margin:2px 0 0;color:var(--mu)}
 </style></head><body>
 <h1>Monitor PS5</h1><div class="sub" id="sub">conectando…</div>
 <div class="row"><button id="go">Empezar</button></div>
 <div class="card full" id="ask" style="display:none;margin-bottom:12px"><div style="margin-bottom:8px">¿Guardar las medidas de esta sesión en la PS5 (CSV)?</div>
 <div class="row" style="margin:0"><button id="yes">Guardar</button><button id="no" class="stop">No</button></div></div>
 <div class="grid" id="tiles"></div>
-<div class="card full" style="margin-top:8px"><div class="k">Más VRAM</div><div id="top" class="mu">—</div></div>
+<div class="card full" style="margin-top:8px" id="t_top"><div class="k">Más VRAM <span class="q">ⓘ</span></div><div id="top" class="mu">—</div></div>
 <div class="mu" id="saved" style="margin:0 2px 8px;font-size:13px"></div>
 <div class="card full" style="margin-top:8px"><div class="k">Picos y veredicto</div><div id="sum" class="mu">Pulsa Empezar y juega: aquí saldrá qué te limita.</div></div>
+<details class="card full" style="margin-top:8px"><summary class="k">¿Qué es cada cosa?</summary><dl id="legend"></dl>
+<div class="mu" style="font-size:13px;margin-top:8px">También: pulsa (o pasa el ratón por) cualquier recuadro.</div></details>
 <script>
-const T=[["cpu","CPU","%"],["gpu","GPU","%"],["vram","VRAM","GB"],["gtt","GTT","GB"],["ram","RAM","GB"],["swap","Swap","GB"],["tcpu","Temp. CPU","°C"],["tgpu","Temp. GPU","°C"]];
+const T=[["cpu","CPU","%"],["gpu","GPU","%"],["vram","VRAM","GB"],["gtt","GTT","GB"],["ram","RAM","GB"],["swap","Swap","GB"],["temp","Temperatura","°C"]];
+const HELP={cpu:"Uso medio del procesador (sus 16 hilos). «Hilo» es el más cargado: si llega al 100 % y la GPU no, la CPU frena el juego.",
+ gpu:"Cuánto tiempo está trabajando la gráfica. Cerca del 100 % casi siempre: ella marca los FPS (baja resolución o calidad).",
+ vram:"Memoria de la gráfica. El cargador la aparta de los 16 GB al arrancar (vram.txt) y Linux no la puede usar. Llena: tirones o cierres.",
+ gtt:"RAM normal que la gráfica toma prestada cuando le falta VRAM o para datos que comparte con la CPU. Sale de la RAM de Linux.",
+ ram:"Memoria de Linux en uso: los 16 GB menos la VRAM. Con menos de 1 GB libre el sistema empieza a tirar de swap.",
+ swap:"Memoria que el sistema aparta para hacer sitio en la RAM. Aquí es zram: comprimida en la propia RAM («ocupa»). Si crece mientras juegas: tirones y cortes de sonido.",
+ temp:"Temperatura del chip. CPU y GPU son el mismo chip, con un solo sensor. El ventilador apunta a 80 °C; más de 90 °C es demasiado.",
+ top:"Los programas que más VRAM usan ahora, y el que más RAM."};
+const $=id=>document.getElementById(id);
 let S=[],got=0,info={},running=false,session=0,timer=null;
-const g=b=>(b/1024).toFixed(1), $=id=>document.getElementById(id);
-$("tiles").innerHTML=T.map(([k,n])=>`<div class="card"><div class="k">${n}</div><div class="v" id="v_${k}">—</div><canvas id="c_${k}"></canvas></div>`).join("");
+const g=b=>(b/1024).toFixed(1);
+$("tiles").innerHTML=T.map(([k,n])=>`<div class="card${k=="temp"?" full":""}" id="t_${k}"><div class="k">${n} <span class="q">ⓘ</span></div><div class="v" id="v_${k}">—</div><canvas id="c_${k}"></canvas></div>`).join("");
+$("legend").innerHTML=T.concat([["top","Más VRAM"]]).map(([k,n])=>`<dt>${n}</dt><dd>${HELP[k]}</dd>`).join("");
+Object.keys(HELP).forEach(k=>{const c=$("t_"+k);if(!c)return;c.title=HELP[k];c.insertAdjacentHTML("beforeend",`<div class="help">${HELP[k]}</div>`);
+ c.onclick=()=>c.classList.toggle("open")});
 function cls(k,x){const vt=info.vt||1;if(k=="vram")return x.vram/vt>=.9?"bad":x.vram/vt>=.8?"warn":"ok";
  if(k=="ram")return x.avail<512?"bad":x.avail<1024?"warn":"ok";if(k=="gpu")return x.gpu>=95?"warn":"ok";
- if(k=="cpu")return x.cpumax>=95?"warn":"ok";if(k=="tgpu"||k=="tcpu")return (x[k]||0)>=90?"bad":(x[k]||0)>=80?"warn":"ok";
+ if(k=="cpu")return x.cpumax>=95?"warn":"ok";if(k=="temp")return (x.temp||0)>=90?"bad":(x.temp||0)>=80?"warn":"ok";
  if(k=="swap")return info.st&&x.swap>=info.st-64?"bad":"ok";return"ok"}
 function text(k,x){switch(k){case"cpu":return`${x.cpu}% <small>hilo ${x.cpumax}%</small>`;case"gpu":return`${x.gpu}%`;
  case"vram":return`${g(x.vram)} <small>/ ${g(info.vt)}</small>`;case"gtt":return`${g(x.gtt)} <small>/ ${g(info.gt)}</small>`;
  case"ram":return`${g(x.ram)} <small>/ ${g(info.rt)}</small>`;case"swap":return`${g(x.swap)} <small>/ ${g(info.st)}</small>${info.zram?`<br><small>ocupa ${g(x.zram)} de RAM</small>`:""}`;
  default:return x[k]==null?"—":`${x[k]}°`}}
-function max(k){return {cpu:100,gpu:100,vram:info.vt,gtt:info.gt,ram:info.rt,swap:info.st||1,tcpu:100,tgpu:100}[k]||1}
+function max(k){return {cpu:100,gpu:100,vram:info.vt,gtt:info.gt,ram:info.rt,swap:info.st||1,temp:100}[k]||1}
 function spark(k){const c=$("c_"+k),w=c.width=c.clientWidth*devicePixelRatio,h=c.height=42*devicePixelRatio,x=c.getContext("2d");
  const d=S.slice(-150),m=max(k);x.clearRect(0,0,w,h);if(d.length<2)return;x.beginPath();
  d.forEach((s,i)=>{const px=i*w/(d.length-1),py=h-(Math.min(s[k]||0,m)/m)*(h-4)-2;i?x.lineTo(px,py):x.moveTo(px,py)});
@@ -1320,7 +1336,7 @@ function draw(){const x=S[S.length-1];
 function summary(s,err){if(!s||!s.vram&&s.vram!==0){return}
  let h=`<ul><li>VRAM ${g(s.vram)} de ${g(info.vt)} GB · GTT ${g(s.gtt)} GB</li><li>RAM ${g(s.ram)} de ${g(info.rt)} GB (libre como mínimo ${g(s.minavail)})</li>
  <li>Swap ${g(s.swap)} GB (al empezar ${g(s.swap0)})</li><li>CPU ${s.cpuavg}% de media, ${s.cpu}% máx. · GPU ${s.gpuavg}% de media, ${s.gpu}% máx.</li>
- <li>Temperatura CPU ${s.tcpu||"?"}° · GPU ${s.tgpu||"?"}°</li></ul>`;
+ <li>Temperatura máx. ${s.temp||"?"}°</li></ul>`;
  if(err&&err.length)h+=`<div class="bad" style="margin-top:6px">Errores de memoria de la GPU:</div><ul class="bad">${err.map(e=>`<li>${e.replace(/</g,"&lt;")}</li>`).join("")}</ul>`;
  if(s.vmref)h+=`<div class="mu" style="margin-top:6px">${s.vmref} reservas de memoria rechazadas (no son de la GPU; los emuladores lo hacen y siguen).</div>`;
  h+=s.verdict.length?`<ul>${s.verdict.map(v=>`<li class="warn">${v}</li>`).join("")}</ul>`:`<div class="ok" style="margin-top:6px">Sin aprietos por ahora.</div>`;

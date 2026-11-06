@@ -13,6 +13,10 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ### Cambiado
 
+- **Monitor web:** una sola temperatura (CPU y GPU son el mismo chip y salían iguales; en el CSV, `temp_c` en vez de
+  `temp_cpu_c` y `temp_gpu_c`), y cada recuadro explica qué es al pulsarlo o pasar el ratón por encima, además de
+  «¿Qué es cada cosa?» al final de la página.
+
 - **bootc [EN PRUEBAS]:** el arreglo de «Failed to start ostree-finalize-staged.service» se ofrece también en
   consolas instaladas con las imágenes v2.5.1 y v2.6.1 que lo tengan (servicio de greenboot enmascarado), no solo en
   la v2.5, como dicen las notas de la v2.6.2.
