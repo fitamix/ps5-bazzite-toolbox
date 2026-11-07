@@ -2809,8 +2809,8 @@ if [ $TEST = 1 ] && ask "¿Abrirlo ahora?" "$([ -f "$PPDB" ] && [ "$LEVEL" = "$C
         done
     fi
     if [ "$CUR" = normal ] && [ -z "$existing" ] && [ ! -f "$SH" ] && ask "¿No te convence? ¿Borro la carpeta del juego ($GTOP, $(du -sh "$GTOP" 2>/dev/null | cut -f1))?" N; then
-        read -r -p "  Para confirmar, escribe el nombre de la carpeta ($(basename "$GTOP")): " c || c=
-        if [ "$c" = "$(basename "$GTOP")" ]; then rm -rf -- "$GTOP" && say "  Borrada."; else say "  No coincide: no borro nada."; fi
+        read -r -p "  Se borra $GTOP entera. Para confirmar, escribe BORRAR: " c || c=
+        if [[ ${c^^} == BORRAR ]]; then rm -rf -- "$GTOP" && say "  Borrada."; else say "  No has escrito BORRAR: no borro nada."; fi
     fi
     [ $PPDB_NEW = 0 ] || rm -f "$PPDB"
     say "Parado. $([ $CHANGE = 1 ] && echo "No se ha cambiado nada." || echo "No se ha añadido nada.")"; exit 0
@@ -3485,9 +3485,9 @@ else
     else
         say "Carpeta del juego: $root ($(du -sh "$root" 2>/dev/null | cut -f1))"
         if ask "¿Borrarla del disco? (no se puede deshacer)" N; then
-            read -r -p "  Para confirmar, escribe el nombre de la carpeta ($(basename "$root")): " c || c=
-            if [ "$c" = "$(basename "$root")" ]; then rm -rf -- "$root" && say "  Borrada."
-            else say "  No coincide: no se borra."; fi
+            read -r -p "  Se borra $root entera. Para confirmar, escribe BORRAR: " c || c=
+            if [[ ${c^^} == BORRAR ]]; then rm -rf -- "$root" && say "  Borrada."
+            else say "  No has escrito BORRAR: no se borra."; fi
         fi
     fi
 fi

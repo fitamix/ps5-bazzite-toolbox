@@ -5,6 +5,12 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+### Cambiado
+
+- **Borrar la carpeta de un juego** (al desinstalarlo, o al descartar una instalación que no convence): para
+  confirmar se escribe `BORRAR` (en mayúsculas o minúsculas) en vez del nombre de la carpeta, que podía ser largo. Antes
+  sigue mostrando la carpeta completa y lo que ocupa.
+
 ## [1.9.1] - 2026-11-07
 
 ### Añadido

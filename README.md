@@ -669,7 +669,7 @@ sin red no puede descargar lsfg-vk la primera vez.
 
 **Desinstalar** (en «Mis juegos», `--remove-game` o en Dolphin). Pregunta por separado: quitarlo de Steam (con copia de `shortcuts.vdf`
 y sus carátulas), borrar sus accesos directos y su script, y borrar su carpeta del disco, que muestra con su tamaño y
-pide escribir su nombre para confirmar. Las partidas guardadas en el prefijo de PortProton se conservan; el prefijo
+pide escribir `BORRAR` para confirmar. Las partidas guardadas en el prefijo de PortProton se conservan; el prefijo
 propio de un juego aislado lo ofrece borrar al final («no» por defecto).
 
 **Ajustes para todos los juegos** (bloque `portproton`):
