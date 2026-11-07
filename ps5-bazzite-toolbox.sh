@@ -2671,7 +2671,7 @@ if [ -n "$TOOLBOX_CMD" ] && [ -n "$ISO_LIST" ] && [ -n "$ISO_SB" ]; then
     say "   con un prefijo propio. Con red (juegos online, launchers)."
     say "3) Aislado sin red: lo mismo, sin red. Lo más seguro para un juego de origen dudoso."
     say "Los aislados no van en la lista de juegos de PortProton (desde ahí se abrirían sin aislar): escritorio y Steam."
-    case $CUR in red) def=2 ;; sin-red) def=3 ;; *) if [ -n "$existing" ] || [ -f "$SH" ]; then def=1; else def=2; fi ;; esac
+    case $CUR in red) def=2 ;; sin-red) def=3 ;; *) def=1 ;; esac      # a game keeps its level; a new one: normal
     [ "$CUR" != normal ] || [ -z "$existing" ] || say "Ahora mismo es normal."
     [ "$CUR" = normal ] || say "Ahora mismo: aislado $([ "$CUR" = red ] && echo con red || echo sin red)."
     c=$def

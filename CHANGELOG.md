@@ -13,6 +13,9 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ### Cambiado
 
+- **Instalar un juego (opción 10):** con Intro se elige **1) Normal**, no «aislado con red». Un juego ya instalado
+  sigue proponiendo el nivel que tiene.
+
 - **Monitor web:** una sola temperatura (CPU y GPU son el mismo chip y salían iguales; en el CSV, `temp_c` en vez de
   `temp_cpu_c` y `temp_gpu_c`), y cada recuadro explica qué es al pulsarlo o pasar el ratón por encima, además de
   «¿Qué es cada cosa?» al final de la página.

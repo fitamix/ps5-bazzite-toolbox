@@ -597,8 +597,8 @@ En Dolphin (tras el bloque `atajos`), botón derecho sobre un `.exe`: **«Instal
 
 **Instalar un juego de Windows** (opción 10, `--add-game`). Primero pregunta **cómo se ejecuta**:
 
-- **1) Normal:** con acceso a todo, como siempre. Para juegos de tiendas fiables.
-- **2) Aislado con red** (lo que se elige con Intro): sin tu carpeta personal, el NAS ni tus otros juegos. Con red,
+- **1) Normal** (lo que se elige con Intro): con acceso a todo, como siempre. Para juegos de tiendas fiables.
+- **2) Aislado con red:** sin tu carpeta personal, el NAS ni tus otros juegos. Con red,
   para juegos online o con launcher.
 - **3) Aislado sin red:** lo mismo, sin red. Para juegos de origen dudoso.
 
