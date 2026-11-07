@@ -5,6 +5,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+## [1.9.1] - 2026-11-07
+
 ### Añadido
 
 - **Generación de fotogramas por juego** (Lossless Scaling de PortProton), en «Mis juegos» (opción 11) y con
@@ -15,11 +17,9 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 - **Instalar un juego (opción 10):** con Intro se elige **1) Normal**, no «aislado con red». Un juego ya instalado
   sigue proponiendo el nivel que tiene.
-
 - **Monitor web:** una sola temperatura (CPU y GPU son el mismo chip y salían iguales; en el CSV, `temp_c` en vez de
   `temp_cpu_c` y `temp_gpu_c`), y cada recuadro explica qué es al pulsarlo o pasar el ratón por encima, además de
   «¿Qué es cada cosa?» al final de la página.
-
 - **bootc [EN PRUEBAS]:** el arreglo de «Failed to start ostree-finalize-staged.service» se ofrece también en
   consolas instaladas con las imágenes v2.5.1, v2.6.1 y v2.6.2 que lo tengan (servicio de greenboot enmascarado), no
   solo en la v2.5, como dicen las notas de la v2.6.3.
@@ -187,7 +187,8 @@ Primera versión publicada.
 - Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
-[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.9.0...HEAD
+[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.9.1...HEAD
+[1.9.1]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.9.0...v1.9.1
 [1.9.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.6.0...v1.7.0
