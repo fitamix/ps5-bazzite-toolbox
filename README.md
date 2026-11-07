@@ -113,10 +113,11 @@ y repasa lo que ha dado problemas en esta consola:
   bloque de ajustes.
 
 **Vigilar en directo** (opción 4): cada 2 s muestra la carga de CPU (media y el hilo más cargado) y de GPU, VRAM, GTT
-(RAM que la gráfica toma prestada), RAM y swap, todo como usado/total, la temperatura de CPU y GPU y los programas que
-más VRAM usan. La swap de Bazzite es zram (RAM comprimida): `2.5/4.3 GB (0.8)` son 2,5 GB en la swap que ocupan
+(RAM que la gráfica toma prestada), RAM y swap, todo como usado/total, la temperatura del chip (CPU y GPU son el mismo, con un solo
+sensor) y los programas que más VRAM usan. La swap de Bazzite es zram (RAM comprimida): `2.5/4.3 GB (0.8)` son 2,5 GB en la swap que ocupan
 0,8 GB de RAM. Al parar (Ctrl+C) resume los picos, dice si falta VRAM, RAM o las dos, si se llenó la swap y si el
-límite es la GPU o un hilo de la CPU, y ofrece guardar cada medida en un CSV.
+límite es la GPU o un hilo de la CPU, y ofrece guardar cada medida en un CSV, con las mismas columnas que el del
+monitor web.
 
 ## Pantalla y sesión gráfica
 
@@ -565,7 +566,7 @@ del móvil, en `http://<IP de la consola>:8765` (la caja te dice la dirección; 
 los programas que más VRAM usan, los errores de memoria de la GPU, los picos y el mismo veredicto que la opción 4
 (si falta VRAM o RAM, si te limita la GPU o un hilo de la CPU). Si nadie mira la página durante 30 s (móvil bloqueado,
 pestaña cerrada), deja de medir sola. Al parar, la página **pregunta si guardar las medidas en la PS5**, en la
-carpeta de la caja, `~/.local/share/ps5-bazzite-toolbox/monitor/ps5-mem-<fecha>.csv` (casi el mismo formato que la
+carpeta de la caja, `~/.local/share/ps5-bazzite-toolbox/monitor/ps5-mem-<fecha>.csv` (el mismo formato que la
 opción 4; `MONWEB_CSV_DIR` en la configuración cambia la carpeta); si
 dices que no, o no vuelves a abrirla antes de empezar otra, no queda nada.
 **Por qué:** ver cómo va un juego mientras juegas, sin SSH ni abrir nada en la consola.
@@ -854,7 +855,7 @@ no guardarlo. Sin terminal (lanzada desde otro script), lo guarda en la carpeta 
 | Fichero | Qué tiene | Lo crea |
 |---|---|---|
 | `ps5-diag-<fecha>.txt` | el informe del diagnóstico, sin contraseñas | opciones 1 y 2, `--check` |
-| `ps5-mem-<fecha>.csv` | una fila cada 2 s: VRAM, GTT, RAM, swap, temperaturas, carga de CPU y GPU y quién gasta más | opción 4, `--mem` |
+| `ps5-mem-<fecha>.csv` | una fila cada 2 s: carga de CPU y GPU, VRAM, GTT, RAM, swap, temperatura y quién gasta más (mismas columnas que el monitor web) | opción 4, `--mem` |
 | `update-<versión>.log` | la salida del actualizador de la imagen, con su comando para deshacer | opción 17 → 1, `--update` |
 
 La descarga de una actualización va a `~/ps5-update-<versión>/`; al terminar bien ofrece borrarla, y si falla se

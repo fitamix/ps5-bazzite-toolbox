@@ -1368,7 +1368,7 @@ monweb_fw() { systemctl is-active -q firewalld; }
 desc_monitorweb() {
     section
     say "El monitor en directo (opción 4) en el navegador del móvil: http://$(lan_ip || echo '<IP de la consola>'):$MONWEB_PORT"
-    say "Guárdalo en la pantalla de inicio. «Empezar» mide cada 2 s (CPU, GPU, VRAM, RAM, swap, temperaturas,"
+    say "Guárdalo en la pantalla de inicio. «Empezar» mide cada 2 s (CPU, GPU, VRAM, RAM, swap, temperatura,"
     say "qué gasta más, picos y qué te limita); sin nadie mirando 30 s, para solo. Al parar pregunta si guardar"
     say "las medidas en la PS5 ($MONWEB_CSV_DIR/ps5-mem-FECHA.csv)."
     say "Instala $MONWEB_PY y el servicio de tu usuario ps5-monitor-web (arranca con la sesión, sin root), y abre"
@@ -1842,7 +1842,12 @@ cpu_load() {                             # cpu_load PREV CUR (/proc/stat "cpu" l
            if ($1 == "cpu") avg = p; else if (p > max) max = p }
          END { printf "%d %d\n", avg, max }' <(printf '%s\n' "$1") <(printf '%s\n' "$2")
 }
-gpu_top() {                              # top N programs by VRAM: "name size" lines (MiB)
+chip_temp_path() {                       # CPU and GPU are one chip: k10temp and amdgpu read the same (as monitor-web.py)
+    local h
+    for h in /sys/class/hwmon/hwmon*; do [ "$(cat "$h/name" 2>/dev/null)" = k10temp ] && { echo "$h/temp1_input"; return; }; done
+    for h in /sys/class/hwmon/hwmon*; do [ "$(cat "$h/name" 2>/dev/null)" = amdgpu ] && { echo "$h/temp1_input"; return; }; done
+}
+gpu_top_mib() {                          # top N programs by VRAM: "name MiB" lines
     grep -s -E '^drm-(client-id|memory-vram):' /proc/[0-9]*/fdinfo/* 2>/dev/null | awk -v n="${1:-3}" '
         { split($1, f, "/"); pid = f[3] }
         /drm-client-id:/ { cid[$1] = $2 }
@@ -1851,15 +1856,17 @@ gpu_top() {                              # top N programs by VRAM: "name size" l
             for (k in v) if ((k in cid) && !seen[cid[k]]++) mib[p[k]] += v[k] / 1024
             for (q in mib) { c = ""; getline c < ("/proc/" q "/comm"); close("/proc/" q "/comm"); tot[c] += mib[q] }
             for (c in tot) printf "%d %s\n", tot[c], c
-        }' | sort -rn | head -"${1:-3}" | awk '{ printf "%s %.1fG  ", $2, $1 / 1024 }'
+        }' | sort -rn | head -"${1:-3}" | awk '{ print $2, $1 }'
 }
 mem_watch() {
-    local stop=0 dev csv csv_name start t vu vt gu gt ra rt ru su st zr tc cc gp cpu0 cpu1 ca cm top ram ev peak_v=0 peak_g=0 min_ra=999999 peak_r=0 peak_s=0 peak_z=0 su0='' peak_t=0 events=0 n=0 ram_top=''
-    local peak_ct=0 peak_ca=0 peak_gp=0 sum_ca=0 sum_gp=0 n_gpu=0 n_cpu=0
+    local stop=0 dev csv csv_name start t vu vt gu gt ra rt ru su st zr tc gp cpu0 cpu1 ca cm top top_mib ram ram_mib ev peak_v=0 peak_g=0 min_ra=999999 peak_r=0 peak_s=0 peak_z=0 su0='' peak_t=0 events=0 n=0 ram_top=''
+    local peak_ca=0 peak_gp=0 sum_ca=0 sum_gp=0 n_gpu=0 n_cpu=0 tpath
     dev=$(ls -d /sys/class/drm/card*/device 2>/dev/null | head -1)
     csv=$(mktemp "${TMPDIR:-/tmp}/ps5-mem.XXXXXX") csv_name=ps5-mem-$(date +%Y%m%d-%H%M%S).csv
     start=$(date '+%Y-%m-%d %H:%M:%S')
-    echo "hora,vram_usada_mb,vram_total_mb,gtt_mb,gtt_total_mb,ram_usada_mb,ram_total_mb,ram_disponible_mb,swap_usada_mb,swap_total_mb,zram_en_ram_mb,temp_c,errores_gpu,top_vram,top_ram,cpu_pct,cpu_hilo_max_pct,gpu_pct,temp_cpu_c" >"$csv"
+    tpath=$(chip_temp_path)
+    # the same columns as the web monitor's CSV (monitor-web.py), so both sessions compare directly
+    echo "hora,cpu_pct,cpu_hilo_max_pct,gpu_pct,vram_usada_mb,gtt_mb,ram_usada_mb,ram_disponible_mb,swap_usada_mb,zram_en_ram_mb,temp_c,errores_gpu,top_vram,top_ram" >"$csv"
     vt=$(( $(cat "$dev/mem_info_vram_total" 2>/dev/null || echo 0) >> 20 ))
     gt=$(( $(cat "$dev/mem_info_gtt_total" 2>/dev/null || echo 0) >> 20 ))
     rt=$(awk '/^MemTotal:/ { print int($2 / 1024) }' /proc/meminfo)
@@ -1867,7 +1874,7 @@ mem_watch() {
     echo "Memoria en directo: VRAM $((vt / 1024)) GB, RAM de Linux $(awk -v r="$rt" 'BEGIN { printf "%.1f", r / 1024 }') GB, swap $(awk -v s="$st" 'BEGIN { printf "%.1f", s / 1024 }') GB$(ls /sys/block/zram* >/dev/null 2>&1 && echo ' (zram: comprimida en la RAM)')."
     echo "Ctrl+C para parar y ver los picos (al final puedes guardar cada medida en un CSV)."
     systemctl --user is-active -q ps5-monitor-web 2>/dev/null && echo "También en el móvil: http://$(lan_ip):$MONWEB_PORT"
-    echo "CPU: media de los $(nproc) hilos y, entre paréntesis, el hilo más cargado. temp: CPU/GPU."
+    echo "CPU: media de los $(nproc) hilos y, entre paréntesis, el hilo más cargado. temp: el chip (CPU y GPU son el mismo)."
     printf '%-8s %-10s %-5s %-15s %-13s %-14s %-21s %-8s %s\n' hora CPU GPU VRAM GTT RAM "swap (en RAM)" temp "más VRAM"
     cpu0=$(grep '^cpu' /proc/stat)
     trap 'stop=1' INT                    # Ctrl+C: finish this sample, then show the peaks
@@ -1879,12 +1886,13 @@ mem_watch() {
         ru=$((rt - ra))
         zr=$(zram_mb)
         su=$(awk '/^SwapTotal:/ { t = $2 } /^SwapFree:/ { f = $2 } END { print int((t - f) / 1024) }' /proc/meminfo)
-        tc=$(sensors 2>/dev/null | awk '/^edge:/ { gsub(/[+°C]/, "", $2); print int($2); exit }')    # GPU
-        cc=$(sensors 2>/dev/null | awk '/^Tctl:/ { gsub(/[+°C]/, "", $2); print int($2); exit }')    # CPU
+        tc=''; [ -n "$tpath" ] && tc=$(( $(cat "$tpath" 2>/dev/null || echo 0) / 1000 ))
         gp=$(cat "$dev/gpu_busy_percent" 2>/dev/null || echo 0)
         cpu1=$(grep '^cpu' /proc/stat); read -r ca cm < <(cpu_load "$cpu0" "$cpu1"); cpu0=$cpu1
-        top=$(gpu_top 3)
-        ram=$(ps -eo rss=,comm= --sort=-rss | head -1 | awk '{ printf "%s %.1fG", $2, $1 / 2^20 }')
+        top_mib=$(gpu_top_mib 3)
+        top=$(awk '{ printf "%s %.1fG  ", $1, $2 / 1024 }' <<<"$top_mib")
+        ram_mib=$(ps -eo rss=,comm= --sort=-rss | head -1 | awk '{ printf "%s %d", $2, $1 / 1024 }')
+        ram=$(awk '{ printf "%s %.1fG", $1, $2 / 1024 }' <<<"$ram_mib")
         [ -n "$su0" ] || su0=$su
         if [ $((n % 3)) = 0 ]; then     # the kernel log every 6 s is enough
             events=$(sudo journalctl -k --since "$start" --no-pager 2>/dev/null | grep -iE "$P_GPUMEM" | grep -vcF "$P_VMREF")
@@ -1897,7 +1905,6 @@ mem_watch() {
         [ "$su" -gt "$peak_s" ] && peak_s=$su
         [ "$zr" -gt "$peak_z" ] && peak_z=$zr
         [ "${tc:-0}" -gt "$peak_t" ] && peak_t=${tc:-0}
-        [ "${cc:-0}" -gt "$peak_ct" ] && peak_ct=${cc:-0}
         [ "$ca" -gt "$peak_ca" ] && peak_ca=$ca
         [ "$gp" -gt "$peak_gp" ] && peak_gp=$gp
         sum_ca=$((sum_ca + ca)) sum_gp=$((sum_gp + gp))
@@ -1909,8 +1916,8 @@ mem_watch() {
         printf '%-8s %-10s %-5s %s%-15s%s %-13s %s%-14s%s %-21s %-8s %s%s\n' "$t" "$ca% ($cm)" "$gp%" "$col" "$(awk -v u="$vu" -v t="$vt" 'BEGIN { printf "%.2f/%.1f GB", u / 1024, t / 1024 }')" "$N" \
             "$(awk -v g="$gu" -v t="$gt" 'BEGIN { printf "%.2f/%.1f GB", g / 1024, t / 1024 }')" \
             "$rcol" "$(awk -v u="$ru" -v t="$rt" 'BEGIN { printf "%.1f/%.1f GB", u / 1024, t / 1024 }')" "$N" \
-            "$(awk -v s="$su" -v t="$st" -v z="$zr" 'BEGIN { printf "%.1f/%.1f GB (%.1f)", s / 1024, t / 1024, z / 1024 }')" "${cc:-?}/${tc:-?}°C" "$top" "$ev"
-        echo "$t,$vu,$vt,$gu,$gt,$ru,$rt,$ra,$su,$st,$zr,${tc:-},$events,\"$top\",\"$ram\",$ca,$cm,$gp,${cc:-}" >>"$csv"
+            "$(awk -v s="$su" -v t="$st" -v z="$zr" 'BEGIN { printf "%.1f/%.1f GB (%.1f)", s / 1024, t / 1024, z / 1024 }')" "${tc:-?}°C" "$top" "$ev"
+        echo "$t,$ca,$cm,$gp,$vu,$gu,$ru,$ra,$su,$zr,${tc:-},$events,\"$(awk '{ printf "%s%s %dM", (NR > 1 ? " " : ""), $1, $2 }' <<<"$top_mib")\",\"$(awk '{ printf "%s %dM", $1, $2 }' <<<"$ram_mib")\"" >>"$csv"
         sleep 2 || true
     done
     trap - INT
@@ -1922,7 +1929,7 @@ mem_watch() {
     echo "  Swap:         $(awk -v a="${su0:-0}" -v b="$peak_s" -v t="$st" -v z="$peak_z" 'BEGIN { printf "%.1f de %.1f GB como máximo (al empezar %.1f); ocupaba %.1f GB de RAM (zram)", b / 1024, t / 1024, a / 1024, z / 1024 }')"
     echo "  CPU:          $((sum_ca / (n > 0 ? n : 1))) % de media, ${peak_ca} % como máximo (de los $(nproc) hilos)"
     echo "  GPU:          $((sum_gp / (n > 0 ? n : 1))) % de media, ${peak_gp} % como máximo"
-    echo "  Temperatura:  CPU ${peak_ct} °C, GPU ${peak_t} °C como máximo"
+    echo "  Temperatura:  ${peak_t} °C como máximo (el chip: CPU y GPU son el mismo)"
     if [ "$events" -gt 0 ]; then
         echo "  ${R}Errores de memoria de la GPU: $events${N}"
         sudo journalctl -k --since "$start" --no-pager 2>/dev/null | grep -iE "$P_GPUMEM" | grep -vF "$P_VMREF" | tail -5 | sed 's/^/    /'

@@ -5,6 +5,14 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+### Cambiado
+
+- **Vigilar en directo (opción 4):** una sola temperatura, la del chip, leída del mismo sensor que el monitor web
+  (antes CPU/GPU, que salían iguales). Su CSV tiene ahora **las mismas columnas que el del monitor web**
+  (`hora,cpu_pct,cpu_hilo_max_pct,gpu_pct,vram_usada_mb,gtt_mb,ram_usada_mb,ram_disponible_mb,swap_usada_mb,`
+  `zram_en_ram_mb,temp_c,errores_gpu,top_vram,top_ram`), así que las sesiones de las dos vistas se comparan
+  directamente. Ya no usa `sensors` cada 2 s.
+
 ## [1.9.2] - 2026-11-07
 
 ### Cambiado
