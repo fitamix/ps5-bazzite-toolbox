@@ -9,7 +9,7 @@
 #    sync the collection; global PortProton defaults (setup block "portproton"). Tools: space taken by each folder,
 #    a backup of the home folder (picking what goes) that restores here or on another install.
 #  - Settings (setup): blocks that adapt the image (language, boot options, Wi-Fi, updates, VRAM, fans, warm
-#    reboot, HDMI fix, disk, firewall, Brave, Edge, NAS, the monitor in a phone's browser, zram swap size, the GPU's 40 compute units). Each explains what it changes, why and how to undo it, and asks.
+#    reboot, HDMI fix, disk, firewall, Brave, Edge, NAS, the monitor in a phone's browser, zram swap size, swap on disk, the GPU's 40 compute units). Each explains what it changes, why and how to undo it, and asks.
 #    Answers are kept in ~/.config/ps5-bazzite-toolbox.conf; running it again only offers what is pending.
 #
 #   bash ps5-bazzite-toolbox.sh                         # menu (the first time it offers to install itself as the
@@ -36,7 +36,7 @@
 #   bash ps5-bazzite-toolbox.sh --restore [DIR]         # bring a copy back, or another install's home folder (another disk)
 #   bash ps5-bazzite-toolbox.sh --install | --uninstall # command ~/.local/bin/ps5-bazzite-toolbox + applications menu
 #   bash ps5-bazzite-toolbox.sh --version
-# Setup blocks: locale cmdline wifi updates vram gpu40 zram fans warmreboot hdmi bt disk firewall brave edge nas bios media esde portproton atajos monitorweb
+# Setup blocks: locale cmdline wifi updates vram gpu40 zram swapdisco fans warmreboot hdmi bt disk firewall brave edge nas bios media esde portproton atajos monitorweb
 set -uo pipefail
 
 TOOLBOX_VERSION=1.9.2                    # bump on every release (see CHANGELOG.md and release.sh)
@@ -133,7 +133,7 @@ MONWEB_UNIT=$HOME/.config/systemd/user/ps5-monitor-web.service
 MONWEB_CSV_DIR=${MONWEB_CSV_DIR:-$HOME/.local/share/ps5-bazzite-toolbox/monitor}   # a session's CSV, when you say so
 BRAVE_FLAGS=$HOME/.var/app/com.brave.Browser/config/brave-flags.conf
 EDGE_FLAGS=$HOME/.var/app/com.microsoft.Edge/config/edge-flags.conf
-BLOCKS="locale cmdline wifi updates vram gpu40 zram fans warmreboot hdmi bt disk firewall brave edge nas bios media esde portproton atajos monitorweb"
+BLOCKS="locale cmdline wifi updates vram gpu40 zram swapdisco fans warmreboot hdmi bt disk firewall brave edge nas bios media esde portproton atajos monitorweb"
 
 # ======================================== settings (setup) ========================================
 # --- saved answers -------------------------------------------------------------------------------
@@ -456,6 +456,62 @@ apply_zram() {
             "$ZRAM_WANT" | sudo tee "$ZRAM_DROPIN" >/dev/null && sudo rm -f "$ZRAM_OLD" || return 1
     say "zram: $ZRAM_WANT tras el próximo reinicio."
     REBOOT=1
+}
+
+# --- swap on disk ----------------------------------------------------------------------------------
+# A swap file behind the zram (lower priority): used only once the zram is full, so a game that runs out of
+# memory slows down instead of being killed by the kernel (OOM). Off by default: on a USB boot drive heavy
+# swapping can stall the whole system. Measured 2026-11-08 (Lichii, Zelda OoT): without it OOM-killed after
+# 9 min; with it the 16 GB file took only the peak (31 MB) and nothing stalled.
+SWAPFILE=/var/swapfile
+SWAP_MARK='# ps5-bazzite-toolbox (bloque swapdisco)'
+SWAP_GB=${SWAP_GB:-16}
+swapfile_gb() {                          # size of the active swap file in GB, or nothing
+    awk -v f="$SWAPFILE" '$1 == f { printf "%d\n", $3 / 1048576 + 0.5 }' /proc/swaps 2>/dev/null
+}
+desc_swapdisco() {
+    local now usb fs
+    now=$(swapfile_gb) usb=$(root_usb) fs=$(findmnt -no FSTYPE -T /var 2>/dev/null)
+    section
+    say "Swap en el disco: un fichero de intercambio ($SWAPFILE) DETRÁS de la zram. La zram se sigue usando"
+    say "primero (prioridad 100); el disco (prioridad 10) solo cuando la zram se ha llenado."
+    say "Ahora: $([ -n "$now" ] && echo "$now GB activos" || echo 'sin swap en disco'); disco del sistema: ${fs:-?}$([ -n "$usb" ] && echo ', por USB')."
+    say "POR QUÉ: con la zram llena, si un programa pide más memoria el sistema lo cierra («escasez de memoria"
+    say "evitada»). Con swap en disco el juego va más lento en esos picos, pero no se cierra. Útil para emuladores"
+    say "que se pasan de memoria (Switch 2: Lichii con Zelda OoT pide más de 14 GB)."
+    say "RIESGO: si el disco va por USB y se escribe mucho en la swap, los atascos del USB pueden congelar todo el"
+    say "sistema unos segundos. Si notas eso (ratón parado), quítala. Ocupa en el disco el tamaño que elijas."
+    say "DESHACER: este bloque con tamaño 0 (menú 16 → swapdisco), o a mano: sudo swapoff $SWAPFILE;"
+    say "sudo sed -i '\\|^$SWAP_MARK\$|,+1d' /etc/fstab; sudo rm $SWAPFILE"
+}
+check_swapdisco() {
+    case $(findmnt -no FSTYPE -T /var 2>/dev/null) in ext4|xfs|btrfs) ;; *) return 2 ;; esac
+    [ "${SWAP_GB:-16}" = 0 ] && { [ -z "$(swapfile_gb)" ]; return; }
+    [ "$(swapfile_gb)" = "$SWAP_GB" ] && grep -qs "^$SWAPFILE " /etc/fstab
+}
+apply_swapdisco() {
+    local fs free
+    value SWAP_GB "Tamaño en GB (8, 16, 24 o 32; 16 recomendado; 0 = quitarla)" "$SWAP_GB"
+    [[ $SWAP_GB =~ ^[0-9]+$ ]] || { say "Tamaño no válido: $SWAP_GB"; return 1; }
+    if [ -e "$SWAPFILE" ] || grep -qs "^$SWAPFILE " /etc/fstab; then
+        say "Quitando la swap en disco que había..."
+        sudo swapoff "$SWAPFILE" 2>/dev/null
+        sudo sed -i -e "\\|^# .*swap.*\$|{N;\\|\\n$SWAPFILE |d}" -e "\\|^$SWAPFILE |d" /etc/fstab || return 1
+        sudo rm -f "$SWAPFILE" || return 1
+    fi
+    [ "$SWAP_GB" = 0 ] && { say "Swap en disco quitada."; return 0; }
+    fs=$(findmnt -no FSTYPE -T /var) free=$(df -BG --output=avail /var | tail -1 | tr -dc 0-9)
+    [ "$free" -gt $((SWAP_GB + 20)) ] || { say "No hay sitio: $free GB libres y hacen falta $SWAP_GB + 20 de margen."; return 1; }
+    say "Creando $SWAPFILE de $SWAP_GB GB (un par de minutos)..."
+    if [ "$fs" = btrfs ]; then           # btrfs needs it without copy-on-write; its own tool does that
+        sudo btrfs filesystem mkswapfile --size "${SWAP_GB}g" "$SWAPFILE" >/dev/null || return 1
+    else                                 # dd, not fallocate: a swap file must have no holes
+        sudo dd if=/dev/zero of="$SWAPFILE" bs=1M count=$((SWAP_GB * 1024)) status=progress || return 1
+        sudo chmod 600 "$SWAPFILE" && sudo mkswap "$SWAPFILE" >/dev/null || return 1
+    fi
+    sudo swapon -p 10 "$SWAPFILE" || return 1
+    printf '%s\n%s none swap defaults,pri=10,nofail 0 0\n' "$SWAP_MARK" "$SWAPFILE" | sudo tee -a /etc/fstab >/dev/null || return 1
+    say "Swap en disco: $SWAP_GB GB activos, detrás de la zram (se mantiene al reiniciar)."
 }
 
 # --- fans ----------------------------------------------------------------------------------------
@@ -1085,6 +1141,13 @@ def meminfo():
         k, v = l.split(":", 1); m[k] = int(v.split()[0]) // 1024
     return m
 
+def disk_swap():                              # swap that isn't zram (a file or partition on disk): size, used (MiB)
+    size = used = 0
+    for l in rd("/proc/swaps").splitlines()[1:]:
+        f = l.split()
+        if len(f) >= 4 and "zram" not in f[0]: size += int(f[2]) // 1024; used += int(f[3]) // 1024
+    return size, used
+
 def cpu_times():
     out = {}
     for l in rd("/proc/stat").splitlines():
@@ -1131,7 +1194,7 @@ class Monitor:
     def info(self):
         m = meminfo()
         return {"vt": num(DEV + "/mem_info_vram_total") >> 20 if DEV else 0, "gt": num(DEV + "/mem_info_gtt_total") >> 20 if DEV else 0,
-                "rt": m.get("MemTotal", 0), "st": m.get("SwapTotal", 0), "threads": os.cpu_count(),
+                "rt": m.get("MemTotal", 0), "st": m.get("SwapTotal", 0), "sd": disk_swap()[0], "threads": os.cpu_count(),
                 "zram": bool(glob.glob("/sys/block/zram*")), "host": os.uname().nodename}
 
     def begin(self):
@@ -1181,7 +1244,7 @@ class Monitor:
             s = {"t": time.strftime("%H:%M:%S"), "cpu": ca, "cpumax": cm, "gpu": num(DEV + "/gpu_busy_percent") if DEV else 0,
                  "vram": num(DEV + "/mem_info_vram_used") >> 20 if DEV else 0, "gtt": num(DEV + "/mem_info_gtt_used") >> 20 if DEV else 0,
                  "ram": m.get("MemTotal", 0) - m.get("MemAvailable", 0), "avail": m.get("MemAvailable", 0),
-                 "swap": m.get("SwapTotal", 0) - m.get("SwapFree", 0), "zram": zr,
+                 "swap": m.get("SwapTotal", 0) - m.get("SwapFree", 0), "zram": zr, "disk": disk_swap()[1],
                  "temp": num(T_CHIP) // 1000 if T_CHIP else None,
                  "top": top, "ramtop": rtop, "errors": len(errs)}
             with self.lock:
@@ -1196,7 +1259,9 @@ class Monitor:
         ram_short = minav < 512 or pk("swap") > s0 + 512
         vram_full = info["vt"] > 0 and pk("vram") * 100 / info["vt"] >= 90
         if info["st"] > 0 and pk("swap") >= info["st"] - 64:
-            v.append("La swap se llenó: si el juego pide más memoria, el sistema lo cierra. Agrándala (ajuste zram).")
+            v.append("La swap se llenó: si el juego pide más memoria, el sistema lo cierra. Agrándala (ajuste zram) o añade swap en disco (ajuste swapdisco).")
+        if pk("disk") >= 256:
+            v.append(f"Usó {pk('disk') / 1024:.1f} GB de swap en disco: el juego siguió, pero más lento en esos momentos. Si el sistema entero se congeló, quítala (ajuste swapdisco).")
         if ram_short and vram_full:
             v.append("Van justas las dos (VRAM llena y Linux tirando de swap): baja texturas o calidad en el juego.")
         elif ram_short:
@@ -1208,7 +1273,7 @@ class Monitor:
         elif sum(1 for x in S if x["cpumax"] >= 95 and x["gpu"] < 85) * 10 >= n * 3:
             v.append("Un hilo de la CPU va lleno mientras la GPU espera: baja distancia de visión, multitudes o físicas.")
         return {"vram": pk("vram"), "gtt": pk("gtt"), "ram": pk("ram"), "minavail": minav, "swap": pk("swap"), "swap0": s0,
-                "zram": pk("zram"), "cpu": pk("cpu"), "cpuavg": round(sum(x["cpu"] for x in S) / n),
+                "zram": pk("zram"), "disk": pk("disk"), "cpu": pk("cpu"), "cpuavg": round(sum(x["cpu"] for x in S) / n),
                 "gpu": pk("gpu"), "gpuavg": round(sum(x["gpu"] for x in S) / n), "temp": pk("temp"),
                 "verdict": v, "vmref": self.vmref}
 
@@ -1224,10 +1289,10 @@ class Monitor:
                     "summary": self.summary(info), "errors": self.errors}
 
     def csv(self):
-        head = "hora,cpu_pct,cpu_hilo_max_pct,gpu_pct,vram_usada_mb,gtt_mb,ram_usada_mb,ram_disponible_mb,swap_usada_mb,zram_en_ram_mb,temp_c,errores_gpu,top_vram,top_ram"
+        head = "hora,cpu_pct,cpu_hilo_max_pct,gpu_pct,vram_usada_mb,gtt_mb,ram_usada_mb,ram_disponible_mb,swap_usada_mb,zram_en_ram_mb,swap_disco_mb,temp_c,errores_gpu,top_vram,top_ram"
         with self.lock: S = list(self.samples)
         rows = [head] + [",".join(map(str, [x["t"], x["cpu"], x["cpumax"], x["gpu"], x["vram"], x["gtt"], x["ram"], x["avail"],
-                        x["swap"], x["zram"], x["temp"] if x["temp"] is not None else "",
+                        x["swap"], x["zram"], x["disk"], x["temp"] if x["temp"] is not None else "",
                         x["errors"], '"' + " ".join(f"{c} {m}M" for c, m in x["top"]) + '"', f'"{x["ramtop"][0]} {x["ramtop"][1]}M"'])) for x in S]
         return "\n".join(rows) + "\n"
 
@@ -1305,7 +1370,7 @@ const HELP={cpu:"Uso medio del procesador (sus 16 hilos). «Hilo» es el más ca
  vram:"Memoria de la gráfica. El cargador la aparta de los 16 GB al arrancar (vram.txt) y Linux no la puede usar. Llena: tirones o cierres.",
  gtt:"RAM normal que la gráfica toma prestada cuando le falta VRAM o para datos que comparte con la CPU. Sale de la RAM de Linux.",
  ram:"Memoria de Linux en uso: los 16 GB menos la VRAM. Con menos de 1 GB libre el sistema empieza a tirar de swap.",
- swap:"Memoria que el sistema aparta para hacer sitio en la RAM. Aquí es zram: comprimida en la propia RAM («ocupa»). Si crece mientras juegas: tirones y cortes de sonido.",
+ swap:"Memoria que el sistema aparta para hacer sitio en la RAM. Primero zram: comprimida en la propia RAM («ocupa»). Si hay swap en disco, solo se usa con la zram llena («en disco»): más lenta, pero el juego no se cierra. Si crece mientras juegas: tirones y cortes de sonido.",
  temp:"Temperatura del chip. CPU y GPU son el mismo chip, con un solo sensor. El ventilador apunta a 80 °C; más de 90 °C es demasiado.",
  top:"Los programas que más VRAM usan ahora, y el que más RAM."};
 const $=id=>document.getElementById(id);
@@ -1321,7 +1386,7 @@ function cls(k,x){const vt=info.vt||1;if(k=="vram")return x.vram/vt>=.9?"bad":x.
  if(k=="swap")return info.st&&x.swap>=info.st-64?"bad":"ok";return"ok"}
 function text(k,x){switch(k){case"cpu":return`${x.cpu}% <small>hilo ${x.cpumax}%</small>`;case"gpu":return`${x.gpu}%`;
  case"vram":return`${g(x.vram)} <small>/ ${g(info.vt)}</small>`;case"gtt":return`${g(x.gtt)} <small>/ ${g(info.gt)}</small>`;
- case"ram":return`${g(x.ram)} <small>/ ${g(info.rt)}</small>`;case"swap":return`${g(x.swap)} <small>/ ${g(info.st)}</small>${info.zram?`<br><small>ocupa ${g(x.zram)} de RAM</small>`:""}`;
+ case"ram":return`${g(x.ram)} <small>/ ${g(info.rt)}</small>`;case"swap":return`${g(x.swap)} <small>/ ${g(info.st)}</small>${info.zram?`<br><small>ocupa ${g(x.zram)} de RAM</small>`:""}${info.sd?`<br><small>en disco ${g(x.disk||0)} de ${g(info.sd)}</small>`:""}`;
  default:return x[k]==null?"—":`${x[k]}°`}}
 function max(k){return {cpu:100,gpu:100,vram:info.vt,gtt:info.gt,ram:info.rt,swap:info.st||1,temp:100}[k]||1}
 function spark(k){const c=$("c_"+k),w=c.width=c.clientWidth*devicePixelRatio,h=c.height=42*devicePixelRatio,x=c.getContext("2d");
@@ -1335,7 +1400,7 @@ function draw(){const x=S[S.length-1];
  $("top").innerHTML=x.top.length?x.top.map(([c,m])=>`${c} <b>${(m/1024).toFixed(1)} GB</b>`).join(" · ")+`<br><span class="mu">más RAM: ${x.ramtop[0]} ${(x.ramtop[1]/1024).toFixed(1)} GB</span>`:"ningún programa usa la GPU"}
 function summary(s,err){if(!s||!s.vram&&s.vram!==0){return}
  let h=`<ul><li>VRAM ${g(s.vram)} de ${g(info.vt)} GB · GTT ${g(s.gtt)} GB</li><li>RAM ${g(s.ram)} de ${g(info.rt)} GB (libre como mínimo ${g(s.minavail)})</li>
- <li>Swap ${g(s.swap)} GB (al empezar ${g(s.swap0)})</li><li>CPU ${s.cpuavg}% de media, ${s.cpu}% máx. · GPU ${s.gpuavg}% de media, ${s.gpu}% máx.</li>
+ <li>Swap ${g(s.swap)} GB (al empezar ${g(s.swap0)})${info.sd?` · en disco ${g(s.disk||0)} GB`:""}</li><li>CPU ${s.cpuavg}% de media, ${s.cpu}% máx. · GPU ${s.gpuavg}% de media, ${s.gpu}% máx.</li>
  <li>Temperatura máx. ${s.temp||"?"}°</li></ul>`;
  if(err&&err.length)h+=`<div class="bad" style="margin-top:6px">Errores de memoria de la GPU:</div><ul class="bad">${err.map(e=>`<li>${e.replace(/</g,"&lt;")}</li>`).join("")}</ul>`;
  if(s.vmref)h+=`<div class="mu" style="margin-top:6px">${s.vmref} reservas de memoria rechazadas (no son de la GPU; los emuladores lo hacen y siguen).</div>`;
@@ -1513,6 +1578,7 @@ default_for() {
         nas) [ -n "${NAS_IP:-}" ] && echo S || echo N ;;
         bios|media) echo N ;;            # a choice, not a fix: only if you want them shared from the NAS
         gpu40) echo N ;;                 # silicon lottery: only if you want to try it
+        swapdisco) echo N ;;             # disk space and, on USB, stall risk: only if games get killed for memory
         *) echo S ;;
     esac
 }
@@ -1835,6 +1901,9 @@ vm_refused() {                           # vm_refused SINCE: "count|program|GB" 
 zram_mb() {                              # RAM taken by zram swap (mm_stat field 3: mem_used_total, bytes)
     cat /sys/block/zram*/mm_stat 2>/dev/null | awk '{ s += $3 } END { print int(s / 1048576) }'
 }
+disk_swap_mb() {                         # swap that isn't zram (bloque swapdisco): "size used" in MiB
+    awk 'NR > 1 && $1 !~ /zram/ { s += $3; u += $4 } END { printf "%d %d\n", s / 1024, u / 1024 }' /proc/swaps 2>/dev/null
+}
 cpu_load() {                             # cpu_load PREV CUR (/proc/stat "cpu" lines) -> "average busiest" in %
     # busy = everything but idle and iowait; the average alone hides a game held back by one full thread
     awk 'NR == FNR { for (i = 2; i <= 9; i++) t[$1] += $i; id[$1] = $5 + $6; next }
@@ -1859,23 +1928,24 @@ gpu_top_mib() {                          # top N programs by VRAM: "name MiB" li
         }' | sort -rn | head -"${1:-3}" | awk '{ print $2, $1 }'
 }
 mem_watch() {
-    local stop=0 dev csv csv_name start t vu vt gu gt ra rt ru su st zr tc gp cpu0 cpu1 ca cm top top_mib ram ram_mib ev peak_v=0 peak_g=0 min_ra=999999 peak_r=0 peak_s=0 peak_z=0 su0='' peak_t=0 events=0 n=0 ram_top=''
+    local stop=0 dev csv csv_name start t vu vt gu gt ra rt ru su st zr sdt sd peak_d=0 tc gp cpu0 cpu1 ca cm top top_mib ram ram_mib ev peak_v=0 peak_g=0 min_ra=999999 peak_r=0 peak_s=0 peak_z=0 su0='' peak_t=0 events=0 n=0 ram_top=''
     local peak_ca=0 peak_gp=0 sum_ca=0 sum_gp=0 n_gpu=0 n_cpu=0 tpath
     dev=$(ls -d /sys/class/drm/card*/device 2>/dev/null | head -1)
     csv=$(mktemp "${TMPDIR:-/tmp}/ps5-mem.XXXXXX") csv_name=ps5-mem-$(date +%Y%m%d-%H%M%S).csv
     start=$(date '+%Y-%m-%d %H:%M:%S')
     tpath=$(chip_temp_path)
     # the same columns as the web monitor's CSV (monitor-web.py), so both sessions compare directly
-    echo "hora,cpu_pct,cpu_hilo_max_pct,gpu_pct,vram_usada_mb,gtt_mb,ram_usada_mb,ram_disponible_mb,swap_usada_mb,zram_en_ram_mb,temp_c,errores_gpu,top_vram,top_ram" >"$csv"
+    echo "hora,cpu_pct,cpu_hilo_max_pct,gpu_pct,vram_usada_mb,gtt_mb,ram_usada_mb,ram_disponible_mb,swap_usada_mb,zram_en_ram_mb,swap_disco_mb,temp_c,errores_gpu,top_vram,top_ram" >"$csv"
     vt=$(( $(cat "$dev/mem_info_vram_total" 2>/dev/null || echo 0) >> 20 ))
     gt=$(( $(cat "$dev/mem_info_gtt_total" 2>/dev/null || echo 0) >> 20 ))
     rt=$(awk '/^MemTotal:/ { print int($2 / 1024) }' /proc/meminfo)
     st=$(awk '/^SwapTotal:/ { print int($2 / 1024) }' /proc/meminfo)
-    echo "Memoria en directo: VRAM $((vt / 1024)) GB, RAM de Linux $(awk -v r="$rt" 'BEGIN { printf "%.1f", r / 1024 }') GB, swap $(awk -v s="$st" 'BEGIN { printf "%.1f", s / 1024 }') GB$(ls /sys/block/zram* >/dev/null 2>&1 && echo ' (zram: comprimida en la RAM)')."
+    read -r sdt _ < <(disk_swap_mb)
+    echo "Memoria en directo: VRAM $((vt / 1024)) GB, RAM de Linux $(awk -v r="$rt" 'BEGIN { printf "%.1f", r / 1024 }') GB, swap $(awk -v s="$st" 'BEGIN { printf "%.1f", s / 1024 }') GB$(ls /sys/block/zram* >/dev/null 2>&1 && echo ' (zram: comprimida en la RAM)')$([ "${sdt:-0}" -gt 0 ] && awk -v d="$sdt" 'BEGIN { printf ", %.0f GB de ellos en disco (solo con la zram llena)", d / 1024 }')."
     echo "Ctrl+C para parar y ver los picos (al final puedes guardar cada medida en un CSV)."
     systemctl --user is-active -q ps5-monitor-web 2>/dev/null && echo "También en el móvil: http://$(lan_ip):$MONWEB_PORT"
     echo "CPU: media de los $(nproc) hilos y, entre paréntesis, el hilo más cargado. temp: el chip (CPU y GPU son el mismo)."
-    printf '%-8s %-10s %-5s %-15s %-13s %-14s %-21s %-8s %s\n' hora CPU GPU VRAM GTT RAM "swap (en RAM)" temp "más VRAM"
+    printf '%-8s %-10s %-5s %-15s %-13s %-14s %-24s %-8s %s\n' hora CPU GPU VRAM GTT RAM "$([ "${sdt:-0}" -gt 0 ] && echo 'swap (en RAM, disco)' || echo 'swap (en RAM)')" temp "más VRAM"
     cpu0=$(grep '^cpu' /proc/stat)
     trap 'stop=1' INT                    # Ctrl+C: finish this sample, then show the peaks
     while [ $stop = 0 ]; do
@@ -1885,6 +1955,7 @@ mem_watch() {
         ra=$(awk '/^MemAvailable:/ { print int($2 / 1024) }' /proc/meminfo)
         ru=$((rt - ra))
         zr=$(zram_mb)
+        read -r _ sd < <(disk_swap_mb)
         su=$(awk '/^SwapTotal:/ { t = $2 } /^SwapFree:/ { f = $2 } END { print int((t - f) / 1024) }' /proc/meminfo)
         tc=''; [ -n "$tpath" ] && tc=$(( $(cat "$tpath" 2>/dev/null || echo 0) / 1000 ))
         gp=$(cat "$dev/gpu_busy_percent" 2>/dev/null || echo 0)
@@ -1904,6 +1975,7 @@ mem_watch() {
         [ "$ru" -gt "$peak_r" ] && peak_r=$ru
         [ "$su" -gt "$peak_s" ] && peak_s=$su
         [ "$zr" -gt "$peak_z" ] && peak_z=$zr
+        [ "${sd:-0}" -gt "$peak_d" ] && peak_d=${sd:-0}
         [ "${tc:-0}" -gt "$peak_t" ] && peak_t=${tc:-0}
         [ "$ca" -gt "$peak_ca" ] && peak_ca=$ca
         [ "$gp" -gt "$peak_gp" ] && peak_gp=$gp
@@ -1913,11 +1985,11 @@ mem_watch() {
         ev=''; [ "$events" -gt 0 ] && ev="  ${R}errores GPU: $events${N}"
         local col=$G rcol=$G; [ "$vt" -gt 0 ] && [ $((vu * 100 / vt)) -ge 90 ] && col=$R
         [ "$ra" -lt 512 ] && rcol=$R                # under 512 MB available: Linux is about to swap hard
-        printf '%-8s %-10s %-5s %s%-15s%s %-13s %s%-14s%s %-21s %-8s %s%s\n' "$t" "$ca% ($cm)" "$gp%" "$col" "$(awk -v u="$vu" -v t="$vt" 'BEGIN { printf "%.2f/%.1f GB", u / 1024, t / 1024 }')" "$N" \
+        printf '%-8s %-10s %-5s %s%-15s%s %-13s %s%-14s%s %-24s %-8s %s%s\n' "$t" "$ca% ($cm)" "$gp%" "$col" "$(awk -v u="$vu" -v t="$vt" 'BEGIN { printf "%.2f/%.1f GB", u / 1024, t / 1024 }')" "$N" \
             "$(awk -v g="$gu" -v t="$gt" 'BEGIN { printf "%.2f/%.1f GB", g / 1024, t / 1024 }')" \
             "$rcol" "$(awk -v u="$ru" -v t="$rt" 'BEGIN { printf "%.1f/%.1f GB", u / 1024, t / 1024 }')" "$N" \
-            "$(awk -v s="$su" -v t="$st" -v z="$zr" 'BEGIN { printf "%.1f/%.1f GB (%.1f)", s / 1024, t / 1024, z / 1024 }')" "${tc:-?}°C" "$top" "$ev"
-        echo "$t,$ca,$cm,$gp,$vu,$gu,$ru,$ra,$su,$zr,${tc:-},$events,\"$(awk '{ printf "%s%s %dM", (NR > 1 ? " " : ""), $1, $2 }' <<<"$top_mib")\",\"$(awk '{ printf "%s %dM", $1, $2 }' <<<"$ram_mib")\"" >>"$csv"
+            "$(awk -v s="$su" -v t="$st" -v z="$zr" -v d="${sd:-0}" -v dt="${sdt:-0}" 'BEGIN { printf "%.1f/%.1f GB (%.1f", s / 1024, t / 1024, z / 1024; if (dt > 0) printf ", %.1f", d / 1024; printf ")" }')" "${tc:-?}°C" "$top" "$ev"
+        echo "$t,$ca,$cm,$gp,$vu,$gu,$ru,$ra,$su,$zr,${sd:-0},${tc:-},$events,\"$(awk '{ printf "%s%s %dM", (NR > 1 ? " " : ""), $1, $2 }' <<<"$top_mib")\",\"$(awk '{ printf "%s %dM", $1, $2 }' <<<"$ram_mib")\"" >>"$csv"
         sleep 2 || true
     done
     trap - INT
@@ -1926,7 +1998,7 @@ mem_watch() {
     echo "  VRAM usada:   $(awk -v u="$peak_v" -v t="$vt" 'BEGIN { printf "%.2f de %.1f GB (%d %%)", u / 1024, t / 1024, t ? u * 100 / t : 0 }')"
     echo "  GTT:          $(awk -v g="$peak_g" -v t="$gt" 'BEGIN { printf "%.2f de %.1f GB (RAM que la gráfica toma prestada)", g / 1024, t / 1024 }')"
     echo "  RAM usada:    $(awk -v u="$peak_r" -v t="$rt" -v r="$min_ra" 'BEGIN { printf "%.1f de %.1f GB (%d %%; libre como mínimo %.1f GB)", u / 1024, t / 1024, t ? u * 100 / t : 0, r / 1024 }') (entonces gastaba más: $ram_top)"
-    echo "  Swap:         $(awk -v a="${su0:-0}" -v b="$peak_s" -v t="$st" -v z="$peak_z" 'BEGIN { printf "%.1f de %.1f GB como máximo (al empezar %.1f); ocupaba %.1f GB de RAM (zram)", b / 1024, t / 1024, a / 1024, z / 1024 }')"
+    echo "  Swap:         $(awk -v a="${su0:-0}" -v b="$peak_s" -v t="$st" -v z="$peak_z" 'BEGIN { printf "%.1f de %.1f GB como máximo (al empezar %.1f); ocupaba %.1f GB de RAM (zram)", b / 1024, t / 1024, a / 1024, z / 1024 }')$([ "${sdt:-0}" -gt 0 ] && awk -v d="$peak_d" -v t="$sdt" 'BEGIN { printf "; en disco %.1f de %.1f GB", d / 1024, t / 1024 }')"
     echo "  CPU:          $((sum_ca / (n > 0 ? n : 1))) % de media, ${peak_ca} % como máximo (de los $(nproc) hilos)"
     echo "  GPU:          $((sum_gp / (n > 0 ? n : 1))) % de media, ${peak_gp} % como máximo"
     echo "  Temperatura:  ${peak_t} °C como máximo (el chip: CPU y GPU son el mismo)"
@@ -1947,8 +2019,11 @@ mem_watch() {
     local ram_short=0 vram_full=0
     { [ "$min_ra" -lt 512 ] || [ "$peak_s" -gt $(( ${su0:-0} + 512 )) ]; } && ram_short=1
     [ "$vt" -gt 0 ] && [ $((peak_v * 100 / vt)) -ge 90 ] && vram_full=1
-    [ "$st" -gt 0 ] && [ "$peak_s" -ge $((st - 64)) ] &&
-        echo "  → La swap se llenó: si el juego pide más memoria, el sistema lo cierra. Agrándala (menú 16 → zram)."
+    if [ "$st" -gt 0 ] && [ "$peak_s" -ge $((st - 64)) ]; then
+        echo "  → La swap se llenó: si el juego pide más memoria, el sistema lo cierra. Agrándala (menú 16 → zram)"
+        echo "    o añade swap en disco (menú 16 → swapdisco)."
+    fi
+    [ "$peak_d" -ge 256 ] && awk -v d="$peak_d" 'BEGIN { printf "  → Usó %.1f GB de swap en disco: el juego siguió, pero más lento en esos momentos. Si el sistema\n    entero se congeló (ratón parado), quítala (menú 16 → swapdisco, tamaño 0).\n", d / 1024 }'
     if [ $ram_short = 1 ] && [ $vram_full = 1 ]; then
         echo "  → Van justas las dos (VRAM llena y Linux tirando de swap): moverlas no ayuda, la memoria total no da"
         echo "    para más con esta calidad. Baja texturas o calidad en el juego. Sin errores de la GPU, puede valer así."

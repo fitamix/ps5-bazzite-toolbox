@@ -115,7 +115,7 @@ y repasa lo que ha dado problemas en esta consola:
 **Vigilar en directo** (opción 4): cada 2 s muestra la carga de CPU (media y el hilo más cargado) y de GPU, VRAM, GTT
 (RAM que la gráfica toma prestada), RAM y swap, todo como usado/total, la temperatura del chip (CPU y GPU son el mismo, con un solo
 sensor) y los programas que más VRAM usan. La swap de Bazzite es zram (RAM comprimida): `2.5/4.3 GB (0.8)` son 2,5 GB en la swap que ocupan
-0,8 GB de RAM. Al parar (Ctrl+C) resume los picos, dice si falta VRAM, RAM o las dos, si se llenó la swap y si el
+0,8 GB de RAM. Con [swap en disco](#swapdisco) sale además lo que hay en el disco: `12.1/26.7 GB (4.0, 1.4)`. Al parar (Ctrl+C) resume los picos, dice si falta VRAM, RAM o las dos, si se llenó la swap y si el
 límite es la GPU o un hilo de la CPU, y ofrece guardar cada medida en un CSV, con las mismas columnas que el del
 monitor web.
 
@@ -165,6 +165,7 @@ pregunta con una respuesta recomendada (`[S/n]` = sí por defecto, `[s/N]` = no)
 | [`vram`](#vram) | Memoria reservada para la gráfica | sí | apagar |
 | [`gpu40`](#gpu40) | Las 40 unidades de cálculo de la GPU en vez de 36 | **no** (pruébalo tú) | apagar |
 | [`zram`](#zram) | Swap comprimida del tamaño de toda la RAM | sí | reiniciar |
+| [`swapdisco`](#swapdisco) | Swap en el disco detrás de la zram, para que no se cierren los juegos por falta de memoria | **no** (si se te cierran) | no |
 | [`fans`](#fans) | Control del ventilador y temperatura objetivo | sí | no |
 | [`warmreboot`](#warmreboot) | Reinicio en caliente (sin pasar por el cargador) | **no** (experimental) | no |
 | [`hdmi`](#hdmi) | Recupera la imagen tras un reinicio en caliente | sí, si usas el reinicio en caliente | no |
@@ -305,6 +306,28 @@ sudo reboot
 ```
 
 **Deshacer:** `sudo rm /etc/systemd/zram-generator.conf.d/90-ps5-bazzite-toolbox.conf` y reiniciar.
+
+### `swapdisco`
+
+**Qué cambia:** crea un fichero de swap en el disco (`/var/swapfile`) con **prioridad 10**, detrás de la zram
+(prioridad 100), y lo deja activo en cada arranque con una línea en `/etc/fstab`. La zram se sigue usando primero: el
+disco solo entra cuando la zram se ha llenado.
+**Por qué:** con la zram llena, si un programa pide más memoria el kernel lo cierra («escasez de memoria evitada»).
+Con swap en disco, el juego va más lento en esos picos, pero sigue. Probado con Lichii (Switch 2) y Zelda OoT, que
+pide más de 14 GB: sin ella se cerraba a los 9 minutos; con ella siguió, y el disco solo recogió el pico.
+**Riesgo:** si el sistema va en un disco USB y se escribe mucho en la swap, los atascos del USB pueden congelar todo
+el sistema unos segundos. Por eso no se aplica por defecto: úsalo si se te cierran juegos por memoria, y quítalo si
+notas el ratón congelado. El monitor ([opción 4](#diagnóstico) y [web](#monitorweb)) dice cuánto se usó del disco.
+**Pregunta:** tamaño en GB (8, 16, 24 o 32; 16 recomendado; 0 = quitarla). Comprueba que queden 20 GB libres más.
+
+```sh
+sudo dd if=/dev/zero of=/var/swapfile bs=1M count=16384 status=progress   # en btrfs: sudo btrfs filesystem mkswapfile --size 16g /var/swapfile
+sudo chmod 600 /var/swapfile && sudo mkswap /var/swapfile && sudo swapon -p 10 /var/swapfile
+printf '# ps5-bazzite-toolbox (bloque swapdisco)\n/var/swapfile none swap defaults,pri=10,nofail 0 0\n' | sudo tee -a /etc/fstab
+```
+
+**Deshacer:** opción 16 → `swapdisco` con tamaño 0, o `sudo swapoff /var/swapfile`, borrar sus dos líneas de
+`/etc/fstab` y `sudo rm /var/swapfile`.
 
 ### `fans`
 
@@ -870,6 +893,7 @@ queda ahí para repetir.
 | `/etc/NetworkManager/conf.d/99-ps5-no-wifi.conf` | `wifi` | — |
 | `/etc/dnf/libdnf5.conf.d/90-ps5-hold.conf` | `updates` | — |
 | `/etc/systemd/zram-generator.conf.d/90-ps5-bazzite-toolbox.conf` | `zram` | — |
+| `/var/swapfile` y dos líneas en `/etc/fstab` | `swapdisco` | — |
 | `/etc/ps5-bazzite-deck/perf.conf` (claves `FAN_TARGET`, `CPU_BOOST`) y `~/ps5-linux-tools/` | `fans` | — |
 | `/usr/local/sbin/ps5-hdmi-kick`, `/etc/systemd/system/ps5-hdmi-kick.service` | `hdmi` | — |
 | `/usr/local/sbin/ps5-bt-guard`, `/etc/systemd/system/ps5-bt-guard.service` | `bt` | — |

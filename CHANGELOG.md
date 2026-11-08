@@ -5,12 +5,23 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+### Añadido
+
+- **Bloque `swapdisco`: swap en el disco** detrás de la zram, para que los programas que se quedan sin memoria vayan
+  más lentos en vez de cerrarse («escasez de memoria evitada»). Tamaño a elegir (8, 16, 24 o 32 GB; 0 = quitarla),
+  prioridad 10 (solo se usa con la zram llena) y activa en cada arranque. No se aplica por defecto: en un disco USB,
+  mucha escritura en la swap puede congelar el sistema unos segundos, y lo explica. Probado con Lichii (Switch 2) y
+  Zelda OoT: sin ella el kernel lo cerraba a los 9 minutos; con ella siguió.
+- **Monitor (opción 4 y web): la swap en disco aparte.** Cuánto hay en el disco, el pico al parar, un aviso si se
+  usó (el juego siguió, pero más lento) y la columna `swap_disco_mb` en el CSV de las dos vistas. El aviso de «la swap
+  se llenó» propone también este bloque.
+
 ### Cambiado
 
 - **Vigilar en directo (opción 4):** una sola temperatura, la del chip, leída del mismo sensor que el monitor web
   (antes CPU/GPU, que salían iguales). Su CSV tiene ahora **las mismas columnas que el del monitor web**
   (`hora,cpu_pct,cpu_hilo_max_pct,gpu_pct,vram_usada_mb,gtt_mb,ram_usada_mb,ram_disponible_mb,swap_usada_mb,`
-  `zram_en_ram_mb,temp_c,errores_gpu,top_vram,top_ram`), así que las sesiones de las dos vistas se comparan
+  `zram_en_ram_mb,swap_disco_mb,temp_c,errores_gpu,top_vram,top_ram`), así que las sesiones de las dos vistas se comparan
   directamente. Ya no usa `sensors` cada 2 s.
 
 ## [1.9.2] - 2026-11-07
