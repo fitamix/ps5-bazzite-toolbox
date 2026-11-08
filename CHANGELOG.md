@@ -5,6 +5,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+## [1.9.4] - 2026-11-08
+
 ### Quitado
 
 - **El acceso «Colección PortProton» del escritorio** (bloque `atajos`): ya no se crea ni se revisa. Instalar,
@@ -222,7 +224,8 @@ Primera versión publicada.
 - Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
-[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.9.3...HEAD
+[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.9.4...HEAD
+[1.9.4]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.9.3...v1.9.4
 [1.9.3]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.9.2...v1.9.3
 [1.9.2]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.9.1...v1.9.2
 [1.9.1]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.9.0...v1.9.1
