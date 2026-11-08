@@ -179,7 +179,7 @@ pregunta con una respuesta recomendada (`[S/n]` = sí por defecto, `[s/N]` = no)
 | [`media`](#media) | Imágenes de ES-DE desde el NAS | no | no |
 | [`esde`](#esde) | Arregla el `es_systems.xml` que deja EmuDeck | sí | no |
 | [`portproton`](#portproton) | Sincronización rápida y trazado de rayos para todos los juegos de PortProton | sí | no |
-| [`atajos`](#atajos) | Botón derecho de Dolphin, comando `espacio` y acceso «Colección PortProton» | sí | no |
+| [`atajos`](#atajos) | Botón derecho de Dolphin y comando `espacio` | sí | no |
 | [`monitorweb`](#monitorweb) | El monitor en directo en el navegador del móvil, siempre disponible | no | no |
 
 Los comandos de cada bloque son lo que hace la caja, con los valores por defecto; cámbialos por los tuyos.
@@ -571,13 +571,16 @@ unset _pp_kv
 - **Botón derecho sobre una carpeta:** «Ver lo que ocupa cada carpeta»
   (`~/.local/share/kio/servicemenus/ps5-bazzite-toolbox-space.desktop`).
 - **El comando `espacio [carpeta]`** (`/usr/local/bin/espacio`).
-- **El acceso «Colección PortProton»** en el escritorio (`portproton-collection.desktop`).
+
+La colección «PortProton» de Steam se actualiza sola al instalar, cambiar o desinstalar un juego (y a mano con la
+opción 12). El acceso «Colección PortProton» del escritorio que creaban las versiones anteriores ya no hace falta: el
+bloque lo borra si lo encuentra.
 
 Todos llaman a la caja de herramientas en su sitio actual: si la mueves, repite el bloque (instalada con la opción 19
 no se mueve). Si Dolphin estaba abierto, ciérralo y ábrelo. No aplica si la caja se ejecuta desde una tubería
 (`curl … | bash`).
 **Deshacer:**
-`rm ~/.local/share/kio/servicemenus/ps5-bazzite-toolbox-*.desktop "$(xdg-user-dir DESKTOP)/portproton-collection.desktop"; sudo rm /usr/local/bin/espacio`.
+`rm ~/.local/share/kio/servicemenus/ps5-bazzite-toolbox-*.desktop; sudo rm /usr/local/bin/espacio`.
 
 ### `monitorweb`
 

@@ -1492,6 +1492,8 @@ run_then_close() {
     local secs=$1; shift
     printf '%s' "bash \"$TOOLBOX_SELF\" $*; rc=\$?; if [ \$rc = 0 ]; then echo; echo \"Se cierra en $secs s…\"; sleep $secs; else echo; echo \"Error (\$rc). Pulsa Intro para cerrar.\"; read -r _; fi"
 }
+# The desktop "Colección PortProton" shortcut of v1.x: no longer made (adding, changing and removing a game already
+# sync the collection; menu option 12 does it by hand). apply_atajos removes it.
 COLL_DESKTOP="$(desk_dir)/portproton-collection.desktop"
 desc_atajos() {
     section
@@ -1499,17 +1501,17 @@ desc_atajos() {
     say "- Dolphin, botón derecho sobre un .exe: «Instalar en PortProton y Steam», «Cambiar aislamiento» y «Desinstalar» ($SM_GAME);"
     say "- Dolphin, botón derecho sobre una carpeta: «Ver lo que ocupa cada carpeta» ($SM_SPACE);"
     say "- el comando «espacio [carpeta]» en cualquier terminal ($SPACE_BIN);"
-    say "- en el escritorio, «Colección PortProton» ($COLL_DESKTOP): sincroniza la colección de Steam."
+    say "La colección «PortProton» de Steam se actualiza sola al instalar, cambiar o desinstalar un juego (y a mano,"
+    say "opción 12): el acceso «Colección PortProton» del escritorio ya no hace falta y este bloque lo quita si lo hay."
     say "POR QUÉ: tenerlos tras instalar desde cero; antes eran scripts sueltos en ~ (add-proton-game.sh,"
     say "portproton-collection.sh, verEspacioCadaDirectorio.sh), que este bloque ya no necesita."
-    say "Si mueves el toolbox de sitio, repite este bloque. DESHACER: rm '$SM_GAME' '$SM_SPACE' '$COLL_DESKTOP'; sudo rm $SPACE_BIN"
+    say "Si mueves el toolbox de sitio, repite este bloque. DESHACER: rm '$SM_GAME' '$SM_SPACE'; sudo rm $SPACE_BIN"
 }
 check_atajos() {
     [ -n "$TOOLBOX_SELF" ] && [ -f "$TOOLBOX_SELF" ] || return 2       # run from a pipe: nothing to point at
     # a missing file makes grep return 2, which here means "doesn't apply": anything missing is pending (1)
     grep -qs -F "$TOOLBOX_SELF" "$SM_GAME" && grep -qs -F "$TOOLBOX_SELF" "$SM_SPACE" &&
-        grep -qs -F "$TOOLBOX_SELF" "$SPACE_BIN" && grep -qs -F "$TOOLBOX_SELF" "$COLL_DESKTOP" &&
-        grep -qs 'Se cierra en' "$SM_GAME" && grep -qs 'Se cierra en' "$COLL_DESKTOP" &&
+        grep -qs -F "$TOOLBOX_SELF" "$SPACE_BIN" && [ ! -e "$COLL_DESKTOP" ] && grep -qs 'Se cierra en' "$SM_GAME" &&
         grep -qs -- '--remove-game' "$SM_GAME" && grep -qs -- '--change-level' "$SM_GAME" || return 1   # launchers that close by themselves
 }
 apply_atajos() {
@@ -1550,18 +1552,8 @@ EOF
     chmod +x "$SM_GAME" "$SM_SPACE"      # Plasma 6 ignores service menus that aren't executable
     printf '#!/bin/sh\n# espacio [CARPETA]: lo que ocupa cada carpeta de CARPETA (ps5-bazzite-toolbox.sh --space)\nexec bash "%s" --space "$@"\n' \
         "$TOOLBOX_SELF" | sudo tee "$SPACE_BIN" >/dev/null && sudo chmod 755 "$SPACE_BIN" || return 1
-    cat >"$COLL_DESKTOP" <<EOF
-[Desktop Entry]
-Type=Application
-Name=Colección PortProton
-Comment=Sincroniza la colección PortProton de Steam (cierra Steam si está abierto)
-Icon=steam
-Terminal=true
-Exec=bash -c '$(run_then_close 3 --pp-collection --yes)'
-EOF
-    chmod +x "$COLL_DESKTOP"
     # the stand-alone versions this replaces (made by hand or by add-proton-game.sh --install)
-    rm -f "$SM_DIR/add-proton-game.desktop" "$HOME/.local/bin/add-proton-game.sh" \
+    rm -f "$SM_DIR/add-proton-game.desktop" "$HOME/.local/bin/add-proton-game.sh" "$COLL_DESKTOP" \
         "$SM_DIR/ps5-toolbox-add-game.desktop" "$SM_DIR/ps5-toolbox-space.desktop"    # names before v1.0.0
     local old; old=$(cd ~ && ls portproton-collection.sh verEspacioCadaDirectorio.sh parpadeoVideo.sh 2>/dev/null | tr '\n' ' ')
     [ -n "$old" ] && say "Ya no hacen falta (bórralos si quieres): ~/${old// / ~/}"
@@ -2137,7 +2129,7 @@ Exec="$TOOLBOX_BIN"
 Categories=System;Utility;
 EOF
 }
-atajos_used() { [ -e "$SM_GAME" ] || [ -e "$SM_SPACE" ] || [ -e "$SPACE_BIN" ] || [ -e "$COLL_DESKTOP" ] ||
+atajos_used() { [ -e "$SM_GAME" ] || [ -e "$SM_SPACE" ] || [ -e "$SPACE_BIN" ] ||
                 [ -e "$SM_DIR/ps5-toolbox-add-game.desktop" ]; }
 install_self() {
     [ -n "$TOOLBOX_SELF" ] && [ -f "$TOOLBOX_SELF" ] || {
@@ -2160,7 +2152,7 @@ install_self() {
     local src=$TOOLBOX_SELF               # the downloaded file (TOOLBOX_SELF changes below, for the shortcuts)
     TOOLBOX_SELF=$TOOLBOX_BIN
     if atajos_used && ! check_atajos; then
-        echo "Tus atajos (Dolphin, «espacio», «Colección PortProton») usan otra copia de la caja de herramientas."
+        echo "Tus atajos (Dolphin, «espacio») usan otra copia de la caja de herramientas."
         yesno "¿Los cambio para que usen la instalada ($TOOLBOX_BIN)?" S && need_sudo && apply_atajos
     fi
     TOOLBOX_SELF=$src
@@ -2179,8 +2171,8 @@ uninstall_self() {
     yesno "¿Desinstalarla?" N || return 1
     rm -f "$TOOLBOX_BIN" "$TOOLBOX_DESKTOP" "$TOOLBOX_BIN".v*
     echo "Desinstalada."
-    grep -qs -F "$TOOLBOX_BIN" "$SM_GAME" "$SPACE_BIN" "$COLL_DESKTOP" &&
-        echo "Los atajos (Dolphin, «espacio», «Colección PortProton») la usaban: quítalos con rm '$SM_GAME' '$SM_SPACE' '$COLL_DESKTOP'; sudo rm $SPACE_BIN"
+    grep -qs -F "$TOOLBOX_BIN" "$SM_GAME" "$SPACE_BIN" &&
+        echo "Los atajos (Dolphin, «espacio») la usaban: quítalos con rm '$SM_GAME' '$SM_SPACE'; sudo rm $SPACE_BIN"
     return 0
 }
 offer_install() {                        # once, from the menu: run from a downloaded file and not installed yet

@@ -5,6 +5,12 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+### Quitado
+
+- **El acceso «Colección PortProton» del escritorio** (bloque `atajos`): ya no se crea ni se revisa. Instalar,
+  cambiar el aislamiento o desinstalar un juego ya actualizan la colección de Steam, y la opción 12 lo hace a mano. Al
+  aplicar el bloque se borra el que hubiera.
+
 ## [1.9.3] - 2026-11-08
 
 ### Añadido
