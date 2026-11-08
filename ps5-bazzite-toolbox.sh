@@ -9,7 +9,7 @@
 #    sync the collection; global PortProton defaults (setup block "portproton"). Tools: space taken by each folder,
 #    a backup of the home folder (picking what goes) that restores here or on another install.
 #  - Settings (setup): blocks that adapt the image (language, boot options, Wi-Fi, updates, VRAM, fans, warm
-#    reboot, HDMI fix, disk, firewall, Brave, Edge, NAS, the monitor in a phone's browser, zram swap size, swap on disk, the GPU's 40 compute units). Each explains what it changes, why and how to undo it, and asks.
+#    reboot, HDMI fix, disk, firewall, Brave, Edge, NAS, the monitor in a phone's browser, zram swap size and compressor, swap on disk, the GPU's 40 compute units). Each explains what it changes, why and how to undo it, and asks.
 #    Answers are kept in ~/.config/ps5-bazzite-toolbox.conf; running it again only offers what is pending.
 #
 #   bash ps5-bazzite-toolbox.sh                         # menu (the first time it offers to install itself as the
@@ -39,7 +39,7 @@
 # Setup blocks: locale cmdline wifi updates vram gpu40 zram swapdisco fans warmreboot hdmi bt disk firewall brave edge nas bios media esde portproton atajos monitorweb
 set -uo pipefail
 
-TOOLBOX_VERSION=1.9.4                    # bump on every release (see CHANGELOG.md and release.sh)
+TOOLBOX_VERSION=1.9.5                    # bump on every release (see CHANGELOG.md and release.sh)
 TOOLBOX_REPO=fitamix/ps5-bazzite-toolbox
 TOOLBOX_BIN=$HOME/.local/bin/ps5-bazzite-toolbox                      # where --install puts it
 TOOLBOX_DESKTOP=$HOME/.local/share/applications/ps5-bazzite-toolbox.desktop
@@ -424,37 +424,61 @@ apply_gpu40() {
 }
 
 # --- zram ----------------------------------------------------------------------------------------
-# Bazzite's swap is zram (compressed RAM) of half the RAM; a game that fills it has nowhere left to go.
-# A drop-in overrides only the size and leaves Bazzite's own file alone.
+# Bazzite's swap is zram (compressed RAM) of half the RAM, compressed with zstd; a game that fills it has nowhere
+# left to go. A drop-in overrides only the size and the compressor and leaves Bazzite's own file alone.
+# Compressor, measured 2026-11-08 with Lichii (Switch 2) and Zelda OoT, RAM full: zstd stores ~2.5-3:1 but every
+# page it compresses takes long enough that the game stopped at 2-5 FPS every ~25 s; lz4 stores ~1.7:1 and those
+# stops went away (RAM free on average 458 MB instead of 54). zram has to compress exactly when RAM runs out.
 ZRAM_DROPIN=/etc/systemd/zram-generator.conf.d/90-ps5-bazzite-toolbox.conf
 ZRAM_OLD=/etc/systemd/zram-generator.conf.d/90-ps5-toolbox.conf          # its name before v1.0.0
+ZRAM_LZ4_HAND=/etc/systemd/zram-generator.conf.d/91-lz4.conf             # the lz4 test by hand that this block replaces
 ZRAM_WANT=${ZRAM_SIZE:-ram}
+ZRAM_ALGO_WANT=${ZRAM_ALGO:-lz4}
 zram_now() { swapon --show=NAME,SIZE,USED --noheadings 2>/dev/null | awk '$1 ~ /zram/ { print $2 " (usada " $3 ")" }'; }
+zram_algo_now() { sed -n 's/.*\[\([^]]*\)\].*/\1/p' /sys/block/zram0/comp_algorithm 2>/dev/null; }   # the one in [brackets]
+zram_algos() { tr -d '[]' </sys/block/zram0/comp_algorithm 2>/dev/null; }    # what this kernel offers
 desc_zram() {
-    local now conf
-    now=$(zram_now) conf=$(sed -n 's/^zram-size *= *//p' /etc/systemd/zram-generator.conf "$ZRAM_OLD" "$ZRAM_DROPIN" 2>/dev/null | tail -1)
+    local now conf algo
+    now=$(zram_now) algo=$(zram_algo_now)
+    conf=$(sed -n 's/^zram-size *= *//p' /etc/systemd/zram-generator.conf "$ZRAM_OLD" "$ZRAM_DROPIN" 2>/dev/null | tail -1)
     section
-    say "Tamaño de la swap zram: memoria que se comprime dentro de la propia RAM cuando falta."
-    say "Ahora: ${now:-sin zram}${conf:+, configurada como zram-size = $conf}."
-    say "Propuesta: zram-size = $ZRAM_WANT (toda la RAM de Linux, como SteamOS) en $ZRAM_DROPIN."
-    say "POR QUÉ: Bazzite pone la mitad de la RAM. Un juego grande (p. ej. un Unreal Engine 5 con 6 GB de VRAM)"
-    say "la llena y a partir de ahí, sin swap libre, el sistema cierra el juego si pide más. Con zstd se comprime"
-    say "~2:1: llena del todo ocupa la mitad de su tamaño en RAM y guarda el doble. No reserva nada: solo gasta"
-    say "RAM cuando se usa. No se añade swap en el disco USB (los atascos del USB colgarían el sistema)."
-    say "DESHACER: sudo rm $ZRAM_DROPIN y reinicia."
-    say "Cuenta tras reiniciar (cambiarla en marcha obliga a vaciar la swap en la RAM)."
+    say "La swap zram: memoria que se comprime dentro de la propia RAM cuando falta. Dos cosas: su tamaño y el"
+    say "compresor."
+    say "Ahora: ${now:-sin zram}${conf:+, configurada como zram-size = $conf}${algo:+, comprime con $algo}."
+    say "Propuesta: zram-size = $ZRAM_WANT (toda la RAM de Linux, como SteamOS) y compresor $ZRAM_ALGO_WANT, en $ZRAM_DROPIN."
+    say "POR QUÉ el tamaño: Bazzite pone la mitad. Un juego grande (p. ej. un Unreal Engine 5 con 6 GB de VRAM) la"
+    say "llena y a partir de ahí, sin swap libre, el sistema cierra el juego si pide más. No reserva nada: solo gasta"
+    say "RAM cuando se usa. No se añade swap en el disco USB aquí (eso es el bloque swapdisco, aparte)."
+    say "POR QUÉ el compresor: la zram comprime justo cuando se acaba la RAM, normalmente jugando, y mientras"
+    say "comprime el juego espera. Los que hay:"
+    say "  lz4     muy rápido (varias veces más que zstd) y guarda menos (~1,7-2 a 1). Los tirones por memoria se"
+    say "          quedan en casi nada. RECOMENDADO para jugar: con Zelda OoT en Lichii quitó las caídas a 2-5 FPS."
+    say "  zstd    el de Bazzite: guarda más (~2,5-3 a 1), pero cada compresión tarda más; con la RAM llena se nota"
+    say "          como tirones. Mejor si usas el escritorio con muchas cosas abiertas y la CPU va sobrada."
+    say "  lzo-rle el del kernel: rápido (algo menos que lz4) y guarda parecido a lz4. Alternativa a lz4."
+    say "DESHACER: sudo rm $ZRAM_DROPIN y reinicia (vuelve a la mitad de la RAM y zstd)."
+    say "Cuenta tras reiniciar (también el reinicio en caliente): la zram se crea al arrancar."
 }
 check_zram() {
     [ -x /usr/lib/systemd/system-generators/zram-generator ] || return 2
     grep -qs "^zram-size = $ZRAM_WANT\$" "$ZRAM_DROPIN" "$ZRAM_OLD" || return 1
+    grep -qs "^compression-algorithm = $ZRAM_ALGO_WANT\$" "$ZRAM_DROPIN" || return 1
+    [ ! -e "$ZRAM_LZ4_HAND" ]                # a later drop-in would override this one's compressor
 }
 apply_zram() {
+    local avail
     value ZRAM_SIZE "Tamaño (ram = toda la RAM; ram / 2 = lo de Bazzite; o en MB, p. ej. 6144)" "$ZRAM_WANT"
     ZRAM_WANT=${ZRAM_SIZE:-ram}
+    avail=$(zram_algos)
+    value ZRAM_ALGO "Compresor (lz4 = menos tirones, recomendado; zstd = guarda más, el de Bazzite; lzo-rle)" "$ZRAM_ALGO_WANT"
+    ZRAM_ALGO_WANT=${ZRAM_ALGO:-lz4}
+    if [ -n "$avail" ] && ! grep -qw -- "$ZRAM_ALGO_WANT" <<<"$avail"; then
+        say "Este kernel no tiene «$ZRAM_ALGO_WANT». Disponibles: $avail"; return 1
+    fi
     sudo mkdir -p "$(dirname "$ZRAM_DROPIN")" &&
-        printf '# ps5-bazzite-toolbox (bloque zram): overrides the size in /etc/systemd/zram-generator.conf\n[zram0]\nzram-size = %s\n' \
-            "$ZRAM_WANT" | sudo tee "$ZRAM_DROPIN" >/dev/null && sudo rm -f "$ZRAM_OLD" || return 1
-    say "zram: $ZRAM_WANT tras el próximo reinicio."
+        printf '# ps5-bazzite-toolbox (bloque zram): overrides the size and compressor in /etc/systemd/zram-generator.conf\n[zram0]\nzram-size = %s\ncompression-algorithm = %s\n' \
+            "$ZRAM_WANT" "$ZRAM_ALGO_WANT" | sudo tee "$ZRAM_DROPIN" >/dev/null && sudo rm -f "$ZRAM_OLD" "$ZRAM_LZ4_HAND" || return 1
+    say "zram: $ZRAM_WANT con $ZRAM_ALGO_WANT tras el próximo reinicio (ahora: $(zram_algo_now || echo '?'))."
     REBOOT=1
 }
 

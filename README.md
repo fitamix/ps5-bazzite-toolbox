@@ -164,7 +164,7 @@ pregunta con una respuesta recomendada (`[S/n]` = sí por defecto, `[s/N]` = no)
 | [`updates`](#updates) | Bloquea las actualizaciones que rompen la imagen | sí | no |
 | [`vram`](#vram) | Memoria reservada para la gráfica | sí | apagar |
 | [`gpu40`](#gpu40) | Las 40 unidades de cálculo de la GPU en vez de 36 | **no** (pruébalo tú) | apagar |
-| [`zram`](#zram) | Swap comprimida del tamaño de toda la RAM | sí | reiniciar |
+| [`zram`](#zram) | Swap comprimida del tamaño de toda la RAM, con el compresor `lz4` (menos tirones) | sí | reiniciar |
 | [`swapdisco`](#swapdisco) | Swap en el disco detrás de la zram, para que no se cierren los juegos por falta de memoria | **no** (si se te cierran) | no |
 | [`fans`](#fans) | Control del ventilador y temperatura objetivo | sí | no |
 | [`warmreboot`](#warmreboot) | Reinicio en caliente (sin pasar por el cargador) | **no** (experimental) | no |
@@ -294,18 +294,50 @@ sudo dmesg | grep active_cu_number                                              
 
 ### `zram`
 
-**Qué cambia:** el tamaño de la swap zram (RAM comprimida): toda la RAM, cuando Bazzite pone la mitad. Va en un
-fichero aparte, sin tocar el de Bazzite.
-**Por qué:** los juegos grandes la llenan y, sin swap libre, el sistema los cierra.
-**Pregunta:** tamaño (`ram` = toda, `ram / 2` = lo de Bazzite, o en MB).
+**Qué cambia:** la swap zram (memoria que se comprime dentro de la propia RAM cuando falta), en dos cosas:
+- **Tamaño:** toda la RAM, cuando Bazzite pone la mitad.
+- **Compresor:** el algoritmo con el que comprime. Bazzite usa `zstd`; la caja propone `lz4`.
+
+Va en un fichero aparte (`/etc/systemd/zram-generator.conf.d/90-ps5-bazzite-toolbox.conf`), sin tocar el de Bazzite.
+Cuenta tras reiniciar, también con el reinicio en caliente: la zram se crea en cada arranque.
+
+**Por qué el tamaño:** los juegos grandes la llenan y, sin swap libre, el sistema los cierra. La zram no reserva nada:
+solo gasta RAM con lo que de verdad guarda.
+
+**Por qué el compresor:** la zram comprime justo cuando se acaba la RAM, que normalmente es jugando, y mientras
+comprime, el programa que pidió memoria espera. Con un juego que va justo de memoria eso se nota como tirones.
+
+| Compresor | Velocidad | Cuánto guarda | Para qué |
+|---|---|---|---|
+| **`lz4`** (recomendado) | muy rápido: varias veces más que `zstd` al comprimir y descomprimir | menos: ~1,7–2 a 1 | **Jugar**, sobre todo emuladores y juegos que llenan la RAM: los tirones por memoria casi desaparecen |
+| `zstd` (el de Bazzite) | más lento | más: ~2,5–3 a 1 | Escritorio con muchas cosas abiertas y la CPU sobrada: cabe más en la misma RAM |
+| `lzo-rle` (el del kernel) | rápido, algo menos que `lz4` | parecido a `lz4` | Alternativa a `lz4` |
+
+Medido en una PS5 con 4 GB de VRAM, Lichii (Switch 2) y Zelda: Ocarina of Time a 0,5x, con la RAM llena:
+
+| | `zstd` | `lz4` |
+|---|---|---|
+| Caídas a 2–5 FPS jugando | una cada ~25 s (al hablar con personajes, al girar) | ninguna en 3,5 minutos (solo al entrar en el mundo) |
+| RAM libre de media | 54 MB | 458 MB |
+| Lo guardado en la zram | ~2,5–3 a 1 | 5,3 GB en 3,1 GB de RAM (1,7 a 1) |
+
+`lz4` guarda menos, así que la zram ocupa algo más de RAM, pero comprime tan rápido que el juego deja de esperar.
+Si con `lz4` se te cierra algún programa por falta de memoria, súbele el tamaño a la zram o añade
+[swap en disco](#swapdisco).
+
+**Pregunta:** tamaño (`ram` = toda, `ram / 2` = lo de Bazzite, o en MB) y compresor (`lz4`, `zstd` o `lzo-rle`;
+comprueba que el kernel lo tenga). Si encuentra `91-lz4.conf` (la prueba a mano de antes de esta opción), lo borra:
+este bloque ya lo cubre.
 
 ```sh
 sudo mkdir -p /etc/systemd/zram-generator.conf.d
-printf '[zram0]\nzram-size = ram\n' | sudo tee /etc/systemd/zram-generator.conf.d/90-ps5-bazzite-toolbox.conf
+printf '[zram0]\nzram-size = ram\ncompression-algorithm = lz4\n' | sudo tee /etc/systemd/zram-generator.conf.d/90-ps5-bazzite-toolbox.conf
 sudo reboot
+cat /sys/block/zram0/comp_algorithm     # tras reiniciar: el que va entre [corchetes] es el que usa
 ```
 
-**Deshacer:** `sudo rm /etc/systemd/zram-generator.conf.d/90-ps5-bazzite-toolbox.conf` y reiniciar.
+**Deshacer:** `sudo rm /etc/systemd/zram-generator.conf.d/90-ps5-bazzite-toolbox.conf` y reiniciar (vuelve a la
+mitad de la RAM con `zstd`). Para cambiar solo el compresor: opción 16 → `zram`.
 
 ### `swapdisco`
 

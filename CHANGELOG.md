@@ -5,6 +5,17 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+## [1.9.5] - 2026-11-08
+
+### Añadido
+
+- **Bloque `zram`: elegir el compresor** además del tamaño. Explica cada uno (`lz4`: muy rápido, guarda ~1,7–2 a 1,
+  recomendado para jugar; `zstd`: el de Bazzite, guarda ~2,5–3 a 1 pero con la RAM llena se nota en tirones;
+  `lzo-rle`: el del kernel) y comprueba que el kernel tenga el elegido. Propone `lz4`: con Lichii (Switch 2) y Zelda
+  OoT quitó las caídas a 2–5 FPS cada ~25 s y la RAM libre media pasó de 54 a 458 MB. Muestra el compresor que se usa
+  ahora. Quien ya tenía el bloque aplicado lo verá pendiente hasta elegir compresor. Si existe `91-lz4.conf` (la
+  prueba a mano), lo borra porque lo cubre el bloque.
+
 ## [1.9.4] - 2026-11-08
 
 ### Quitado
@@ -224,7 +235,8 @@ Primera versión publicada.
 - Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
-[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.9.4...HEAD
+[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.9.5...HEAD
+[1.9.5]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.9.4...v1.9.5
 [1.9.4]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.9.3...v1.9.4
 [1.9.3]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.9.2...v1.9.3
 [1.9.2]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.9.1...v1.9.2
