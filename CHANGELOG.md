@@ -5,6 +5,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+## [1.10.0] - 2026-11-09
+
 ### Añadido
 
 - **Bloque `arranque`: sin la pantalla de carga** (*plymouth*: `plymouth.enable=0 rd.plymouth=0` en
@@ -255,7 +257,8 @@ Primera versión publicada.
 - Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
-[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.9.6...HEAD
+[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.10.0...HEAD
+[1.10.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.9.6...v1.10.0
 [1.9.6]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.9.5...v1.9.6
 [1.9.5]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.9.4...v1.9.5
 [1.9.4]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.9.3...v1.9.4
