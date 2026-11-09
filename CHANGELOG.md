@@ -5,6 +5,13 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+### Cambiado
+
+- **`--setup --all` respeta los «sí» que ya diste.** Antes aplicaba solo la respuesta por defecto de cada bloque, así
+  que los opcionales (`gpu40`, `monitorweb`, `swapdisco`, `bios`, `media`…) se saltaban aunque los hubieras aceptado
+  antes. Ahora, si `~/.config/ps5-bazzite-toolbox.conf` recuerda que dijiste que sí, los aplica también: copiando ese
+  fichero a una instalación nueva y ejecutando `--setup --all` queda como la anterior.
+
 ## [1.9.5] - 2026-11-08
 
 ### Añadido

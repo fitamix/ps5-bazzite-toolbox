@@ -91,7 +91,7 @@ lo hay, un comando del sistema que hace lo mismo.
 | **Ajustes de la consola** | | | |
 | 14 | Ver qué ajustes están aplicados | `--setup --status` | — |
 | 15 | Aplicar los pendientes, uno a uno | `--setup` | — |
-| — | Aplicar sin preguntar la respuesta recomendada en todos | `--setup --all` | — |
+| — | Aplicar sin preguntar: la respuesta recomendada, o la tuya si ya habías dicho que sí a un bloque (sirve para dejar una instalación nueva como la anterior copiando `~/.config/ps5-bazzite-toolbox.conf`) | `--setup --all` | — |
 | 16 | Revisar o cambiar ajustes concretos (también los que dijiste que no) | `--setup --only vram,nas` | cada bloque, en [Ajustes](#ajustes-de-la-consola) |
 | **Sistema** | | | |
 | 17 | Imagen: instalar otra versión de GitHub, volver a como estaba antes de actualizar (en pruebas) o guardar una copia | `--update [v1.8.4]`, `--rollback` | ver [Cambiar de versión](#cambiar-de-versión-de-la-imagen-y-volver-atrás) |

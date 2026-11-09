@@ -1864,6 +1864,9 @@ for b in ${ONLY:-$BLOCKS}; do
     esac
     [ $STATUS_ONLY = 1 ] && continue
     if [ $st = 1 ]; then q="¿Aplicar '$b'?" d=$(default_for "$b")
+        # you said yes to it before (SKIP_x=0 is only saved on a yes): that answer wins over the block's default,
+        # so --all on a new install applies the opt-in blocks you had (gpu40, monitorweb, swapdisco...)
+        [ "${!skipvar:-}" = 0 ] && d=S
     elif [ $st = 0 ] && [ -n "$ONLY" ]; then     # asked for by name: allow changing its values
         q="'$b' ya está aplicado. ¿Volver a aplicarlo (para cambiar sus valores)?" d=N
     else continue; fi
