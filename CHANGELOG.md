@@ -5,6 +5,13 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+### Arreglado
+
+- **El monitor web ya no se para solo al mirar otra pestaña.** La página dejaba de preguntar en segundo plano y el
+  monitor se paraba a los 30 s sin nadie mirando: al volver pedía guardar o descartar, como si hubieras pulsado
+  «Parar». Ahora la página sigue preguntando cada 15 s aunque no esté visible, y el monitor solo se para tras
+  10 minutos sin ninguna página abierta.
+
 ## [1.10.0] - 2026-11-09
 
 ### Añadido

@@ -1205,13 +1205,14 @@ EOF
 # --- monitorweb ----------------------------------------------------------------------------------
 # The live monitor (option 4) in a phone's browser, always reachable at http://<console>:8765 with nothing to start:
 # a small Python server, a user service (no root) and a firewall rule for the home network only. It only measures
-# while a page asks for it ("Empezar"); unwatched for 30 s it stops by itself, and then the page asks whether to
+# while a page asks for it ("Empezar"); unwatched for 10 min it stops by itself, and then the page asks whether to
 # keep the session's CSV on the console. The script is kept here as text.
 monweb_script() { cat <<'__MONWEB__'
 #!/usr/bin/env python3
 # PS5 Bazzite toolbox — the live monitor (menu option 4) in a phone's browser: http://<PS5 address>:PORT
 # Waiting it does nothing (blocked on the socket). "Empezar" on the page starts a sample every 2 s; with no page
-# asking for 30 s (phone locked, tab closed) it stops by itself. Once stopped, the page asks whether to keep the
+# asking for 10 min (phone locked, tab or browser closed) it stops by itself. A page in a background tab keeps
+# asking every 15 s (browsers may slow that to once a minute), so looking at another tab doesn't stop it. Once stopped, the page asks whether to keep the
 # session's CSV on the console (--csv-dir, default the home folder, ps5-mem-DATE.csv); nothing is saved unasked.
 # Read-only: besides that file it changes nothing.
 # Only answers private addresses (home network); the firewall rule of the toolbox's block "monitorweb" does the same.
@@ -1221,7 +1222,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 PORT = int(sys.argv[sys.argv.index("--port") + 1]) if "--port" in sys.argv else 8765
 CSV_DIR = sys.argv[sys.argv.index("--csv-dir") + 1] if "--csv-dir" in sys.argv else os.path.expanduser("~")
 MIN_SAVE = 5                                   # samples (10 s) before a session is worth a file
-EVERY, IDLE_STOP, KEEP = 2, 30, 1800          # seconds per sample, stop after this long unwatched, samples kept (1 h)
+EVERY, IDLE_STOP, KEEP = 2, 600, 1800         # seconds per sample, stop after this long unwatched, samples kept (1 h)
 P_GPUMEM = re.compile(r"ENOMEM|Not enough memory|Failed to pin|ring [a-z_0-9.]+ (timeout|reset)|page fault", re.I)
 P_VMREF = "__vm_enough_memory"                 # a program refused address space (e.g. RPCS3): not the GPU
 
@@ -1519,7 +1520,7 @@ async function poll(){try{const same=session&&got,r=await fetch("/data?since="+(
  got=d.total;draw();summary(d.summary,d.errors);
  $("ask").style.display=d.ask?"":"none";
  $("saved").textContent=d.saved?(d.saved.startsWith("/")?"Guardado en la PS5: "+d.saved:d.saved):""}catch(e){$("sub").textContent="sin conexión con la PS5…"}
- clearTimeout(timer);if(document.visibilityState=="visible")timer=setTimeout(poll,running?2000:5000)}
+ clearTimeout(timer);timer=setTimeout(poll,document.visibilityState=="visible"?(running?2000:5000):15000)}
 $("yes").onclick=async()=>{await fetch("/save",{method:"POST"});setTimeout(poll,300)};
 $("no").onclick=async()=>{await fetch("/discard",{method:"POST"});setTimeout(poll,300)};
 $("go").onclick=async()=>{await fetch(running?"/stop":"/start",{method:"POST"});setTimeout(poll,300)};
@@ -1541,7 +1542,7 @@ desc_monitorweb() {
     section
     say "El monitor en directo (opción 4) en el navegador del móvil: http://$(lan_ip || echo '<IP de la consola>'):$MONWEB_PORT"
     say "Guárdalo en la pantalla de inicio. «Empezar» mide cada 2 s (CPU, GPU, VRAM, RAM, swap, temperatura,"
-    say "qué gasta más, picos y qué te limita); sin nadie mirando 30 s, para solo. Al parar pregunta si guardar"
+    say "qué gasta más, picos y qué te limita); sin ninguna página abierta 10 min, para solo. Al parar pregunta si guardar"
     say "las medidas en la PS5 ($MONWEB_CSV_DIR/ps5-mem-FECHA.csv)."
     say "Instala $MONWEB_PY y el servicio de tu usuario ps5-monitor-web (arranca con la sesión, sin root), y abre"
     say "el puerto $MONWEB_PORT en el cortafuegos solo para tu red ($(lan_net)). Solo enseña datos; no tiene clave:"

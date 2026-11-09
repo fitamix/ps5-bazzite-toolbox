@@ -670,8 +670,9 @@ no se mueve). Si Dolphin estaba abierto, ciérralo y ábrelo. No aplica si la ca
 del móvil, en `http://<IP de la consola>:8765` (la caja te dice la dirección; guárdala en la pantalla de inicio).
 «Empezar» mide cada 2 s CPU (media y el hilo más cargado), GPU, VRAM, GTT, RAM, swap y temperatura, con su gráfica,
 los programas que más VRAM usan, los errores de memoria de la GPU, los picos y el mismo veredicto que la opción 4
-(si falta VRAM o RAM, si te limita la GPU o un hilo de la CPU). Si nadie mira la página durante 30 s (móvil bloqueado,
-pestaña cerrada), deja de medir sola. Al parar, la página **pregunta si guardar las medidas en la PS5**, en la
+(si falta VRAM o RAM, si te limita la GPU o un hilo de la CPU). Mirar otras pestañas no la para: en segundo plano la página sigue
+preguntando cada 15 s. Si no hay ninguna abierta durante 10 minutos (móvil bloqueado, pestaña o navegador cerrados),
+deja de medir sola. Al parar, la página **pregunta si guardar las medidas en la PS5**, en la
 carpeta de la caja, `~/.local/share/ps5-bazzite-toolbox/monitor/ps5-mem-<fecha>.csv` (el mismo formato que la
 opción 4; `MONWEB_CSV_DIR` en la configuración cambia la carpeta); si
 dices que no, o no vuelves a abrirla antes de empezar otra, no queda nada.
