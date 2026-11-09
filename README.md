@@ -169,7 +169,9 @@ pregunta con una respuesta recomendada (`[S/n]` = sí por defecto, `[s/N]` = no)
 | [`fans`](#fans) | Control del ventilador y temperatura objetivo | sí | no |
 | [`warmreboot`](#warmreboot) | Reinicio en caliente (sin pasar por el cargador) | **no** (experimental) | no |
 | [`hdmi`](#hdmi) | Recupera la imagen tras un reinicio en caliente | sí, si usas el reinicio en caliente | no |
+| [`arranque`](#arranque) | Arranque sin la pantalla de carga (el logo), que una vez lo dejó colgado | sí | reiniciar |
 | [`bt`](#bt) | Recarga el Bluetooth si arranca sin adaptador (PS5 original) | sí | no |
+| [`steambt`](#steambt) | Mantiene activado el Bluetooth de Steam (si no, apaga el adaptador y el mando no conecta) | sí | no |
 | [`disk`](#disk) | Quita la consulta SMART de KDE que bloquea discos USB | sí | no |
 | [`firewall`](#firewall) | Arregla el cortafuegos, que arranca «fallido» por un módulo que falta en el kernel | sí | no |
 | [`brave`](#brave) | Brave sin pedir la contraseña de la Cartera de KDE | no | no |
@@ -418,6 +420,31 @@ journalctl -b -u ps5-hdmi-kick                 # lo que hizo en este arranque
 
 **Deshacer:** `sudo systemctl disable ps5-hdmi-kick`.
 
+### `arranque`
+
+**Qué cambia:** quita la pantalla de carga (*plymouth*): añade `plymouth.enable=0 rd.plymouth=0` a
+`/efi/cmdline.txt`, con copia previa. Solo pone el logo de Bazzite; sin ella se ve el texto del arranque.
+**Por qué:** una vez dejó un arranque del Lexar parado 3 minutos (`plymouth-read-write.service`) hasta pulsar
+`Ctrl+Alt+F3`, y no aporta nada.
+
+**Lo que no toca, aunque retrase el arranque:**
+
+- `cardwired`, el gestor de GPU de Bazzite para portátiles con dos gráficas: el modo juego lo espera ~10 s, pero
+  arranca Steam con `cardwire launch`. Sin él, la sesión se cae, Bazzite reinicia Steam y se queda en el escritorio.
+  Si una versión de prueba lo enmascaró, este bloque lo vuelve a activar.
+- `ps5-hdmi-kick` corre después de llegar al modo juego.
+- La espera a la red la necesita el montaje del NAS.
+- Los segundos de los discos son el kernel detectando el USB.
+
+**A mano:**
+
+```sh
+sudo cp /efi/cmdline.txt /efi/cmdline.txt.bak && sudo sed -i 's/$/ plymouth.enable=0 rd.plymouth=0/' /efi/cmdline.txt
+systemd-analyze; systemd-analyze blame | head     # después de reiniciar: cuánto tarda y qué
+```
+
+**Deshacer:** quita `plymouth.enable=0 rd.plymouth=0` de `/efi/cmdline.txt` (o copia un `.bak-*` encima).
+
 ### `bt`
 
 **Qué cambia:** instala `ps5-bt-guard`, un servicio que al arrancar y al despertar comprueba que el Bluetooth tiene
@@ -432,6 +459,27 @@ bluetoothctl list | grep -q '^Controller' || { sudo modprobe -r btusb; sleep 2; 
 ```
 
 **Deshacer:** `sudo systemctl disable ps5-bt-guard`. Si ni así vuelve: apagar y arrancar con el cargador.
+
+### `steambt`
+
+**Qué cambia:** instala un servicio de tu usuario, `ps5-steam-bt`, que corre antes de cada arranque del modo juego,
+con Steam todavía cerrado. Si en la configuración de Steam (`~/.local/share/Steam/config/config.vdf`, `"System"` →
+`"Bluetooth"` → `"Enabled"`) el Bluetooth está a `"0"`, lo pone a `"1"`. Si ya está activado, no toca nada.
+**Por qué:** con el Bluetooth desactivado en Steam (Ajustes → Bluetooth), Steam apaga el adaptador cada vez que entra
+al modo juego y el mando no conecta. Ocurre sin que lo toques cuando Bazzite reinicia Steam: si el modo juego se cae 5
+veces seguidas, `gamescope-session-plus` vuelve a poner los ficheros base de Steam, pide iniciar sesión otra vez y deja
+el Bluetooth desactivado. Se corrige antes de abrir Steam, porque con Steam abierto el cambio se pierde al cerrarse.
+Sirve en cualquier PS5.
+**A mano:** `~/.local/share/ps5-bazzite-toolbox/steam-bt-on.sh` y `~/.config/systemd/user/ps5-steam-bt.service`
+(función `apply_steambt` del script); luego:
+
+```sh
+systemctl --user daemon-reload && systemctl --user enable ps5-steam-bt.service
+journalctl --user -b -u ps5-steam-bt          # «switched on» si tuvo que activarlo
+```
+
+**Deshacer:** `systemctl --user disable ps5-steam-bt`, y borrar esos dos ficheros. Si quieres el Bluetooth apagado
+en Steam, desactiva este bloque: si no, se vuelve a activar en el siguiente arranque.
 
 ### `disk`
 
@@ -923,7 +971,7 @@ queda ahí para repetir.
 
 | Fichero o carpeta | Bloque | Copia de seguridad |
 |---|---|---|
-| `/efi/cmdline.txt` | `cmdline`, `gpu40` | `/efi/cmdline.txt.bak-<fecha>` antes de cada cambio |
+| `/efi/cmdline.txt` | `cmdline`, `gpu40`, `arranque` | `/efi/cmdline.txt.bak-<fecha>` antes de cada cambio |
 | `/efi/vram.txt` | `vram` | `/efi/vram.txt.orig` (la primera vez) |
 | `/etc/NetworkManager/conf.d/99-ps5-no-wifi.conf` | `wifi` | — |
 | `/etc/dnf/libdnf5.conf.d/90-ps5-hold.conf` | `updates` | — |
@@ -932,6 +980,7 @@ queda ahí para repetir.
 | `/etc/ps5-bazzite-deck/perf.conf` (claves `FAN_TARGET`, `CPU_BOOST`) y `~/ps5-linux-tools/` | `fans` | — |
 | `/usr/local/sbin/ps5-hdmi-kick`, `/etc/systemd/system/ps5-hdmi-kick.service` | `hdmi` | — |
 | `/usr/local/sbin/ps5-bt-guard`, `/etc/systemd/system/ps5-bt-guard.service` | `bt` | — |
+| `~/.local/share/ps5-bazzite-toolbox/steam-bt-on.sh`, `~/.config/systemd/user/ps5-steam-bt.service`; cambia `"Enabled"` de `"Bluetooth"` en `~/.local/share/Steam/config/config.vdf` | `steambt` | — |
 | `/etc/polkit-1/rules.d/50-ps5-no-kde-smart.rules`, `~/.config/kded6rc` | `disk` | — |
 | `/etc/firewalld/zones/<zona>.xml` (la zona sin los servicios cuyo módulo falta) | `firewall` | — |
 | `~/.var/app/com.brave.Browser/config/brave-flags.conf` | `brave` | — |

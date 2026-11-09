@@ -5,6 +5,17 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+### Añadido
+
+- **Bloque `arranque`: sin la pantalla de carga** (*plymouth*: `plymouth.enable=0 rd.plymouth=0` en
+  `/efi/cmdline.txt`). Solo pone el logo, y una vez dejó el arranque parado 3 minutos hasta pulsar `Ctrl+Alt+F3`.
+  Recomendado; cuenta desde el siguiente reinicio. `cardwired` no se toca: el modo juego arranca Steam con
+  `cardwire launch`.
+- **Bloque `steambt`: el Bluetooth de Steam, siempre activado.** Con él desactivado, Steam apaga el adaptador al
+  entrar al modo juego y el mando no conecta. Bazzite lo deja así cuando reinicia Steam tras varias caídas seguidas
+  del modo juego. Un servicio de usuario lo vuelve a activar antes de cada sesión, con Steam cerrado; si ya está
+  activado no toca nada. Recomendado; para cualquier PS5.
+
 ## [1.9.6] - 2026-11-09
 
 ### Cambiado

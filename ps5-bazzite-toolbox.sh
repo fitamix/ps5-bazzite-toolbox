@@ -36,7 +36,7 @@
 #   bash ps5-bazzite-toolbox.sh --restore [DIR]         # bring a copy back, or another install's home folder (another disk)
 #   bash ps5-bazzite-toolbox.sh --install | --uninstall # command ~/.local/bin/ps5-bazzite-toolbox + applications menu
 #   bash ps5-bazzite-toolbox.sh --version
-# Setup blocks: locale cmdline wifi updates vram gpu40 zram swapdisco fans warmreboot hdmi bt disk firewall brave edge nas bios media esde portproton atajos monitorweb
+# Setup blocks: locale cmdline wifi updates vram gpu40 zram swapdisco fans warmreboot hdmi arranque bt steambt disk firewall brave edge nas bios media esde portproton atajos monitorweb
 set -uo pipefail
 
 TOOLBOX_VERSION=1.9.6                    # bump on every release (see CHANGELOG.md and release.sh)
@@ -133,7 +133,7 @@ MONWEB_UNIT=$HOME/.config/systemd/user/ps5-monitor-web.service
 MONWEB_CSV_DIR=${MONWEB_CSV_DIR:-$HOME/.local/share/ps5-bazzite-toolbox/monitor}   # a session's CSV, when you say so
 BRAVE_FLAGS=$HOME/.var/app/com.brave.Browser/config/brave-flags.conf
 EDGE_FLAGS=$HOME/.var/app/com.microsoft.Edge/config/edge-flags.conf
-BLOCKS="locale cmdline wifi updates vram gpu40 zram swapdisco fans warmreboot hdmi bt disk firewall brave edge nas bios media esde portproton atajos monitorweb"
+BLOCKS="locale cmdline wifi updates vram gpu40 zram swapdisco fans warmreboot hdmi arranque bt steambt disk firewall brave edge nas bios media esde portproton atajos monitorweb"
 
 # ======================================== settings (setup) ========================================
 # --- saved answers -------------------------------------------------------------------------------
@@ -681,6 +681,35 @@ EOF
     sudo systemctl daemon-reload && sudo systemctl enable ps5-hdmi-kick.service
 }
 
+# --- arranque ------------------------------------------------------------------------------------
+# Plymouth's splash only shows the logo, and once held a boot for 3 minutes until a VT switch. NOT cardwired, although
+# it delays graphical.target ~10 s: Game Mode starts Steam through "cardwire launch" (gamescope-session-plus), which
+# needs the daemon; without it the session dies, Bazzite resets Steam and falls back to the desktop.
+# Earlier test builds masked it: unmask it here.
+cardwired_masked() { [ "$(systemctl is-enabled cardwired.service 2>/dev/null)" = masked ]; }
+desc_arranque() {
+    section
+    say "Arranque sin la pantalla de carga (plymouth): solo pone el logo. Con plymouth.enable=0 rd.plymouth=0 en"
+    say "$CMDLINE verás el texto del arranque en su lugar."
+    cardwired_masked && say "Y vuelve a activar cardwired, que una versión de prueba quitaba: el modo juego lo necesita."
+    say "POR QUÉ: una vez dejó el arranque parado 3 minutos hasta pulsar Ctrl+Alt+F3, y no aporta nada."
+    say "DESHACER: quita plymouth.enable=0 rd.plymouth=0 de $CMDLINE (o copia un $CMDLINE.bak-* encima)."
+    say "Cuenta a partir del siguiente arranque."
+}
+check_arranque() {
+    sudo test -f "$CMDLINE" || return 2
+    cmd_has plymouth.enable=0 && cmd_has rd.plymouth=0 && ! cardwired_masked
+}
+apply_arranque() {
+    if sudo test -f "$CMDLINE" && ! { cmd_has plymouth.enable=0 && cmd_has rd.plymouth=0; }; then
+        sudo cp "$CMDLINE" "$CMDLINE.bak-$(date +%Y%m%d-%H%M%S)" || return 1
+        cmd_set plymouth.enable 0 && cmd_set rd.plymouth 0 || return 1
+        say "Ahora: $(sudo cat "$CMDLINE")"
+    fi
+    if cardwired_masked; then sudo systemctl unmask cardwired.service && sudo systemctl start cardwired.service || return 1; fi
+    REBOOT=1
+}
+
 # --- bt ------------------------------------------------------------------------------------------
 # The IW620's Bluetooth can fail its first reset at boot ("hci0: Opcode 0x0c03 failed: -110"): bluetoothd
 # then starts with no adapter. The image's ps5-bt-revive only looks for "command ... tx timeout", so it says
@@ -732,6 +761,60 @@ TimeoutStartSec=150
 WantedBy=multi-user.target suspend.target
 EOF
     sudo systemctl daemon-reload && sudo systemctl enable ps5-bt-guard.service
+}
+
+# --- steambt -------------------------------------------------------------------------------------
+# Steam keeps its Bluetooth switch in config.vdf ("System" > "Bluetooth" > "Enabled") and, with "0", powers the
+# adapter down every time Game Mode starts: the controller can't connect. A Steam reset (gamescope-session-plus's
+# short_session_recover after 5 quick crashes) leaves it at "0". Steam rewrites config.vdf on exit, so it is put
+# back to "1" by a user unit that runs before each Game Mode session, while Steam is closed.
+STEAM_CFG=$HOME/.local/share/Steam/config/config.vdf
+STEAMBT_SH=$HOME/.local/share/ps5-bazzite-toolbox/steam-bt-on.sh
+STEAMBT_UNIT=$HOME/.config/systemd/user/ps5-steam-bt.service
+steambt_now() { awk '/"Bluetooth"/{b=1} b && /"Enabled"/{gsub(/[^0-9]/,""); print; exit}' "$STEAM_CFG" 2>/dev/null; }
+desc_steambt() {
+    section
+    say "Deja el Bluetooth de Steam siempre activado: antes de cada arranque del modo juego, si en su"
+    say "configuración está desactivado, lo vuelve a activar (Steam cerrado, para que no lo pise)."
+    say "POR QUÉ: con el Bluetooth desactivado en Steam (Ajustes → Bluetooth), Steam apaga el adaptador al"
+    say "entrar al modo juego y el mando no conecta. Si Bazzite reinicia Steam (tras varias caídas seguidas del"
+    say "modo juego), se queda desactivado sin que tú lo toques."
+    say "Ahora en Steam: $(case $(steambt_now) in 1) echo activado ;; 0) echo DESACTIVADO ;; *) echo 'sin ajuste guardado' ;; esac)."
+    say "Si alguna vez quieres apagarlo en Steam, se volverá a activar en el siguiente arranque: desactiva este bloque."
+    say "DESHACER: systemctl --user disable ps5-steam-bt; rm $STEAMBT_UNIT $STEAMBT_SH"
+}
+check_steambt() {
+    [ -d "$HOME/.local/share/Steam" ] || return 2
+    [ -x "$STEAMBT_SH" ] && systemctl --user is-enabled -q ps5-steam-bt.service 2>/dev/null
+}
+apply_steambt() {
+    mkdir -p "$(dirname "$STEAMBT_SH")" "$(dirname "$STEAMBT_UNIT")" || return 1
+    cat >"$STEAMBT_SH" <<'EOF' || return 1
+#!/bin/sh
+# Steam's Bluetooth switch back on before Game Mode starts (ps5-bazzite-toolbox, block steambt).
+# Log: journalctl --user -b -u ps5-steam-bt
+CFG=$HOME/.local/share/Steam/config/config.vdf
+[ -f "$CFG" ] || exit 0
+if awk '/"Bluetooth"/{b=1} b && /"Enabled"/{r=/"0"/?0:1; exit} b && /}/{exit} END{exit (r=="" ? 1 : r)}' "$CFG"; then
+    sed -i -E '/"Bluetooth"/,/}/ s/("Enabled"[[:space:]]+)"0"/\1"1"/' "$CFG" && echo "Steam Bluetooth was off: switched on"
+fi
+EOF
+    chmod 755 "$STEAMBT_SH" &&
+    cat >"$STEAMBT_UNIT" <<EOF || return 1
+[Unit]
+Description=Steam's Bluetooth switch on before Game Mode (ps5-bazzite-toolbox)
+Before=gamescope-session-plus@ogui-steam.service
+
+[Service]
+Type=oneshot
+ExecStart=$STEAMBT_SH
+
+[Install]
+WantedBy=gamescope-session-plus@ogui-steam.service
+EOF
+    systemctl --user daemon-reload && systemctl --user enable ps5-steam-bt.service || return 1
+    [ "$(steambt_now)" = 0 ] && say "Ahora está desactivado en Steam: se activará la próxima vez que entres al modo juego."
+    return 0
 }
 
 # --- disk ----------------------------------------------------------------------------------------
