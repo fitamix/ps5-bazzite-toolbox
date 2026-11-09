@@ -5,6 +5,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+## [1.9.6] - 2026-11-09
+
 ### Cambiado
 
 - **`--setup --all` respeta los «sí» que ya diste.** Antes aplicaba solo la respuesta por defecto de cada bloque, así
@@ -242,7 +244,8 @@ Primera versión publicada.
 - Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
-[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.9.5...HEAD
+[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.9.6...HEAD
+[1.9.6]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.9.5...v1.9.6
 [1.9.5]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.9.4...v1.9.5
 [1.9.4]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.9.3...v1.9.4
 [1.9.3]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.9.2...v1.9.3
