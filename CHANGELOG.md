@@ -5,6 +5,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+## [1.10.2] - 2026-11-10
+
 ### Añadido
 
 - **Bloque `fans`: temperatura objetivo en las imágenes v2.8.1 y posteriores.** La v2.8 quitó `ps5-perf fan` y el
@@ -273,7 +275,8 @@ Primera versión publicada.
 - Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
-[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.10.1...HEAD
+[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.10.2...HEAD
+[1.10.2]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.10.1...v1.10.2
 [1.10.1]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.10.0...v1.10.1
 [1.10.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.9.6...v1.10.0
 [1.9.6]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.9.5...v1.9.6
