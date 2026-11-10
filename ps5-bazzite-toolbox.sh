@@ -39,7 +39,7 @@
 # Setup blocks: locale cmdline wifi updates vram gpu40 zram swapdisco fans warmreboot hdmi arranque bt steambt disk firewall brave edge nas bios media esde portproton atajos monitorweb
 set -uo pipefail
 
-TOOLBOX_VERSION=1.10.2                   # bump on every release (see CHANGELOG.md and release.sh)
+TOOLBOX_VERSION=1.10.3                   # bump on every release (see CHANGELOG.md and release.sh)
 TOOLBOX_REPO=fitamix/ps5-bazzite-toolbox
 TOOLBOX_BIN=$HOME/.local/bin/ps5-bazzite-toolbox                      # where --install puts it
 TOOLBOX_DESKTOP=$HOME/.local/share/applications/ps5-bazzite-toolbox.desktop
@@ -105,7 +105,7 @@ save_output() {                          # save_output TMPFILE NAME "what" -> 0 
     if mkdir -p "$dest" 2>/dev/null && mv "$tmp" "$dest/$name"; then SAVED=$dest/$name; echo "Guardado: $SAVED"
     else echo "No puedo guardarlo en $dest; se queda en $tmp (se borra al apagar)." >&2; return 1; fi
 }
-# sudo is asked for only when an option needs it (the journal, /efi, polkit's rules, SDDM, systemd, /etc), once:
+# sudo is asked for only when an option needs it (the journal, the boot partition, polkit's rules, SDDM, systemd, /etc), once:
 # a background loop then keeps it valid until the toolbox closes (Fedora forgets it after 5 minutes).
 SUDO_KEEP=''
 need_sudo() {
@@ -121,8 +121,9 @@ need_sudo() {
 
 CONF=$HOME/.config/ps5-bazzite-toolbox.conf
 OLD_CONF=$HOME/.config/ps5-bazzite-postinstall.conf      # its name before v1.0.0
-CMDLINE=/efi/cmdline.txt
-VRAMTXT=/efi/vram.txt
+EFI=/efi; [ $IS_BOOTC = 1 ] && EFI=/boot/efi   # the boot partition: bootc mounts it at /boot/efi
+CMDLINE=$EFI/cmdline.txt                 # on bootc, options added here are kept across updates (ps5-bootc-sync)
+VRAMTXT=$EFI/vram.txt
 PERFCONF=/etc/ps5-bazzite-deck/perf.conf
 TOOLS_REPO=https://github.com/ps5-linux/ps5-linux-tools
 TOOLS_COMMIT=f1fa98a                     # the revision reviewed on 2026-10-27
@@ -176,6 +177,10 @@ root_usb() {                             # "vid:pid driver" of the boot drive wh
     p=$(udevadm info -q property -n "/dev/$d" 2>/dev/null)
     grep -q '^ID_BUS=usb' <<<"$p" || return 1
     echo "$(sed -n 's/^ID_VENDOR_ID=//p' <<<"$p"):$(sed -n 's/^ID_MODEL_ID=//p' <<<"$p") $(sed -n 's/^ID_USB_DRIVER=//p' <<<"$p")"
+}
+gpu_dev() {                              # the GPU's sysfs dir; newer kernels also give each connector
+    local d                              # (card0-DP-1/device) a device link, without the mem_info files
+    for d in /sys/class/drm/card*/device; do [ -e "$d/mem_info_vram_total" ] && { echo "$d"; return; }; done
 }
 usb_errors() { journalctl -b -k --no-pager 2>/dev/null | grep -cE 'uas_eh_abort|timing out command|reset (SuperSpeed|high-speed).*USB device'; }
 warm_on() { command -v ps5-warm-reboot >/dev/null && ps5-warm-reboot status 2>/dev/null | grep >/dev/null ': on'; }
@@ -1800,7 +1805,7 @@ head_ "Sistema"
 info "Imagen $(cat /etc/ps5-bazzite-deck-version 2>/dev/null || echo '?'), kernel $(uname -r), arrancado $(uptime -p)"
 info "Arranque analizado: $BOOT ($(sudo journalctl --list-boots --no-pager 2>/dev/null | awk -v b="$BOOT" '$1 == b { $1 = $2 = ""; print }' | sed 's/^ *//'))"
 log "cmdline: $(cat /proc/cmdline)"
-log "vram.txt: $(sudo cat /efi/vram.txt 2>/dev/null)"
+log "vram.txt: $(sudo cat "$VRAMTXT" 2>/dev/null)"
 failed=$(systemctl --failed --no-legend --plain 2>/dev/null | awk '{print $1}' |
     grep -vE '^(bootloader-update|greenboot-healthcheck|ublue-os-media-automount)\.service$')
 if [ -z "$failed" ]; then ok "Servicios: ninguno fallido (sin contar los 3 de ostree/automontaje, que no importan)"
@@ -1835,7 +1840,7 @@ elif grep -q '^ID_BUS=usb' <<<"$props"; then warn "Sin la regla anti-SMART de KD
 
 # --- GPU -----------------------------------------------------------------------------------------------
 head_ "Gráfica"
-dev=$(ls -d /sys/class/drm/card*/device 2>/dev/null | head -1)
+dev=$(gpu_dev)
 gb() { awk -v v="$(cat "$1" 2>/dev/null || echo 0)" 'BEGIN { printf "%.1f GB", v / 2^30 }'; }
 info "VRAM $(gb "$dev/mem_info_vram_total") (usada $(gb "$dev/mem_info_vram_used")), RAM prestada a la GPU (GTT) $(gb "$dev/mem_info_gtt_used")"
 vt=$(cat "$dev/mem_info_vram_total" 2>/dev/null || echo 0)
@@ -2052,7 +2057,7 @@ gpu_top_mib() {                          # top N programs by VRAM: "name MiB" li
 mem_watch() {
     local stop=0 dev csv csv_name start t vu vt gu gt ra rt ru su st zr sdt sd peak_d=0 tc gp cpu0 cpu1 ca cm top top_mib ram ram_mib ev peak_v=0 peak_g=0 min_ra=999999 peak_r=0 peak_s=0 peak_z=0 su0='' peak_t=0 events=0 n=0 ram_top=''
     local peak_ca=0 peak_gp=0 sum_ca=0 sum_gp=0 n_gpu=0 n_cpu=0 tpath
-    dev=$(ls -d /sys/class/drm/card*/device 2>/dev/null | head -1)
+    dev=$(gpu_dev)
     csv=$(mktemp "${TMPDIR:-/tmp}/ps5-mem.XXXXXX") csv_name=ps5-mem-$(date +%Y%m%d-%H%M%S).csv
     start=$(date '+%Y-%m-%d %H:%M:%S')
     tpath=$(chip_temp_path)

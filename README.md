@@ -39,6 +39,7 @@ si prefieres hacerlo a mano sin instalar nada.
 - [PortProton y Steam](#portproton-y-steam)
 - [Cambiar de versión de la imagen y volver atrás](#cambiar-de-versión-de-la-imagen-y-volver-atrás)
 - [Copia de seguridad de tu carpeta personal](#copia-de-seguridad-de-tu-carpeta-personal)
+- [Utilidades: imágenes bootc en el firmware 4.x](#utilidades-imágenes-bootc-en-el-firmware-4x)
 - [Ficheros: qué usa y dónde guarda cada cosa](#ficheros-qué-usa-y-dónde-guarda-cada-cosa)
 - [Versiones de la caja de herramientas](#versiones-de-la-caja-de-herramientas)
 - [Cosas que se hacen a mano](#cosas-que-se-hacen-a-mano)
@@ -948,6 +949,35 @@ rsync -aHAX --one-file-system --info=progress2 --exclude=/.cache ~/ /run/media/$
 flatpak list --system --app --columns=application > /run/media/$USER/DISCO/flatpak-sistema.txt
 rsync -aHAX --info=progress2 /run/media/$USER/DISCO/ps5-copia/ ~/                                          # recuperar
 ```
+
+## Utilidades: imágenes bootc en el firmware 4.x
+
+En `utils/` hay herramientas sueltas, para usar en el ordenador y no en la PS5. Cada release las incluye con su
+`.sha256`.
+
+**`ps5-fw4-gpt-fix.py`** hace que una imagen bootc de VivaLaVent, o un disco ya grabado con ella, monte en una PS5 con el
+firmware 4.03 o 4.50
+([issue #47](https://github.com/VivaLaVent/ps5-bazzite-deck/issues/47)). Sin el arreglo, la PS5 dice «el sistema de
+archivos no es compatible» y el cargador no encuentra el kernel. Con algunos lectores USB 3 rápidos, la consola llega
+a apagarse al pinchar el disco.
+
+La causa: la tabla de particiones de la imagen dice que el primer sector utilizable es el 2048. Con ese valor, el
+kernel del firmware 4.x lee fuera de la tabla y no crea las particiones. La utilidad pone 34, el valor habitual, en las
+dos cabeceras de la tabla. No toca ni las particiones ni los datos. Necesita solo Python 3, en Linux, macOS o WSL.
+
+```sh
+curl -LO https://github.com/fitamix/ps5-bazzite-toolbox/releases/latest/download/ps5-fw4-gpt-fix.py
+python3 ps5-fw4-gpt-fix.py ps5-bazzite-deck-bootc-vX.img             # enseña lo que cambiaría
+python3 ps5-fw4-gpt-fix.py ps5-bazzite-deck-bootc-vX.img --apply     # arregla la imagen; luego se graba como siempre
+sudo python3 ps5-fw4-gpt-fix.py /dev/sdX --apply                    # o un disco ya grabado (Linux)
+```
+
+- Comprueba el `.sha256` de la imagen antes de arreglarla, porque después cambia.
+- Para deshacerlo: `--first-lba 2048 --apply`.
+- El primer arranque amplía la partición raíz y conserva el arreglo.
+
+Probado con la v2.10 en una PS5 original con el firmware 4.50: monta y arranca, también después del primer arranque.
+Los detalles, en inglés, están en [utils/ps5-fw4-gpt-fix.md](utils/ps5-fw4-gpt-fix.md).
 
 ## Ficheros: qué usa y dónde guarda cada cosa
 

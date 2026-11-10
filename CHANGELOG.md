@@ -5,6 +5,22 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+## [1.10.3] - 2026-11-10
+
+### Añadido
+
+- **`utils/ps5-fw4-gpt-fix.py`:** hace que una imagen bootc, o un disco grabado con ella, monte en una PS5 con el
+  firmware 4.x (VivaLaVent/ps5-bazzite-deck#47). Pone el primer sector utilizable de la tabla GPT en 34 en lugar de
+  2048. Va también como fichero de cada release. Ver «Utilidades» en el README.
+
+### Arreglado
+
+- **Instalaciones bootc:** los bloques que tocan `cmdline.txt` o `vram.txt` (ventiladores, arranque rápido, VRAM, GPU)
+  los buscaban en `/efi`, que en bootc no existe: allí la partición de arranque está en `/boot/efi`. Las opciones
+  añadidas a `cmdline.txt` se conservan en las actualizaciones de bootc.
+- **Monitor (opción 4) y diagnóstico: VRAM y GTT a 0 con el kernel 7.3 (v2.10).** Ese kernel da también a cada salida
+  de vídeo (`card0-DP-1`) un enlace `device`, y se tomaba el primero, sin los datos de memoria. Ahora se usa el de la GPU.
+
 ## [1.10.2] - 2026-11-10
 
 ### Añadido
@@ -275,7 +291,8 @@ Primera versión publicada.
 - Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
-[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.10.2...HEAD
+[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.10.3...HEAD
+[1.10.3]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.10.2...v1.10.3
 [1.10.2]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.10.1...v1.10.2
 [1.10.1]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.10.0...v1.10.1
 [1.10.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.9.6...v1.10.0

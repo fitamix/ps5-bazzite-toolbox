@@ -9,7 +9,8 @@
 #      "## [Sin publicar]" above it and update the links at the bottom.
 #   3. Commit everything.
 # It then checks all that, tags v1.1.0, pushes, and creates the GitHub release with ps5-bazzite-toolbox.sh, its .sha256
-# (what the toolbox's self-update downloads) and the CHANGELOG section as notes. Asks before anything public.
+# (what the toolbox's self-update downloads), the utilities in utils/ (*.py, each with its .sha256) and the CHANGELOG
+# section as notes. Asks before anything public.
 # Undo (right after): gh release delete v1.1.0 --cleanup-tag   (the commits stay pushed)
 set -euo pipefail
 
@@ -52,19 +53,23 @@ git fetch -q origin main
     die "origin/main tiene commits que tú no tienes (git pull primero)"
 
 printf '\n==> Se publicará %s (commit %s)\n\n%s\n\n' "$TAG" "$(git rev-parse --short HEAD)" "$notes"
-echo "QUÉ HACE: crea la etiqueta $TAG, sube main y la etiqueta a GitHub y crea la release con ps5-bazzite-toolbox.sh y su"
-echo "          .sha256. Quien tenga la caja de herramientas verá el aviso de versión nueva al abrir el menú."
+echo "QUÉ HACE: crea la etiqueta $TAG, sube main y la etiqueta a GitHub y crea la release con ps5-bazzite-toolbox.sh, las"
+echo "          utilidades de utils/ y sus .sha256. Quien tenga la caja de herramientas verá el aviso de versión nueva al abrir el menú."
 echo "DESHACER: gh release delete $TAG --cleanup-tag"
 ask "¿Publicar $TAG?" || exit 1
 
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
-cp ps5-bazzite-toolbox.sh "$tmp/"
-if command -v sha256sum >/dev/null; then (cd "$tmp" && sha256sum ps5-bazzite-toolbox.sh >ps5-bazzite-toolbox.sh.sha256)
-else (cd "$tmp" && shasum -a 256 ps5-bazzite-toolbox.sh >ps5-bazzite-toolbox.sh.sha256); fi
+cp ps5-bazzite-toolbox.sh utils/*.py "$tmp/"
+assets=()
+for f in ps5-bazzite-toolbox.sh $(cd utils && ls *.py); do
+    if command -v sha256sum >/dev/null; then (cd "$tmp" && sha256sum "$f" >"$f.sha256")
+    else (cd "$tmp" && shasum -a 256 "$f" >"$f.sha256"); fi
+    assets+=("$tmp/$f" "$tmp/$f.sha256")
+done
 printf '%s\n' "$notes" >"$tmp/notes.md"
 
 git tag -a "$TAG" -m "ps5-bazzite-toolbox $TAG"
 git push origin main "$TAG"
-gh release create "$TAG" "$tmp/ps5-bazzite-toolbox.sh" "$tmp/ps5-bazzite-toolbox.sh.sha256" \
+gh release create "$TAG" "${assets[@]}" \
     --verify-tag --title "$TAG" --notes-file "$tmp/notes.md"
 echo "Hecho: $(gh release view "$TAG" --json url --jq .url)"
