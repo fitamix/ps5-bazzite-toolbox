@@ -5,6 +5,16 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+## [1.10.4] - 2026-11-10
+
+### Añadido
+
+- **Bloque `cpufreq`: menos calor y menos ventilador en reposo.** El driver de frecuencia de la imagen deja que el
+  regulador `schedutil` revise la frecuencia cada 0,075 ms. En reposo eso son unos 275 cambios por segundo; el propio
+  regulador gasta un 20 % de un núcleo y los núcleos no bajan de 2,3–2,6 GHz. El servicio `ps5-cpufreq-calm` lo
+  pone a 10 ms en cada arranque. Medido en la v2.10: unos 90 cambios por segundo, un 8 % de un núcleo y 1,25 GHz de
+  media. Jugando, la CPU sigue llegando a su máximo.
+
 ## [1.10.3] - 2026-11-10
 
 ### Añadido
@@ -291,7 +301,8 @@ Primera versión publicada.
 - Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
-[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.10.3...HEAD
+[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.10.4...HEAD
+[1.10.4]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.10.3...v1.10.4
 [1.10.3]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.10.2...v1.10.3
 [1.10.2]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.10.1...v1.10.2
 [1.10.1]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.10.0...v1.10.1

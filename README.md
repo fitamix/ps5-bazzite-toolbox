@@ -168,6 +168,7 @@ pregunta con una respuesta recomendada (`[S/n]` = sí por defecto, `[s/N]` = no)
 | [`zram`](#zram) | Swap comprimida del tamaño de toda la RAM, con el compresor `lz4` (menos tirones) | sí | reiniciar |
 | [`swapdisco`](#swapdisco) | Swap en el disco detrás de la zram, para que no se cierren los juegos por falta de memoria | **no** (si se te cierran) | no |
 | [`fans`](#fans) | Control del ventilador y temperatura objetivo | sí | no |
+| [`cpufreq`](#cpufreq) | Calma el regulador de frecuencia de la CPU: menos calor y ventilador en reposo | sí | no |
 | [`warmreboot`](#warmreboot) | Reinicio en caliente (sin pasar por el cargador) | **no** (experimental) | no |
 | [`hdmi`](#hdmi) | Recupera la imagen tras un reinicio en caliente | sí, si usas el reinicio en caliente | no |
 | [`arranque`](#arranque) | Arranque sin la pantalla de carga (el logo), que una vez lo dejó colgado | sí | reiniciar |
@@ -406,6 +407,31 @@ cat /sys/module/ps5_fan/parameters/target                   # el objetivo en uso
 v2.8.1+).
 **Deshacer:** perf → `ps5-perf off`; tools → `sudo systemctl disable --now ps5fan ps5boost`; objetivo → vacío en el
 bloque (vuelve a los 80 °C de fábrica; en v2.8.1+ quita `ps5_fan.target=` de `cmdline.txt`).
+
+### `cpufreq`
+
+**Qué cambia:** instala `ps5-cpufreq-calm`, un servicio que al arrancar pone el regulador de frecuencia de la CPU
+(`schedutil`) a revisar la frecuencia como mucho cada 10 ms. Solo aplica si el regulador es `schedutil`, que es el de la
+imagen.
+
+**Por qué:** el driver de la imagen (`ps5-cpufreq`) le deja revisarla cada 0,075 ms. Medido en la v2.10 en reposo:
+
+| | Sin el bloque (75 µs) | Con el bloque (10 ms) |
+|---|---|---|
+| Cambios de frecuencia por segundo | ~275 | ~90 |
+| CPU que gasta el regulador (`sugov:0`) | ~20 % de un núcleo | ~8 % |
+| Frecuencia media de los núcleos | 2,3–2,6 GHz | ~1,25 GHz |
+
+Eso es calor que el ventilador tiene que sacar sin que haya nada en marcha. Jugando, la CPU sigue subiendo a su máximo.
+
+**A mano:** `/usr/local/sbin/ps5-cpufreq-calm` y `/etc/systemd/system/ps5-cpufreq-calm.service` (función
+`apply_cpufreq` del script). Equivale a lo siguiente, que se pierde al apagar:
+
+```sh
+echo 10000 | sudo tee /sys/devices/system/cpu/cpufreq/schedutil/rate_limit_us
+```
+
+**Deshacer:** `sudo systemctl disable ps5-cpufreq-calm`. Cuenta desde el siguiente arranque.
 
 ### `warmreboot`
 
@@ -1027,6 +1053,7 @@ queda ahí para repetir.
 | `/var/swapfile` y dos líneas en `/etc/fstab` | `swapdisco` | — |
 | `/etc/ps5-bazzite-deck/perf.conf` (claves `FAN_TARGET`, `CPU_BOOST`) y `~/ps5-linux-tools/` | `fans` | — |
 | `/usr/local/sbin/ps5-hdmi-kick`, `/etc/systemd/system/ps5-hdmi-kick.service` | `hdmi` | — |
+| `/usr/local/sbin/ps5-cpufreq-calm`, `/etc/systemd/system/ps5-cpufreq-calm.service` | `cpufreq` | — |
 | `/usr/local/sbin/ps5-bt-guard`, `/etc/systemd/system/ps5-bt-guard.service` | `bt` | — |
 | `~/.local/share/ps5-bazzite-toolbox/steam-bt-on.sh`, `~/.config/systemd/user/ps5-steam-bt.service`; cambia `"Enabled"` de `"Bluetooth"` en `~/.local/share/Steam/config/config.vdf` | `steambt` | — |
 | `/etc/polkit-1/rules.d/50-ps5-no-kde-smart.rules`, `~/.config/kded6rc` | `disk` | — |

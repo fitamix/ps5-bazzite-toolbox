@@ -36,10 +36,10 @@
 #   bash ps5-bazzite-toolbox.sh --restore [DIR]         # bring a copy back, or another install's home folder (another disk)
 #   bash ps5-bazzite-toolbox.sh --install | --uninstall # command ~/.local/bin/ps5-bazzite-toolbox + applications menu
 #   bash ps5-bazzite-toolbox.sh --version
-# Setup blocks: locale cmdline wifi updates vram gpu40 zram swapdisco fans warmreboot hdmi arranque bt steambt disk firewall brave edge nas bios media esde portproton atajos monitorweb
+# Setup blocks: locale cmdline wifi updates vram gpu40 zram swapdisco fans cpufreq warmreboot hdmi arranque bt steambt disk firewall brave edge nas bios media esde portproton atajos monitorweb
 set -uo pipefail
 
-TOOLBOX_VERSION=1.10.3                   # bump on every release (see CHANGELOG.md and release.sh)
+TOOLBOX_VERSION=1.10.4                   # bump on every release (see CHANGELOG.md and release.sh)
 TOOLBOX_REPO=fitamix/ps5-bazzite-toolbox
 TOOLBOX_BIN=$HOME/.local/bin/ps5-bazzite-toolbox                      # where --install puts it
 TOOLBOX_DESKTOP=$HOME/.local/share/applications/ps5-bazzite-toolbox.desktop
@@ -134,7 +134,7 @@ MONWEB_UNIT=$HOME/.config/systemd/user/ps5-monitor-web.service
 MONWEB_CSV_DIR=${MONWEB_CSV_DIR:-$HOME/.local/share/ps5-bazzite-toolbox/monitor}   # a session's CSV, when you say so
 BRAVE_FLAGS=$HOME/.var/app/com.brave.Browser/config/brave-flags.conf
 EDGE_FLAGS=$HOME/.var/app/com.microsoft.Edge/config/edge-flags.conf
-BLOCKS="locale cmdline wifi updates vram gpu40 zram swapdisco fans warmreboot hdmi arranque bt steambt disk firewall brave edge nas bios media esde portproton atajos monitorweb"
+BLOCKS="locale cmdline wifi updates vram gpu40 zram swapdisco fans cpufreq warmreboot hdmi arranque bt steambt disk firewall brave edge nas bios media esde portproton atajos monitorweb"
 
 # ======================================== settings (setup) ========================================
 # --- saved answers -------------------------------------------------------------------------------
@@ -638,6 +638,58 @@ apply_fans() {
         return 0
     fi
     say "Objetivo del ventilador ahora: $(fan_now || echo '?') °C."
+}
+
+# --- cpufreq -------------------------------------------------------------------------------------
+# The image's CPU frequency driver (ps5-cpufreq) lets schedutil re-evaluate every 75 us. At rest that is ~275
+# frequency changes a second; the governor's kthread (sugov:0) takes ~20 % of a core and the cores hover at
+# 2.3-2.6 GHz instead of resting at 800 MHz: heat the fan has to remove. With 10 ms: ~90 changes a second,
+# sugov ~8 %, cores at ~1.25 GHz on average (v2.10, 2026-11-10). Games still get full speed.
+# It is a kernel setting that resets at every boot, so a small service writes it at startup.
+CPUFREQ_RATE=10000
+CPUFREQ_KNOB=/sys/devices/system/cpu/cpufreq/schedutil/rate_limit_us
+cpufreq_now() { cat "$CPUFREQ_KNOB" 2>/dev/null; }
+desc_cpufreq() {
+    section
+    say "Instala ps5-cpufreq-calm: al arrancar pone el regulador de frecuencia de la CPU (schedutil) a revisar"
+    say "la frecuencia como mucho cada $((CPUFREQ_RATE / 1000)) ms ($CPUFREQ_KNOB = $CPUFREQ_RATE)."
+    say "POR QUÉ: el driver de la imagen le deja revisarla cada 0,075 ms. En reposo eso son unos 275 cambios"
+    say "de frecuencia por segundo: el propio regulador (sugov:0) gasta ~20 % de un núcleo y los núcleos no"
+    say "bajan de 2,3-2,6 GHz. Con $((CPUFREQ_RATE / 1000)) ms: ~90 cambios por segundo, ~8 % y ~1,25 GHz de media,"
+    say "así que hay menos calor y menos ventilador en reposo. Jugando, la CPU sigue subiendo a su máximo."
+    say "Ahora: $(cpufreq_now) µs."
+    say "DESHACER: sudo systemctl disable ps5-cpufreq-calm (cuenta desde el siguiente arranque)."
+}
+check_cpufreq() {
+    [ -e "$CPUFREQ_KNOB" ] || return 2   # another governor, or a kernel without the knob
+    [ -x /usr/local/sbin/ps5-cpufreq-calm ] && systemctl is-enabled -q ps5-cpufreq-calm.service 2>/dev/null &&
+        [ "$(cpufreq_now)" = "$CPUFREQ_RATE" ]
+}
+apply_cpufreq() {
+    sudo tee /usr/local/sbin/ps5-cpufreq-calm >/dev/null <<CALM || return 1
+#!/bin/bash
+# Let schedutil re-evaluate the CPU frequency at most every $CPUFREQ_RATE us instead of the driver's 75 us.
+# Installed by ps5-bazzite-toolbox.sh (block cpufreq). Log: journalctl -b -u ps5-cpufreq-calm
+K=$CPUFREQ_KNOB
+for _ in \$(seq 30); do [ -w "\$K" ] && break; sleep 1; done
+[ -w "\$K" ] || { echo "\$K isn't there (governor not schedutil?): nothing to do"; exit 0; }
+echo $CPUFREQ_RATE >"\$K" && echo "schedutil rate_limit_us: \$(cat "\$K")"
+CALM
+    sudo chmod 755 /usr/local/sbin/ps5-cpufreq-calm &&
+    sudo tee /etc/systemd/system/ps5-cpufreq-calm.service >/dev/null <<'UNIT' || return 1
+[Unit]
+Description=Calm the CPU frequency governor (schedutil rate limit, ps5-bazzite-toolbox)
+After=systemd-modules-load.service ps5-perf.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ps5-cpufreq-calm
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+    sudo systemctl daemon-reload && sudo systemctl enable --now ps5-cpufreq-calm.service
 }
 
 # --- warmreboot ----------------------------------------------------------------------------------
