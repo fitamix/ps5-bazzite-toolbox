@@ -5,6 +5,17 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+### Añadido
+
+- **Interfaz en inglés.** La caja de herramientas habla español o inglés: elige sola según el idioma del sistema
+  (`LANG`, `LC_ALL` o `LC_MESSAGES`; si empieza por `es`, español; si no, inglés). Se fuerza con `--lang es|en`, que
+  además lo guarda en `TOOLBOX_LANG` del fichero de ajustes. En español, los textos son los de siempre. En inglés se
+  aceptan `y`/`yes` en las preguntas (`[Y/n]`), y para borrar un juego se puede escribir `DELETE` además de `BORRAR`.
+- **README en inglés y en español.** `README.md` pasa a estar en inglés (es lo que GitHub enseña) y el español sigue
+  en `README.es.md`; cada uno enlaza al otro arriba del todo.
+- **Aviso del arreglo para el firmware 4.x arriba del README.** Un recuadro destacado explica que las imágenes bootc
+  no montan en la PS5 con el firmware 4.03 o 4.50 y cómo arreglarlas con `utils/ps5-fw4-gpt-fix.py`.
+
 ## [1.10.4] - 2026-11-10
 
 ### Añadido
