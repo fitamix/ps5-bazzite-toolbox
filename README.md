@@ -385,9 +385,26 @@ silenciosa pero caliente). Dos formas, y la caja usa solo una:
   sudo systemctl enable --now ps5fan.service ps5boost.service
   ```
 
-**Pregunta:** perf o tools (si la imagen trae `ps5-perf`), y la temperatura objetivo.
+**La temperatura objetivo según la imagen:**
+
+| Imagen | Cómo se fija | Cuándo cuenta |
+|---|---|---|
+| hasta v2.7.x | `FAN_TARGET` en `perf.conf`, que aplica `ps5-perf` (`/sys/…/ps5-fan/target_temp`) | al momento |
+| v2.8 | no se puede: Linux no toca el objetivo (91 °C de Sony) | — |
+| **v2.8.1 y posteriores** | parámetro de arranque **`ps5_fan.target=NN`** en `/efi/cmdline.txt` (40 a 91; sin él, 80 °C; `0` = el de Sony) | **desde el siguiente reinicio** |
+
+La caja detecta cuál tiene tu imagen (en v2.8.1+ existe `/sys/module/ps5_fan/parameters/target`, que enseña el valor
+en uso) y en v2.8.1+ escribe el parámetro con copia previa de `cmdline.txt`. A mano:
+
+```sh
+sudo sed -i 's/$/ ps5_fan.target=75/' /efi/cmdline.txt     # y reinicia
+cat /sys/module/ps5_fan/parameters/target                   # el objetivo en uso
+```
+
+**Pregunta:** perf o tools (si la imagen trae `ps5-perf`), y la temperatura objetivo (60–85 °C hasta v2.7.x; 60–91 en
+v2.8.1+).
 **Deshacer:** perf → `ps5-perf off`; tools → `sudo systemctl disable --now ps5fan ps5boost`; objetivo → vacío en el
-bloque (vuelve a los 80 °C de fábrica).
+bloque (vuelve a los 80 °C de fábrica; en v2.8.1+ quita `ps5_fan.target=` de `cmdline.txt`).
 
 ### `warmreboot`
 
@@ -972,7 +989,7 @@ queda ahí para repetir.
 
 | Fichero o carpeta | Bloque | Copia de seguridad |
 |---|---|---|
-| `/efi/cmdline.txt` | `cmdline`, `gpu40`, `arranque` | `/efi/cmdline.txt.bak-<fecha>` antes de cada cambio |
+| `/efi/cmdline.txt` | `cmdline`, `gpu40`, `arranque`, `fans` (v2.8.1+) | `/efi/cmdline.txt.bak-<fecha>` antes de cada cambio |
 | `/efi/vram.txt` | `vram` | `/efi/vram.txt.orig` (la primera vez) |
 | `/etc/NetworkManager/conf.d/99-ps5-no-wifi.conf` | `wifi` | — |
 | `/etc/dnf/libdnf5.conf.d/90-ps5-hold.conf` | `updates` | — |

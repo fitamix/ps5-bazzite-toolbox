@@ -544,10 +544,16 @@ apply_swapdisco() {
 # driver, /sys/.../target_temp, 80 °C from the factory), which the image's ps5-perf sets from FAN_TARGET.
 # So ps5fan and ps5-perf don't fight over the fan: with ps5fan, ps5-perf is kept for the target only
 # (CPU_BOOST=0, ps5boost does the boost).
+# v2.8 took target_temp and `ps5-perf fan` out; v2.8.1+ has the target as a boot parameter instead,
+# ps5_fan.target= in cmdline.txt (40 to Sony's 91, 0 = Sony's; 80 when absent), read-only once booted.
 FAN_SYS=/sys/bus/platform/devices/ps5-fan/target_temp
+FAN_PARAM=/sys/module/ps5_fan/parameters/target
 has_perf() { command -v ps5-perf >/dev/null; }
 fan_mode() { echo "${FAN_MODE:-$(systemctl is-enabled -q ps5fan.service 2>/dev/null && echo tools || { has_perf && echo perf || echo tools; })}"; }
-fan_now() { cat "$FAN_SYS" 2>/dev/null; }
+fan_now() { if [ -e "$FAN_PARAM" ]; then cat "$FAN_PARAM"; else cat "$FAN_SYS"; fi 2>/dev/null; }
+fan_cmdline_ok() {                       # the boot parameter matches FAN_TARGET (none for the image's 80)
+    if [ -n "${FAN_TARGET:-}" ]; then cmd_has "ps5_fan.target=$FAN_TARGET"; else ! sudo grep -q 'ps5_fan\.target=' "$CMDLINE"; fi
+}
 perf_set() {                             # perf_set KEY [VALUE] -> sets (or with no value removes) KEY in perf.conf
     sudo mkdir -p "$(dirname "$PERFCONF")" && sudo touch "$PERFCONF" && sudo sed -i "/^$1=/d" "$PERFCONF" || return 1
     [ $# -lt 2 ] || [ -z "$2" ] || echo "$1=$2" | sudo tee -a "$PERFCONF" >/dev/null
@@ -562,9 +568,20 @@ desc_fans() {
     say "  (instala gcc, make y git con dnf)."
     say "Y en los dos casos, la TEMPERATURA OBJETIVO: el ventilador acelera para no pasar de ella. La de fábrica"
     say "es 80 °C (silencioso, el chip llega a ~80 jugando); 70 °C enfría más con algo más de ruido."
-    has_perf && say "  Con tools, ps5-perf solo fija esa temperatura (CPU_BOOST=0: el boost lo hace ps5boost)."
+    has_perf && [ ! -e "$FAN_PARAM" ] && say "  Con tools, ps5-perf solo fija esa temperatura (CPU_BOOST=0: el boost lo hace ps5boost)."
+    [ -e "$FAN_PARAM" ] && say "  En esta imagen (v2.8.1+) el objetivo es un parámetro de arranque, ps5_fan.target= en $CMDLINE" \
+                             "  (con copia previa): cuenta desde el siguiente reinicio. Sin él, la imagen usa 80 °C."
     say "Ahora: $(fan_mode), objetivo $(fan_now || echo '?') °C${FAN_TARGET:+ (elegido: $FAN_TARGET)}."
     say "DESHACER: perf → ps5-perf off; tools → sudo systemctl disable --now ps5fan ps5boost; objetivo → vacío aquí."
+}
+fan_target_ask() {                       # fan_target_ask LO HI -> FAN_TARGET in range, or empty for the default 80
+    local t
+    while :; do
+        value FAN_TARGET "Temperatura objetivo del ventilador en °C ($1-$2; '-' = la de fábrica, 80)" "${FAN_TARGET:-80}"
+        t=$FAN_TARGET; [ "$t" = 80 ] && { remember FAN_TARGET ''; t=''; }
+        [ -z "$t" ] || { [[ $t =~ ^[0-9]+$ ]] && [ "$t" -ge "$1" ] && [ "$t" -le "$2" ]; } && break
+        say "Tiene que ser un número entre $1 y $2."
+    done
 }
 check_fans() {
     local m; m=$(fan_mode)
@@ -577,20 +594,14 @@ check_fans() {
         ! has_perf || ps5-perf status 2>/dev/null | grep >/dev/null ': off' ||
             sudo grep -qx 'CPU_BOOST=0' "$PERFCONF" 2>/dev/null || return 1
     fi
-    [ -z "${FAN_TARGET:-}" ] || [ "$(fan_now)" = "$FAN_TARGET" ]
+    if [ -e "$FAN_PARAM" ]; then fan_cmdline_ok
+    else [ -z "${FAN_TARGET:-}" ] || [ "$(fan_now)" = "$FAN_TARGET" ]; fi
 }
 apply_fans() {
     local m; m=$(fan_mode)
     has_perf && value FAN_MODE "¿perf o tools?" "$m"; m=${FAN_MODE:-tools}
-    if has_perf && [ -e "$FAN_SYS" ]; then
-        local t
-        while :; do
-            value FAN_TARGET "Temperatura objetivo del ventilador en °C (60-85; '-' = la de fábrica, 80)" "${FAN_TARGET:-80}"
-            t=$FAN_TARGET; [ "$t" = 80 ] && { remember FAN_TARGET ''; t=''; }
-            [ -z "$t" ] || { [[ $t =~ ^[0-9]+$ ]] && [ "$t" -ge 60 ] && [ "$t" -le 85 ]; } && break
-            say "Tiene que ser un número entre 60 y 85."
-        done
-    fi
+    if [ -e "$FAN_PARAM" ]; then fan_target_ask 60 91
+    elif has_perf && [ -e "$FAN_SYS" ]; then fan_target_ask 60 85; fi
     if [ "$m" = perf ]; then
         sudo systemctl disable --now ps5fan.service ps5boost.service 2>/dev/null
         perf_set CPU_BOOST && perf_set FAN_TARGET "${FAN_TARGET:-}" || return 1
@@ -612,6 +623,14 @@ apply_fans() {
                 perf_set FAN_TARGET && perf_set CPU_BOOST && ps5-perf off >/dev/null
             fi
         fi
+    fi
+    if [ -e "$FAN_PARAM" ] && ! fan_cmdline_ok; then
+        sudo cp "$CMDLINE" "$CMDLINE.bak-$(date +%Y%m%d-%H%M%S)" || return 1
+        if [ -n "${FAN_TARGET:-}" ]; then cmd_set ps5_fan.target "$FAN_TARGET" || return 1
+        else sudo sed -i -E 's/ *ps5_fan\.target=[^ ]*//' "$CMDLINE" || return 1; fi
+        say "Objetivo ahora: $(fan_now || echo '?') °C; desde el siguiente reinicio: ${FAN_TARGET:-80} °C."
+        REBOOT=1
+        return 0
     fi
     say "Objetivo del ventilador ahora: $(fan_now || echo '?') °C."
 }

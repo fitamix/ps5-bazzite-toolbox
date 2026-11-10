@@ -5,6 +5,13 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+### Añadido
+
+- **Bloque `fans`: temperatura objetivo en las imágenes v2.8.1 y posteriores.** La v2.8 quitó `ps5-perf fan` y el
+  objetivo quedaba en los 91 °C de Sony; la v2.8.1 lo devuelve como parámetro de arranque (`ps5_fan.target=`, 80 °C
+  si no se pone). La caja lo detecta y escribe ese parámetro en `/efi/cmdline.txt` (con copia previa; 60–91 °C,
+  cuenta desde el siguiente reinicio). En imágenes anteriores sigue como antes, con `ps5-perf`.
+
 ## [1.10.1] - 2026-11-09
 
 ### Arreglado
