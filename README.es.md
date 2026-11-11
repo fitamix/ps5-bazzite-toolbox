@@ -37,6 +37,8 @@ si prefieres hacerlo a mano sin instalar nada.
 > ([issue #47](https://github.com/VivaLaVent/ps5-bazzite-deck/issues/47)). [`utils/ps5-fw4-gpt-fix.py`](utils/ps5-fw4-gpt-fix.py) arregla la imagen (o un disco ya grabado):
 > `curl -LO https://github.com/fitamix/ps5-bazzite-toolbox/releases/latest/download/ps5-fw4-gpt-fix.py`
 > y luego `python3 ps5-fw4-gpt-fix.py IMAGEN.img --apply`.
+> Las imágenes **v2.11 y posteriores** ya vienen arregladas. Solo hace falta para imágenes anteriores o discos ya
+> grabados con ellas.
 > Detalles: [Utilidades: imágenes bootc en el firmware 4.x](#utilidades-imágenes-bootc-en-el-firmware-4x).
 
 ## Índice

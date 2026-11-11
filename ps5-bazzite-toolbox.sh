@@ -684,6 +684,8 @@ desc_cpufreq() {
 }
 check_cpufreq() {
     [ -e "$CPUFREQ_KNOB" ] || return 2   # another governor, or a kernel without the knob
+    # v2.11+ kernels set transition_delay_us to 10 ms themselves: nothing to add unless ours is already there
+    [ -x /usr/local/sbin/ps5-cpufreq-calm ] || [ "$(cpufreq_now)" -lt "$CPUFREQ_RATE" ] 2>/dev/null || return 2
     [ -x /usr/local/sbin/ps5-cpufreq-calm ] && systemctl is-enabled -q ps5-cpufreq-calm.service 2>/dev/null &&
         [ "$(cpufreq_now)" = "$CPUFREQ_RATE" ]
 }

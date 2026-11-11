@@ -34,6 +34,10 @@ was changed. The card was then plugged into a running PS5 on FW 4.50 with klogsr
 
 ## Fix
 
+**Fixed upstream in v2.11:** VivaLaVent's bootc images from v2.11 on are built with first usable LBA 34, so they mount
+on FW 4.x as they are. Use this script only for an earlier image, or for a drive already flashed with one. The
+project ships the same fix as `bootc/tools/gpt-first-lba.py`.
+
 Download it from the latest release:
 `curl -LO https://github.com/fitamix/ps5-bazzite-toolbox/releases/latest/download/ps5-fw4-gpt-fix.py`
 

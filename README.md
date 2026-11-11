@@ -37,6 +37,7 @@ case you prefer to do it by hand without installing anything.
 > ([issue #47](https://github.com/VivaLaVent/ps5-bazzite-deck/issues/47)). [`utils/ps5-fw4-gpt-fix.py`](utils/ps5-fw4-gpt-fix.py) fixes the image (or a drive already flashed):
 > `curl -LO https://github.com/fitamix/ps5-bazzite-toolbox/releases/latest/download/ps5-fw4-gpt-fix.py`
 > then `python3 ps5-fw4-gpt-fix.py IMAGE.img --apply`.
+> Images **v2.11 and later** come fixed. You only need it for earlier images, or drives already flashed with them.
 > Full details: [Utilities: bootc images on firmware 4.x](#utilities-bootc-images-on-firmware-4x).
 
 ## Contents

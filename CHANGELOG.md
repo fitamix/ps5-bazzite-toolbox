@@ -16,6 +16,13 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 - **Aviso del arreglo para el firmware 4.x arriba del README.** Un recuadro destacado explica que las imágenes bootc
   no montan en la PS5 con el firmware 4.03 o 4.50 y cómo arreglarlas con `utils/ps5-fw4-gpt-fix.py`.
 
+### Cambiado
+
+- **Bloque `cpufreq` en la v2.11 y posteriores:** sale como «no aplica». Desde la v2.11, el kernel de VivaLaVent ya hace
+  que el regulador revise la frecuencia cada 10 ms
+  ([#53](https://github.com/VivaLaVent/ps5-bazzite-deck/issues/53)). Si ya estaba instalado, se queda, y se puede quitar
+  con `sudo systemctl disable ps5-cpufreq-calm`.
+
 ## [1.10.4] - 2026-11-10
 
 ### Añadido
