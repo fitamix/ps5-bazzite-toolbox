@@ -2170,7 +2170,6 @@ A mano (no se puede automatizar desde aquí):
     resolución en Ajustes → Pantalla, salvapantallas/atenuado desactivado.
   - EmuDeck: instalador SteamOS, tipo de dispositivo "Steam Machine", ubicación Internal; después
     el bloque nas y Steam ROM Manager (Parse → Save).
-  - DualSense por Bluetooth: emparejar en un perfil propio del mando (PS + Cuadrado).
 EOF
 ;;
 *) cat <<'EOF'
@@ -2180,10 +2179,13 @@ By hand (cannot be automated from here):
     resolution in Settings → Display, screensaver/dimming disabled.
   - EmuDeck: SteamOS installer, device type "Steam Machine", location Internal; afterwards
     the nas block and Steam ROM Manager (Parse → Save).
-  - DualSense over Bluetooth: pair it in the controller's own profile (PS + Square).
 EOF
 ;;
 esac
+# with the shared address (ps5-bt-address off) the PS5's pairings are imported at boot: nothing to pair
+[ -e /etc/ps5-bazzite-deck/bt-address-off ] ||
+    echo "$(L '  - DualSense por Bluetooth: emparejar en un perfil propio del mando (PS + Cuadrado).' \
+               "  - DualSense over Bluetooth: pair it in the controller's own profile (PS + Square).")"
 fi
 [ -z "$FAILED" ]
 }
