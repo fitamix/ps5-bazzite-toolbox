@@ -5,6 +5,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+## [1.11.0] - 2026-11-11
+
 ### Añadido
 
 - **Interfaz en inglés.** La caja de herramientas habla español o inglés: elige sola según el idioma del sistema
@@ -22,6 +24,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
   que el regulador revise la frecuencia cada 10 ms
   ([#53](https://github.com/VivaLaVent/ps5-bazzite-deck/issues/53)). Si ya estaba instalado, se queda, y se puede quitar
   con `sudo systemctl disable ps5-cpufreq-calm`.
+- **Resumen de `--setup`:** el aviso de emparejar el DualSense a mano solo sale si Linux usa su propia dirección
+  Bluetooth. Con `ps5-bt-address off`, los emparejamientos de la PS5 se importan al arrancar y no hay nada que emparejar.
 
 ## [1.10.4] - 2026-11-10
 
@@ -319,7 +323,8 @@ Primera versión publicada.
 - Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
-[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.10.4...HEAD
+[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.11.0...HEAD
+[1.11.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.10.4...v1.11.0
 [1.10.4]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.10.3...v1.10.4
 [1.10.3]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.10.2...v1.10.3
 [1.10.2]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.10.1...v1.10.2
