@@ -5,11 +5,14 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+## [1.12.0] - 2026-11-12
+
 ### Añadido
 
 - **Librerías de Windows en un prefijo de PortProton** (opción 21 o `--libs`, que enseña cada prefijo con los juegos
-  que lo usan; también desde un juego: en «Mis juegos», `--libs Juego.exe` o al probar uno nuevo, respuesta `l`). Para los juegos que dicen que necesitan «Microsoft Visual C++ 2015-2022 Redistributable» u
-  otras librerías que Windows trae y un prefijo nuevo no. Ofrece las habituales (Visual C++ de 2005 a 2022,
+  que lo usan; también desde un juego: en «Mis juegos», `--libs Juego.exe` o al probar uno nuevo, respuesta `l`).
+  Para los juegos que dicen que necesitan «Microsoft Visual C++ 2015-2022 Redistributable» u otras librerías que
+  Windows trae y un prefijo nuevo no. Ofrece las habituales (Visual C++ de 2005 a 2022,
   `d3dcompiler_47`, XACT, PhysX, OpenAL y .NET 4.8), dice cuáles tiene ya el prefijo y las instala con el `winetricks`
   de PortProton dentro de su Flatpak, con la versión de Proton del juego y una pantalla (por SSH, la de la sesión). El
   menú de PortProton para esto nunca funcionó aquí, y el instalador de Visual C++ falla sin pantalla (estado 203).
@@ -363,7 +366,8 @@ Primera versión publicada.
 - Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
-[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.11.2...HEAD
+[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.12.0...HEAD
+[1.12.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.11.2...v1.12.0
 [1.11.2]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.11.1...v1.11.2
 [1.11.1]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.11.0...v1.11.1
 [1.11.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.10.4...v1.11.0
