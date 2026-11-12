@@ -202,8 +202,10 @@ The commands for each block are what the toolbox does, with the default values; 
 
 ### `locale`
 
-**WHAT IT DOES:** system language, keyboard (console and desktop), time zone and automatic network time.
-**WHY:** the image ships in English, with a US keyboard and UTC time.
+**WHAT IT DOES:** system language, keyboard (console, desktop and Game Mode), time zone and automatic network time.
+**WHY:** the image ships in English, with a US keyboard and UTC time. Also, Game Mode (gamescope) doesn't read the
+system keyboard: a physical keyboard types like a US one (e.g. no @ when logging in through a browser) until it is
+set in `~/.config/environment.d`, which it reads at startup.
 **It asks:** language (`es_ES.UTF-8`), keyboard (`es`) and time zone (`Europe/Madrid`).
 
 ```sh
@@ -212,9 +214,11 @@ sudo localectl set-keymap es
 sudo localectl set-x11-keymap es
 sudo timedatectl set-timezone Europe/Madrid
 sudo timedatectl set-ntp true
+mkdir -p ~/.config/environment.d
+echo XKB_DEFAULT_LAYOUT=es > ~/.config/environment.d/90-ps5-bazzite-toolbox-keyboard.conf   # Game Mode
 ```
 
-**UNDO:** the same commands with other values. Steam has its own language and time zone (see
+**UNDO:** the same commands with other values; for Game Mode, delete that file. Steam has its own language and time zone (see
 [Things done by hand](#things-done-by-hand)).
 
 ### `cmdline`

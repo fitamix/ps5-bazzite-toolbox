@@ -212,18 +212,26 @@ REBOOT=0 COLD=0
 
 # --- locale --------------------------------------------------------------------------------------
 LANG_WANT=${SYS_LANG:-es_ES.UTF-8} KEYMAP_WANT=${SYS_KEYMAP:-es} TZ_WANT=${SYS_TZ:-Europe/Madrid}
+# Game Mode (gamescope) ignores the system layout and types US on a physical keyboard; gamescope-session-plus sources
+# ~/.config/environment.d/*.conf before starting it, so the layout goes there.
+GS_KEYBOARD=$HOME/.config/environment.d/90-ps5-bazzite-toolbox-keyboard.conf
+x11_layout() { localectl status 2>/dev/null | sed -n 's/.*X11 Layout: //p'; }
 desc_locale() {
     section
-    say "$(L "Idioma del sistema, teclado (consola y escritorio) y zona horaria, con hora por NTP." "System language, keyboard (console and desktop) and time zone, with time from NTP.")"
+    say "$(L "Idioma del sistema, teclado (consola, escritorio y modo juego) y zona horaria, con hora por NTP." "System language, keyboard (console, desktop and Game Mode) and time zone, with time from NTP.")"
     say "$(L "Ahora: $(localectl status 2>/dev/null | sed -n 's/.*LANG=//p' | head -1), teclado $(localectl status 2>/dev/null | sed -n 's/.*VC Keymap: //p'), $(timedatectl show -p Timezone --value)" "Now: $(localectl status 2>/dev/null | sed -n 's/.*LANG=//p' | head -1), keyboard $(localectl status 2>/dev/null | sed -n 's/.*VC Keymap: //p'), $(timedatectl show -p Timezone --value)")"
-    say "$(L "POR QUÉ: la imagen viene en inglés, con teclado US y hora UTC." "WHY: the image ships in English, with a US keyboard and UTC time.")"
-    say "$(L "DESHACER: vuelve a ejecutar el bloque con otros valores." "UNDO: run the block again with other values.")"
+    say "$(L "El modo juego no lee el teclado del sistema: se le dice en $GS_KEYBOARD (XKB_DEFAULT_LAYOUT)." "Game Mode doesn't read the system keyboard: it is set in $GS_KEYBOARD (XKB_DEFAULT_LAYOUT).")"
+    say "$(L "POR QUÉ: la imagen viene en inglés, con teclado US y hora UTC. En el modo juego, un teclado físico escribe" "WHY: the image ships in English, with a US keyboard and UTC time. In Game Mode a physical keyboard types")"
+    say "$(L "  como uno US aunque el sistema esté en otro idioma (p. ej. no sale la @ al iniciar sesión en un navegador)." "  like a US one even when the system uses another layout (e.g. no @ when logging in through a browser).")"
+    say "$(L "DESHACER: vuelve a ejecutar el bloque con otros valores; para el modo juego, rm $GS_KEYBOARD." "UNDO: run the block again with other values; for Game Mode, rm $GS_KEYBOARD.")"
     say "$(L "Steam tiene su propio idioma y zona horaria: cámbialos también en sus ajustes." "Steam has its own language and time zone: change them in its settings too.")"
+    say "$(L "El teclado del modo juego cuenta la próxima vez que entres en él." "The Game Mode keyboard takes effect the next time you enter it.")"
 }
 check_locale() {
     local l; l=$(localectl status 2>/dev/null)
     grep -q "LANG=$LANG_WANT" <<<"$l" && grep -q "VC Keymap: $KEYMAP_WANT\$" <<<"$l" &&
-        [ "$(timedatectl show -p Timezone --value)" = "$TZ_WANT" ]
+        [ "$(timedatectl show -p Timezone --value)" = "$TZ_WANT" ] &&
+        { grep -qsx "XKB_DEFAULT_LAYOUT=$(x11_layout)" "$GS_KEYBOARD" || return 1; }  # grep says 2 for a missing file: pending
 }
 apply_locale() {
     value SYS_LANG "$(L "Idioma (p. ej. es_ES.UTF-8, en_US.UTF-8)" "Language (e.g. es_ES.UTF-8, en_US.UTF-8)")" "$LANG_WANT"
@@ -232,7 +240,12 @@ apply_locale() {
     LANG_WANT=$SYS_LANG KEYMAP_WANT=$SYS_KEYMAP TZ_WANT=$SYS_TZ
     sudo localectl set-locale "LANG=$SYS_LANG" && sudo localectl set-keymap "$SYS_KEYMAP" &&
         sudo localectl set-x11-keymap "$SYS_KEYMAP" && sudo timedatectl set-timezone "$SYS_TZ" &&
-        sudo timedatectl set-ntp true
+        sudo timedatectl set-ntp true || return 1
+    local x; x=$(x11_layout); x=${x:-$SYS_KEYMAP}     # the X11 name of the layout (localectl maps console keymaps)
+    mkdir -p "${GS_KEYBOARD%/*}" &&
+        printf '%s\n' "# ps5-bazzite-toolbox (bloque locale): teclado del modo juego; gamescope usa US si no se le dice." \
+            "XKB_DEFAULT_LAYOUT=$x" >"$GS_KEYBOARD" &&
+        say "$(L "Teclado del modo juego: $x (cuenta la próxima vez que entres en él)." "Game Mode keyboard: $x (takes effect the next time you enter it).")"
 }
 
 # --- cmdline -------------------------------------------------------------------------------------

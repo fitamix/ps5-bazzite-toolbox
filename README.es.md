@@ -203,8 +203,10 @@ Los comandos de cada bloque son lo que hace la caja, con los valores por defecto
 
 ### `locale`
 
-**Qué cambia:** idioma del sistema, teclado (consola y escritorio), zona horaria y hora automática por red.
-**Por qué:** la imagen viene en inglés, con teclado US y hora UTC.
+**Qué cambia:** idioma del sistema, teclado (consola, escritorio y modo juego), zona horaria y hora automática por red.
+**Por qué:** la imagen viene en inglés, con teclado US y hora UTC. Además, el modo juego (gamescope) no lee el
+teclado del sistema: con un teclado físico escribe como uno US (por ejemplo, no sale la @ al iniciar sesión en un
+navegador) hasta que se le indica en `~/.config/environment.d`, que lee al arrancar.
 **Pregunta:** idioma (`es_ES.UTF-8`), teclado (`es`) y zona horaria (`Europe/Madrid`).
 
 ```sh
@@ -213,9 +215,11 @@ sudo localectl set-keymap es
 sudo localectl set-x11-keymap es
 sudo timedatectl set-timezone Europe/Madrid
 sudo timedatectl set-ntp true
+mkdir -p ~/.config/environment.d
+echo XKB_DEFAULT_LAYOUT=es > ~/.config/environment.d/90-ps5-bazzite-toolbox-keyboard.conf   # modo juego
 ```
 
-**Deshacer:** los mismos comandos con otros valores. Steam tiene su propio idioma y zona horaria (ver
+**Deshacer:** los mismos comandos con otros valores; para el modo juego, borra ese fichero. Steam tiene su propio idioma y zona horaria (ver
 [Cosas que se hacen a mano](#cosas-que-se-hacen-a-mano)).
 
 ### `cmdline`

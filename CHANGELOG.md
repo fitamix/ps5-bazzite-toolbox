@@ -5,6 +5,14 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+### Añadido
+
+- **Teclado del modo juego en el bloque `locale`.** El modo juego (gamescope) no lee el teclado del sistema: con un
+  teclado físico escribía como uno US aunque el sistema estuviera en español (por ejemplo, no salía la @ al iniciar
+  sesión en el navegador de un plugin de Decky). El bloque escribe ahora la distribución del sistema en
+  `~/.config/environment.d/90-ps5-bazzite-toolbox-keyboard.conf` (`XKB_DEFAULT_LAYOUT`), que el modo juego lee al
+  arrancar. En una consola con `locale` ya aplicado, sale como pendiente hasta repetirlo.
+
 ## [1.11.0] - 2026-11-11
 
 ### Añadido
