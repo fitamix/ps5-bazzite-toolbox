@@ -9,7 +9,7 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ### Añadido
 
-- **Librerías de Windows en un prefijo de PortProton** (opción 21 o `--libs`, que enseña cada prefijo con los juegos
+- **Librerías de Windows en un prefijo de PortProton** (opción 13 o `--libs`, que enseña cada prefijo con los juegos
   que lo usan; también desde un juego: en «Mis juegos», `--libs Juego.exe` o al probar uno nuevo, respuesta `l`). Para
   los juegos que dicen que necesitan «Microsoft Visual C++ 2015-2022 Redistributable» u otras librerías que Windows
   trae y un prefijo nuevo no. Ofrece las habituales (Visual C++ de 2005 a 2022, `d3dcompiler_47`, XACT, PhysX, OpenAL
@@ -19,6 +19,12 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
   la sesión). El menú de PortProton para esto nunca funcionó aquí, y el instalador de Visual C++ falla sin pantalla
   (estado 203). Visto con Dead as Disco. Antes copia el registro del prefijo en `bak-libs-FECHA`. Enseña cada paso
   (descarga, instalador) mientras trabaja, y con Ctrl+C para y dice cuál quedó a medias.
+
+### Cambiado
+
+- **Menú: las librerías son la opción 13**, junto a las demás de PortProton, así que las siguientes suben un número:
+  «Ver lo que ocupa cada carpeta» pasa a la 14, los ajustes a la 15, 16 y 17, la imagen a la 18, actualizar la caja a la
+  19, instalarla a la 20 y la copia de seguridad a la 21. Los avisos y el README ya citan los números nuevos.
 
 ## [1.11.2] - 2026-11-12
 

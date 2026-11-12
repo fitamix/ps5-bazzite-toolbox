@@ -98,20 +98,20 @@ lo hay, un comando del sistema que hace lo mismo.
 | 10 | Instalar un juego de Windows (normal o aislado), probarlo y añadirlo a Steam | `--add-game [Juego.exe]` | — |
 | 11 | Mis juegos: cambiar su aislamiento, la generación de fotogramas, las librerías de Windows, o desinstalarlos | `--games`, `--change-level Juego.exe`, `--framegen Juego.exe`, `--libs [Juego.exe]`, `--remove-game [Juego.exe\|"Nombre"]` | — |
 | 12 | Sincronizar la colección «PortProton» de Steam (cierra Steam) | `--pp-collection [--dry-run\|--yes]` | — |
-| 21 | Librerías de Windows (Visual C++…) en un prefijo de PortProton, para todos sus juegos | `--libs [Juego.exe]` | — |
+| 13 | Librerías de Windows (Visual C++…) en un prefijo de PortProton, para todos sus juegos | `--libs [Juego.exe]` | — |
 | — | Lanzar un juego como lo dejó la opción 10 (lo usan Steam y el escritorio) | `--run Juego.exe` | — |
 | **Utilidades** | | | |
-| 13 | Lo que ocupa cada carpeta (también el comando `espacio` y el botón derecho de Dolphin) | `--space [carpeta]` | `du -bsh -- */ .[!.]*/ \| sort -h` |
+| 14 | Lo que ocupa cada carpeta (también el comando `espacio` y el botón derecho de Dolphin) | `--space [carpeta]` | `du -bsh -- */ .[!.]*/ \| sort -h` |
 | **Ajustes de la consola** | | | |
-| 14 | Ver qué ajustes están aplicados | `--setup --status` | — |
-| 15 | Aplicar los pendientes, uno a uno | `--setup` | — |
+| 15 | Ver qué ajustes están aplicados | `--setup --status` | — |
+| 16 | Aplicar los pendientes, uno a uno | `--setup` | — |
 | — | Aplicar sin preguntar: la respuesta recomendada, o la tuya si ya habías dicho que sí a un bloque (sirve para dejar una instalación nueva como la anterior copiando `~/.config/ps5-bazzite-toolbox.conf`) | `--setup --all` | — |
-| 16 | Revisar o cambiar ajustes concretos (también los que dijiste que no) | `--setup --only vram,nas` | cada bloque, en [Ajustes](#ajustes-de-la-consola) |
+| 17 | Revisar o cambiar ajustes concretos (también los que dijiste que no) | `--setup --only vram,nas` | cada bloque, en [Ajustes](#ajustes-de-la-consola) |
 | **Sistema** | | | |
-| 17 | Imagen: instalar otra versión de GitHub, volver a como estaba antes de actualizar (en pruebas) o guardar una copia | `--update [v1.8.4]`, `--rollback` | ver [Cambiar de versión](#cambiar-de-versión-de-la-imagen-y-volver-atrás) |
-| 18 | Actualizar esta caja de herramientas (muestra las novedades y pregunta) | `--self-update [v1.1.0]` | — |
-| 19 | Instalarla como comando y en el menú de aplicaciones, o desinstalarla | `--install`, `--uninstall` | — |
-| 20 | Copia de seguridad de tu carpeta personal: guardar (eligiendo qué) o recuperar, también desde otro disco | `--backup`, `--restore [carpeta]` | ver [Copia de seguridad](#copia-de-seguridad-de-tu-carpeta-personal) |
+| 18 | Imagen: instalar otra versión de GitHub, volver a como estaba antes de actualizar (en pruebas) o guardar una copia | `--update [v1.8.4]`, `--rollback` | ver [Cambiar de versión](#cambiar-de-versión-de-la-imagen-y-volver-atrás) |
+| 19 | Actualizar esta caja de herramientas (muestra las novedades y pregunta) | `--self-update [v1.1.0]` | — |
+| 20 | Instalarla como comando y en el menú de aplicaciones, o desinstalarla | `--install`, `--uninstall` | — |
+| 21 | Copia de seguridad de tu carpeta personal: guardar (eligiendo qué) o recuperar, también desde otro disco | `--backup`, `--restore [carpeta]` | ver [Copia de seguridad](#copia-de-seguridad-de-tu-carpeta-personal) |
 | — | Versión y ayuda | `--version`, `--help` | — |
 | — | Idioma de la interfaz (se guarda; va antes de las demás opciones) | `--lang es\|en` | — |
 
@@ -160,9 +160,9 @@ Los ajustes van en **bloques**. Cada uno, al ofrecerse, explica **qué cambia, p
 pregunta con una respuesta recomendada (`[S/n]` = sí por defecto, `[s/N]` = no). Lo que depende de cada consola
 (disco, idioma, NAS…) lo detecta o lo pregunta.
 
-- **Opción 15** (`--setup`) ofrece uno a uno los pendientes; **14** (`--setup --status`) solo enseña el estado:
+- **Opción 16** (`--setup`) ofrece uno a uno los pendientes; **15** (`--setup --status`) solo enseña el estado:
   ✔ aplicado, ✘ pendiente, – no aplica en esta consola (o dijiste que no).
-- **Opción 16** (`--setup --only vram,nas`) vuelve a un bloque concreto, aunque ya esté aplicado o le dijeras que no:
+- **Opción 17** (`--setup --only vram,nas`) vuelve a un bloque concreto, aunque ya esté aplicado o le dijeras que no:
   es la forma de cambiar un valor o deshacerlo.
 - **Tus respuestas** (idioma, VRAM, datos del NAS, bloques que no quieres…) se guardan en
   `~/.config/ps5-bazzite-toolbox.conf`, y la próxima vez solo ofrece lo pendiente.
@@ -275,7 +275,7 @@ sudo sed -i 's| module_blacklist=moal||' /efi/cmdline.txt     # solo con la imag
 **Qué cambia:** apaga las actualizaciones automáticas de Bazzite y prohíbe a `dnf` actualizar el kernel, Mesa, el
 firmware y gamescope.
 **Por qué:** esos paquetes llevan parches de la PS5; actualizarlos rompe la imagen. La imagen se actualiza con su
-propio actualizador ([opción 17](#cambiar-de-versión-de-la-imagen-y-volver-atrás)), no con `ujust update` ni
+propio actualizador ([opción 18](#cambiar-de-versión-de-la-imagen-y-volver-atrás)), no con `ujust update` ni
 `rpm-ostree` (no es una imagen ostree). **En bootc no aplica**: ahí las actualizaciones son las del autor y se deshacen.
 
 ```sh
@@ -317,7 +317,7 @@ sudo sed -i -E 's/ *amdgpu\.ps5_cu_unlock=[0-9]+//' /efi/cmdline.txt            
 sudo dmesg | grep active_cu_number                                                # tras arrancar: 40 o 36
 ```
 
-**Deshacer:** opción 16 → `gpu40` y elegir 36. Cuenta solo tras **apagar** y arrancar con el cargador.
+**Deshacer:** opción 17 → `gpu40` y elegir 36. Cuenta solo tras **apagar** y arrancar con el cargador.
 
 ### `zram`
 
@@ -364,7 +364,7 @@ cat /sys/block/zram0/comp_algorithm     # tras reiniciar: el que va entre [corch
 ```
 
 **Deshacer:** `sudo rm /etc/systemd/zram-generator.conf.d/90-ps5-bazzite-toolbox.conf` y reiniciar (vuelve a la
-mitad de la RAM con `zstd`). Para cambiar solo el compresor: opción 16 → `zram`.
+mitad de la RAM con `zstd`). Para cambiar solo el compresor: opción 17 → `zram`.
 
 ### `swapdisco`
 
@@ -385,7 +385,7 @@ sudo chmod 600 /var/swapfile && sudo mkswap /var/swapfile && sudo swapon -p 10 /
 printf '# ps5-bazzite-toolbox (bloque swapdisco)\n/var/swapfile none swap defaults,pri=10,nofail 0 0\n' | sudo tee -a /etc/fstab
 ```
 
-**Deshacer:** opción 16 → `swapdisco` con tamaño 0, o `sudo swapoff /var/swapfile`, borrar sus dos líneas de
+**Deshacer:** opción 17 → `swapdisco` con tamaño 0, o `sudo swapoff /var/swapfile`, borrar sus dos líneas de
 `/etc/fstab` y `sudo rm /var/swapfile`.
 
 ### `fans`
@@ -723,7 +723,7 @@ La colección «PortProton» de Steam se actualiza sola al instalar, cambiar o d
 opción 12). El acceso «Colección PortProton» del escritorio que creaban las versiones anteriores ya no hace falta: el
 bloque lo borra si lo encuentra.
 
-Todos llaman a la caja de herramientas en su sitio actual: si la mueves, repite el bloque (instalada con la opción 19
+Todos llaman a la caja de herramientas en su sitio actual: si la mueves, repite el bloque (instalada con la opción 20
 no se mueve). Si Dolphin estaba abierto, ciérralo y ábrelo. No aplica si la caja se ejecuta desde una tubería
 (`curl … | bash`).
 **Deshacer:**
@@ -807,7 +807,7 @@ partidas) se mueve entre tu PortProton y la copia aislada (preguntando), lo abre
 dices que sí, rehace sus accesos y su script de Steam. La entrada de Steam no cambia: conserva el tiempo jugado, las
 carátulas y la colección. Si estaba en el prefijo compartido `DEFAULT`, empieza con uno nuevo y sus partidas se
 quedan en `DEFAULT`. Si mueves o borras la caja de herramientas, los juegos aislados no arrancan desde Steam: instálala
-(opción 19).
+(opción 20).
 
 Después, pregunta en cada paso:
 
@@ -825,7 +825,7 @@ Después, pregunta en cada paso:
 aislado con red o sin red), también los que instalaste antes de esta versión; elige uno para cambiar su aislamiento,
 su generación de fotogramas, sus librerías de Windows o desinstalarlo.
 
-**Librerías de Windows** (opción 21 o `--libs`, por prefijo; también desde un juego: en «Mis juegos», con
+**Librerías de Windows** (opción 13 o `--libs`, por prefijo; también desde un juego: en «Mis juegos», con
 `--libs Juego.exe`, o al probar uno nuevo con la opción 10, respuesta `l`): las librerías van en el prefijo y valen
 para todos sus juegos, así que la lista de prefijos dice qué juegos usa cada uno. Muchos juegos piden librerías que Windows trae y un prefijo nuevo no,
 sobre todo el aviso «necesita Microsoft Visual C++ 2015-2022 Redistributable». Con un juego, usa su prefijo y su versión de Proton (de su `.ppdb`;
@@ -877,7 +877,7 @@ valor cuando el `.ppdb` del juego no dice nada.
 ## Cambiar de versión de la imagen y volver atrás
 
 > **En una instalación bootc** (desde la v2.5, grabando la imagen bootc; **en pruebas**: aún no se ha probado en una
-> consola bootc de verdad) todo esto lo hace `bootc` y la opción 17
+> consola bootc de verdad) todo esto lo hace `bootc` y la opción 18
 > solo lo explica y pregunta: **actualizar** (`sudo bootc upgrade`, la siguiente del canal que sigues), **volver a la
 > anterior** (`sudo bootc rollback`) o **cambiar de canal o fijar una versión** (`sudo bootc switch
 > ghcr.io/vivalavent/ps5-bazzite-bootc:stable` o `:v2.5.1`; lista las versiones bootc de GitHub). Lo nuevo entra al
@@ -885,7 +885,7 @@ valor cuando el `.ppdb` del juego no dice nada.
 > actualizar (`ostree-finalize-staged`). La caja sabe que es bootc por `/run/ostree-booted`, y su versión por
 > `/usr/share/ps5-bazzite-bootc/VERSION`. Lo de abajo es para Legacy.
 
-**Opción 17** (`--update [versión]`, `--rollback`). En una instalación **Legacy** (la de antes de la v2.5, que se
+**Opción 18** (`--update [versión]`, `--rollback`). En una instalación **Legacy** (la de antes de la v2.5, que se
 actualiza en el sitio) primero pregunta qué quieres hacer:
 
 1. **Instalar una versión de GitHub.** Lista las publicadas (estables, preliminares y «rápidas» que solo cambian el
@@ -944,26 +944,26 @@ Cada copia ocupa unos 300 MB; se guardan las 3 últimas (pregunta antes de borra
 autor (`/var/lib/ps5-update-backup/`) solo guarda el kernel y los módulos: su «undo» deja los scripts, servicios y
 el fichero de versión de la versión nueva.
 
-**Volver** (opción 17 → 2, `--rollback`): eliges una copia y la restaura tal cual, sin red y aunque el kernel sea
+**Volver** (opción 18 → 2, `--rollback`): eliges una copia y la restaura tal cual, sin red y aunque el kernel sea
 otro. Borra lo que había añadido la versión nueva y ofrece borrar los módulos del kernel que ya no arranca. Antes
 guarda cómo está todo (copia «antes de volver a …»), así que la vuelta también se deshace. Lo que hayas cambiado en
 esas partes después de la copia (por ejemplo con los bloques `gpu40` o `fans`) vuelve a como estaba: revísalo con la
-opción 14. Bazzite, Steam, los juegos y tus ficheros no van en la copia, porque las actualizaciones de la imagen no
+opción 15. Bazzite, Steam, los juegos y tus ficheros no van en la copia, porque las actualizaciones de la imagen no
 los tocan. Después hay que **apagar** y arrancar con el cargador.
 
 **Si la versión nueva ni arranca**, la caja no puede ayudar desde la consola. Por eso, al actualizar y si cabe,
 también deja el kernel actual en la partición de arranque, en `anterior-toolbox/`. Esa partición es FAT, así que
 cualquier ordenador la lee: conecta la memoria USB al ordenador, copia los ficheros de `anterior-toolbox/` a la raíz
-de la partición, arranca la PS5 con el cargador y termina la vuelta con la opción 17 → 2. Lo explica su `LEEME.txt`.
+de la partición, arranca la PS5 con el cargador y termina la vuelta con la opción 18 → 2. Lo explica su `LEEME.txt`.
 
 ## Copia de seguridad de tu carpeta personal
 
-La opción 20 guarda tu carpeta personal (`/var/home/<usuario>`) en otro disco, el NAS o cualquier carpeta, y la
+La opción 21 guarda tu carpeta personal (`/var/home/<usuario>`) en otro disco, el NAS o cualquier carpeta, y la
 recupera aquí o en otra instalación: un disco nuevo, la imagen bootc… Ahí está casi todo lo tuyo: juegos de Steam y
 sus partidas, PortProton y sus prefijos, EmuDeck, ES-DE, los plugins de Decky, los Flatpaks instalados para tu
 usuario y la configuración de cada programa y de esta caja.
 
-**Guardar** (20 → 1, `--backup`):
+**Guardar** (21 → 1, `--backup`):
 
 1. Eliges dónde: te ofrece los discos montados y el NAS (con su espacio libre) o escribes una carpeta. La copia va
    en `ps5-copia-<usuario>/` dentro de ella.
@@ -992,7 +992,7 @@ sistema usaba sin UAS (`usb-storage.quirks=…:u…`, como el Lexar ES3), te lo 
 reinicies, para que la copia larga no dé errores: lo desenchufas, lo enchufas y sigue. A mano:
 `echo 21c4:0003:um | sudo tee /sys/module/usb_storage/parameters/quirks` antes de enchufarlo.
 
-**Recuperar** (20 → 2, `--restore [carpeta]`): le das la carpeta de la copia, o **la de otra instalación**: el disco
+**Recuperar** (21 → 2, `--restore [carpeta]`): le das la carpeta de la copia, o **la de otra instalación**: el disco
 de tu instalación anterior enchufado, su carpeta personal o la raíz del disco (`/run/media/<usuario>/<disco>`; la
 encuentra también dentro de una instalación bootc). Eliges qué traer, comprueba el espacio, cierra Steam si está
 abierto y copia. Sobrescribe los ficheros que se llamen igual y no borra nada más. Después:
@@ -1000,7 +1000,7 @@ abierto y copia. Sobrescribe los ficheros que se llamen igual y no borra nada m�
 - reinstala el servicio de Decky y los Flatpaks del sistema que falten (desde Flathub; con `sudo` y preguntando);
 - lista los enlaces que apuntan a sitios que ahora no están: los del NAS vuelven a funcionar al montarlo con el
   bloque [`nas`](#nas), que usa tus datos guardados;
-- ofrece aplicar tus ajustes guardados (opción 15), que vienen en `~/.config/ps5-bazzite-toolbox.conf`.
+- ofrece aplicar tus ajustes guardados (opción 16), que vienen en `~/.config/ps5-bazzite-toolbox.conf`.
 
 Para que los juegos salgan en Steam directamente, recupera con el **mismo nombre de usuario** (las rutas de Steam,
 PortProton y los enlaces la llevan dentro) y con Steam cerrado. Mejor hazlo por SSH o en una consola de texto
@@ -1045,24 +1045,24 @@ Los detalles, en inglés, están en [utils/ps5-fw4-gpt-fix.md](utils/ps5-fw4-gpt
 
 ## Ficheros: qué usa y dónde guarda cada cosa
 
-La caja de herramientas no deja nada fuera de estos sitios. «Desinstalar» (opción 19) solo quita el comando, su
+La caja de herramientas no deja nada fuera de estos sitios. «Desinstalar» (opción 20) solo quita el comando, su
 acceso en el menú y su copia anterior; lo demás se queda, y aquí está cómo quitarlo.
 
 ### Sus propios ficheros
 
 | Fichero | Qué es | Lo crea | Se quita con |
 |---|---|---|---|
-| `~/.local/bin/ps5-bazzite-toolbox` | la caja instalada como comando | opción 19, `--install` (y la oferta del menú la primera vez) | opción 19 |
-| `~/.local/bin/ps5-bazzite-toolbox.v<versión>` | la versión anterior, tras actualizarla (solo la última) | opción 18, `--self-update` | opción 19 |
-| `~/.local/share/applications/ps5-bazzite-toolbox.desktop` | «Caja de herramientas PS5» en el menú de aplicaciones | opción 19 | opción 19 |
+| `~/.local/bin/ps5-bazzite-toolbox` | la caja instalada como comando | opción 20, `--install` (y la oferta del menú la primera vez) | opción 20 |
+| `~/.local/bin/ps5-bazzite-toolbox.v<versión>` | la versión anterior, tras actualizarla (solo la última) | opción 19, `--self-update` | opción 20 |
+| `~/.local/share/applications/ps5-bazzite-toolbox.desktop` | «Caja de herramientas PS5» en el menú de aplicaciones | opción 20 | opción 20 |
 | `~/.config/ps5-bazzite-toolbox.conf` | tus respuestas a los ajustes (idioma, VRAM, NAS sin contraseña, temperatura del ventilador, bloques que no quieres…) y tus carpetas con versiones descargadas de la imagen (`IMG_LOCAL`) | opciones 15, 16 y 17, `--setup` | `rm` (vuelve a preguntar todo) |
 | `~/.config/ps5-bazzite-toolbox-juegos.conf` | tus juegos de PortProton instalados con la caja: aislamiento, `.exe`, nombre y carpeta que ve | opciones 10 y 11 | se actualiza al desinstalar cada juego |
 | `~/.local/share/ps5-bazzite-toolbox/aislado/` | la copia de PortProton para juegos aislados, con un prefijo por juego | opción 10 o 11 con un juego aislado | `rm -rf` (con los juegos aislados desinstalados: ahí están sus partidas) |
 | `~/.cache/ps5-bazzite-toolbox-run.log` | lo que dice un juego aislado al lanzarlo desde Steam o el modo juego | `--run` | `rm` |
-| `/var/lib/ps5-bazzite-toolbox/imagen/` | las copias de la imagen ([arriba](#volver-atrás-en-pruebas)) | opción 17 | opción 17 al hacer otra copia, o `sudo rm -rf` |
-| `/efi/anterior-toolbox/` | el kernel de antes de la última actualización, con su `LEEME.txt` | opción 17 → 1 | `sudo rm -rf /efi/anterior-toolbox` |
-| `<tu carpeta de versiones>/<versión>/` | el paquete de una versión instalada desde GitHub, con su `.sha256` y `NOTAS.md`, si aceptas guardarlo | opción 17 → 1 | `rm -rf` |
-| `<destino>/ps5-copia-<usuario>/` | la copia de tu carpeta personal: `casa/` (la carpeta o los `.tar.zst`), `sistema/` (servicio de Decky, Flatpaks, lo que dejaste fuera, tamaños) y `ps5-copia.info` (fecha, usuario, imagen, formato; solo existe si la copia terminó) | opción 20 → 1, `--backup` | `rm -rf` |
+| `/var/lib/ps5-bazzite-toolbox/imagen/` | las copias de la imagen ([arriba](#volver-atrás-en-pruebas)) | opción 18 | opción 18 al hacer otra copia, o `sudo rm -rf` |
+| `/efi/anterior-toolbox/` | el kernel de antes de la última actualización, con su `LEEME.txt` | opción 18 → 1 | `sudo rm -rf /efi/anterior-toolbox` |
+| `<tu carpeta de versiones>/<versión>/` | el paquete de una versión instalada desde GitHub, con su `.sha256` y `NOTAS.md`, si aceptas guardarlo | opción 18 → 1 | `rm -rf` |
+| `<destino>/ps5-copia-<usuario>/` | la copia de tu carpeta personal: `casa/` (la carpeta o los `.tar.zst`), `sistema/` (servicio de Decky, Flatpaks, lo que dejaste fuera, tamaños) y `ps5-copia.info` (fecha, usuario, imagen, formato; solo existe si la copia terminó) | opción 21 → 1, `--backup` | `rm -rf` |
 
 ### Informes que ofrece guardar
 
@@ -1074,7 +1074,7 @@ no guardarlo. Sin terminal (lanzada desde otro script), lo guarda en la carpeta 
 |---|---|---|
 | `ps5-diag-<fecha>.txt` | el informe del diagnóstico, sin contraseñas | opciones 1 y 2, `--check` |
 | `ps5-mem-<fecha>.csv` | una fila cada 2 s: carga de CPU y GPU, VRAM, GTT, RAM, swap, temperatura y quién gasta más (mismas columnas que el monitor web) | opción 4, `--mem` |
-| `update-<versión>.log` | la salida del actualizador de la imagen, con su comando para deshacer | opción 17 → 1, `--update` |
+| `update-<versión>.log` | la salida del actualizador de la imagen, con su comando para deshacer | opción 18 → 1, `--update` |
 
 La descarga de una actualización va a `~/ps5-update-<versión>/`; al terminar bien ofrece borrarla, y si falla se
 queda ahí para repetir.
@@ -1125,14 +1125,14 @@ queda ahí para repetir.
 Cada versión publicada está en [Releases](https://github.com/fitamix/ps5-bazzite-toolbox/releases) con sus
 novedades, y el historial completo en [CHANGELOG.md](CHANGELOG.md). La numeración sigue `MAYOR.MENOR.ARREGLO`:
 
-- **MENOR** (1.**1**.0): bloques de ajustes, opciones o comprobaciones nuevas. Tras actualizar, la opción 15
+- **MENOR** (1.**1**.0): bloques de ajustes, opciones o comprobaciones nuevas. Tras actualizar, la opción 16
   (`--setup`) ofrece solo lo nuevo que tengas pendiente.
 - **ARREGLO** (1.0.**1**): correcciones, sin nada nuevo que aplicar.
 - **MAYOR** (**2**.0.0): algo que cambia cómo se usaba (opciones renombradas, formato de las respuestas guardadas).
   Las notas dicen qué hacer.
 
 Al abrir el menú, la caja mira (en 4 segundos como mucho, y sin decir nada si no hay red) si hay una versión más
-nueva y lo avisa. La opción 18 (`--self-update`) muestra las novedades, pregunta, descarga, comprueba el SHA-256,
+nueva y lo avisa. La opción 19 (`--self-update`) muestra las novedades, pregunta, descarga, comprueba el SHA-256,
 guarda la copia anterior como `….v<versión>` (solo la última) y sustituye la instalada (o, si no la instalaste, el
 fichero que ejecutas). Tus respuestas guardadas no se tocan.
 

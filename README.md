@@ -97,20 +97,20 @@ there is one, a system command that does the same.
 | 10 | Install a Windows game (normal or isolated), test it and add it to Steam | `--add-game [Game.exe]` | — |
 | 11 | My games: change their isolation, frame generation, Windows libraries, or uninstall them | `--games`, `--change-level Game.exe`, `--framegen Game.exe`, `--libs [Game.exe]`, `--remove-game [Game.exe\|"Name"]` | — |
 | 12 | Sync the "PortProton" collection in Steam (closes Steam) | `--pp-collection [--dry-run\|--yes]` | — |
-| 21 | Windows libraries (Visual C++…) in a PortProton prefix, for all its games | `--libs [Game.exe]` | — |
+| 13 | Windows libraries (Visual C++…) in a PortProton prefix, for all its games | `--libs [Game.exe]` | — |
 | — | Launch a game as option 10 left it (used by Steam and the desktop) | `--run Game.exe` | — |
 | **Utilities** | | | |
-| 13 | How much space each folder takes (also the `espacio` command and the Dolphin right-click) | `--space [folder]` | `du -bsh -- */ .[!.]*/ \| sort -h` |
+| 14 | How much space each folder takes (also the `espacio` command and the Dolphin right-click) | `--space [folder]` | `du -bsh -- */ .[!.]*/ \| sort -h` |
 | **Console settings** | | | |
-| 14 | See which settings are applied | `--setup --status` | — |
-| 15 | Apply the pending ones, one by one | `--setup` | — |
+| 15 | See which settings are applied | `--setup --status` | — |
+| 16 | Apply the pending ones, one by one | `--setup` | — |
 | — | Apply without asking: the recommended answer, or yours if you had already said yes to a block (useful to set up a new install like the previous one by copying `~/.config/ps5-bazzite-toolbox.conf`) | `--setup --all` | — |
-| 16 | Review or change specific settings (including those you said no to) | `--setup --only vram,nas` | each block, in [Settings](#console-settings) |
+| 17 | Review or change specific settings (including those you said no to) | `--setup --only vram,nas` | each block, in [Settings](#console-settings) |
 | **System** | | | |
-| 17 | Image: install another version from GitHub, go back to how it was before updating (in testing) or save a copy | `--update [v1.8.4]`, `--rollback` | see [Switching version](#switching-the-image-version-and-rolling-back) |
-| 18 | Update this toolbox (shows what is new and asks) | `--self-update [v1.1.0]` | — |
-| 19 | Install it as a command and in the application menu, or uninstall it | `--install`, `--uninstall` | — |
-| 20 | Backup of your home folder: save (choosing what) or restore, also from another disk | `--backup`, `--restore [folder]` | see [Backup](#backing-up-your-home-folder) |
+| 18 | Image: install another version from GitHub, go back to how it was before updating (in testing) or save a copy | `--update [v1.8.4]`, `--rollback` | see [Switching version](#switching-the-image-version-and-rolling-back) |
+| 19 | Update this toolbox (shows what is new and asks) | `--self-update [v1.1.0]` | — |
+| 20 | Install it as a command and in the application menu, or uninstall it | `--install`, `--uninstall` | — |
+| 21 | Backup of your home folder: save (choosing what) or restore, also from another disk | `--backup`, `--restore [folder]` | see [Backup](#backing-up-your-home-folder) |
 | — | Version and help | `--version`, `--help` | — |
 | — | Interface language (saved; goes before the other options) | `--lang es\|en` | — |
 
@@ -159,9 +159,9 @@ Settings come in **blocks**. Each one, when offered, explains **what it changes,
 asks with a recommended answer (`[Y/n]` = yes by default, `[y/N]` = no). What depends on each console
 (disk, language, NAS…) it detects or asks.
 
-- **Option 15** (`--setup`) offers the pending ones one by one; **14** (`--setup --status`) only shows the state:
+- **Option 16** (`--setup`) offers the pending ones one by one; **15** (`--setup --status`) only shows the state:
   ✔ applied, ✘ pending, – not applicable on this console (or you said no).
-- **Option 16** (`--setup --only vram,nas`) goes back to a specific block, even if it is already applied or you said no to it:
+- **Option 17** (`--setup --only vram,nas`) goes back to a specific block, even if it is already applied or you said no to it:
   it is the way to change a value or undo it.
 - **Your answers** (language, VRAM, NAS details, blocks you do not want…) are saved in
   `~/.config/ps5-bazzite-toolbox.conf`, and next time it only offers what is pending.
@@ -274,7 +274,7 @@ sudo sed -i 's| module_blacklist=moal||' /efi/cmdline.txt     # only with image 
 **WHAT IT DOES:** turns off Bazzite's automatic updates and forbids `dnf` from updating the kernel, Mesa, the
 firmware and gamescope.
 **WHY:** those packages carry PS5 patches; updating them breaks the image. The image is updated with its
-own updater ([option 17](#switching-the-image-version-and-rolling-back)), not with `ujust update` or
+own updater ([option 18](#switching-the-image-version-and-rolling-back)), not with `ujust update` or
 `rpm-ostree` (it is not an ostree image). **On bootc it does not apply**: there, updates are the author's and can be undone.
 
 ```sh
@@ -316,7 +316,7 @@ sudo sed -i -E 's/ *amdgpu\.ps5_cu_unlock=[0-9]+//' /efi/cmdline.txt            
 sudo dmesg | grep active_cu_number                                                # after booting: 40 or 36
 ```
 
-**UNDO:** option 16 → `gpu40` and choose 36. Takes effect only after **powering off** and booting with the loader.
+**UNDO:** option 17 → `gpu40` and choose 36. Takes effect only after **powering off** and booting with the loader.
 
 ### `zram`
 
@@ -363,7 +363,7 @@ cat /sys/block/zram0/comp_algorithm     # after rebooting: the one in [brackets]
 ```
 
 **UNDO:** `sudo rm /etc/systemd/zram-generator.conf.d/90-ps5-bazzite-toolbox.conf` and reboot (goes back to
-half the RAM with `zstd`). To change only the compressor: option 16 → `zram`.
+half the RAM with `zstd`). To change only the compressor: option 17 → `zram`.
 
 ### `swapdisco`
 
@@ -384,7 +384,7 @@ sudo chmod 600 /var/swapfile && sudo mkswap /var/swapfile && sudo swapon -p 10 /
 printf '# ps5-bazzite-toolbox (bloque swapdisco)\n/var/swapfile none swap defaults,pri=10,nofail 0 0\n' | sudo tee -a /etc/fstab
 ```
 
-**UNDO:** option 16 → `swapdisco` with size 0, or `sudo swapoff /var/swapfile`, delete its two lines from
+**UNDO:** option 17 → `swapdisco` with size 0, or `sudo swapoff /var/swapfile`, delete its two lines from
 `/etc/fstab` and `sudo rm /var/swapfile`.
 
 ### `fans`
@@ -722,7 +722,7 @@ Steam's "PortProton" collection updates itself when you install, change or unins
 option 12). The desktop "PortProton Collection" shortcut that earlier versions created is no longer needed: the
 block deletes it if it finds it.
 
-They all call the toolbox at its current location: if you move it, repeat the block (installed with option 19
+They all call the toolbox at its current location: if you move it, repeat the block (installed with option 20
 it does not move). If Dolphin was open, close it and open it again. Not applicable if the toolbox is run from a pipe
 (`curl … | bash`).
 **UNDO:**
@@ -808,7 +808,7 @@ saves) is moved between your PortProton and the isolated copy (asking first), it
 works and, if you say yes, it rebuilds its shortcuts and its Steam script. The Steam entry does not change: it keeps
 the play time, the artwork and the collection. If it was in the shared `DEFAULT` prefix, it starts with a new one and
 its saves stay in `DEFAULT`. If you move or delete the toolbox, isolated games do not start from Steam: install it
-again (option 19).
+again (option 20).
 
 After that, it asks at every step:
 
@@ -827,7 +827,7 @@ After that, it asks at every step:
 isolated with network or without), including those you installed before this version; pick one to change its
 isolation, its frame generation, its Windows libraries, or to uninstall it.
 
-**Windows libraries** (option 21 or `--libs`, by prefix; also from a game: in "My games", with `--libs Game.exe`,
+**Windows libraries** (option 13 or `--libs`, by prefix; also from a game: in "My games", with `--libs Game.exe`,
 or when testing a new one with option 10, answer `l`): libraries go into the prefix and serve all its games, so the
 prefix list says which games use each one. Many games need libraries Windows ships and a new prefix doesn't, above all the "requires Microsoft Visual C++
 2015-2022 Redistributable" message. With a game, it uses its prefix and its Proton version (from its `.ppdb`; isolated
@@ -879,7 +879,7 @@ game's `.ppdb` says nothing.
 ## Switching the image version and rolling back
 
 > **On a bootc install** (since v2.5, by flashing the bootc image; **in testing**: not yet tested on a real bootc
-> console) `bootc` does all of this and option 17
+> console) `bootc` does all of this and option 18
 > only explains it and asks: **update** (`sudo bootc upgrade`, the next one in the channel you follow), **roll back to
 > the previous one** (`sudo bootc rollback`) or **change channel or pin a version** (`sudo bootc switch
 > ghcr.io/vivalavent/ps5-bazzite-bootc:stable` or `:v2.5.1`; it lists the bootc versions on GitHub). The new one takes
@@ -888,7 +888,7 @@ game's `.ppdb` says nothing.
 > knows it is bootc from `/run/ostree-booted`, and its version from `/usr/share/ps5-bazzite-bootc/VERSION`. What
 > follows is for Legacy.
 
-**Option 17** (`--update [version]`, `--rollback`). On a **Legacy** install (the one before v2.5, which updates in
+**Option 18** (`--update [version]`, `--rollback`). On a **Legacy** install (the one before v2.5, which updates in
 place) it first asks what you want to do:
 
 1. **Install a version from GitHub.** It lists the published ones (stable, pre-releases and "quick" ones that only
@@ -947,26 +947,26 @@ Each copy takes about 300 MB; the last 3 are kept (it asks before deleting the o
 (`/var/lib/ps5-update-backup/`) only saves the kernel and the modules: its "undo" leaves the scripts, services and
 version file of the new version in place.
 
-**Rolling back** (option 17 -> 2, `--rollback`): you pick a copy and it restores it as is, without network and even if
+**Rolling back** (option 18 -> 2, `--rollback`): you pick a copy and it restores it as is, without network and even if
 the kernel is different. It deletes what the new version had added and offers to delete the modules of the kernel that
 no longer boots. Beforehand it saves how everything is (a "before going back to ..." copy), so the rollback can be
 undone too. What you changed in those parts after the copy (for example with the `gpu40` or `fans` blocks) goes back
-to how it was: check it with option 14. Bazzite, Steam, games and your files are not in the copy, because image
+to how it was: check it with option 15. Bazzite, Steam, games and your files are not in the copy, because image
 updates do not touch them. Afterwards you must **power off** and boot with the loader.
 
 **If the new version does not even boot**, the toolbox cannot help from the console. That is why, when updating and
 if it fits, it also leaves the current kernel on the boot partition, in `anterior-toolbox/`. That partition is FAT, so
 any computer can read it: plug the USB drive into the computer, copy the files in `anterior-toolbox/` to the root of
-the partition, boot the PS5 with the loader and finish the rollback with option 17 -> 2. Its `LEEME.txt` explains it.
+the partition, boot the PS5 with the loader and finish the rollback with option 18 -> 2. Its `LEEME.txt` explains it.
 
 ## Backing up your home folder
 
-Option 20 saves your home folder (`/var/home/<user>`) to another disk, the NAS or any folder, and restores it here or
+Option 21 saves your home folder (`/var/home/<user>`) to another disk, the NAS or any folder, and restores it here or
 on another install: a new disk, the bootc image... Almost everything of yours is there: Steam games and their saves,
 PortProton and its prefixes, EmuDeck, ES-DE, Decky plugins, the Flatpaks installed for your user and the settings of
 every program and of this toolbox.
 
-**Save** (20 -> 1, `--backup`):
+**Save** (21 -> 1, `--backup`):
 
 1. You choose where: it offers the mounted disks and the NAS (with their free space) or you type a folder. The copy
    goes in `ps5-copia-<user>/` inside it.
@@ -996,7 +996,7 @@ tells you and sets the same now, until you reboot, so the long copy does not giv
 and it carries on. By hand:
 `echo 21c4:0003:um | sudo tee /sys/module/usb_storage/parameters/quirks` before plugging it in.
 
-**Restore** (20 -> 2, `--restore [folder]`): you give it the copy's folder, or **the one from another install**: the
+**Restore** (21 -> 2, `--restore [folder]`): you give it the copy's folder, or **the one from another install**: the
 disk of your previous install plugged in, its home folder or the disk root (`/run/media/<user>/<disk>`; it also finds
 it inside a bootc install). You choose what to bring, it checks the space, closes Steam if it is open and copies. It
 overwrites files with the same name and deletes nothing else. Afterwards:
@@ -1004,7 +1004,7 @@ overwrites files with the same name and deletes nothing else. Afterwards:
 - it reinstalls the Decky service and any missing system Flatpaks (from Flathub; with `sudo` and asking);
 - it lists links that point to places that are not there now: the NAS ones work again when you mount it with the
   [`nas`](#nas) block, which uses your saved data;
-- it offers to apply your saved settings (option 15), which are in `~/.config/ps5-bazzite-toolbox.conf`.
+- it offers to apply your saved settings (option 16), which are in `~/.config/ps5-bazzite-toolbox.conf`.
 
 For games to show up in Steam directly, restore with the **same user name** (the Steam, PortProton and link paths
 contain it) and with Steam closed. Better to do it over SSH or in a text console (Ctrl+Alt+F3): from the desktop, KDE
@@ -1049,24 +1049,24 @@ The details are in [utils/ps5-fw4-gpt-fix.md](utils/ps5-fw4-gpt-fix.md).
 
 ## Files: what it uses and where it saves things
 
-The toolbox leaves nothing outside these places. "Uninstall" (option 19) only removes the command, its menu entry and
+The toolbox leaves nothing outside these places. "Uninstall" (option 20) only removes the command, its menu entry and
 its previous copy; everything else stays, and here is how to remove it.
 
 ### Its own files
 
 | File | What it is | Created by | Removed with |
 |---|---|---|---|
-| `~/.local/bin/ps5-bazzite-toolbox` | the toolbox installed as a command | option 19, `--install` (and the menu offer the first time) | option 19 |
-| `~/.local/bin/ps5-bazzite-toolbox.v<version>` | the previous version, after updating it (only the last one) | option 18, `--self-update` | option 19 |
-| `~/.local/share/applications/ps5-bazzite-toolbox.desktop` | "PS5 Toolbox" in the applications menu | option 19 | option 19 |
+| `~/.local/bin/ps5-bazzite-toolbox` | the toolbox installed as a command | option 20, `--install` (and the menu offer the first time) | option 20 |
+| `~/.local/bin/ps5-bazzite-toolbox.v<version>` | the previous version, after updating it (only the last one) | option 19, `--self-update` | option 20 |
+| `~/.local/share/applications/ps5-bazzite-toolbox.desktop` | "PS5 Toolbox" in the applications menu | option 20 | option 20 |
 | `~/.config/ps5-bazzite-toolbox.conf` | your answers to the settings (language, VRAM, NAS without password, fan temperature, blocks you do not want...), the language chosen with `--lang` (`TOOLBOX_LANG`, `en` or `es`) and your folders with downloaded image versions (`IMG_LOCAL`) | options 15, 16 and 17, `--setup`, `--lang` | `rm` (it asks everything again) |
 | `~/.config/ps5-bazzite-toolbox-juegos.conf` | your PortProton games installed with the toolbox: isolation, `.exe`, name and the folder it sees | options 10 and 11 | updated when each game is uninstalled |
 | `~/.local/share/ps5-bazzite-toolbox/aislado/` | the PortProton copy for isolated games, with one prefix per game | option 10 or 11 with an isolated game | `rm -rf` (with the isolated games uninstalled: their saves are there) |
 | `~/.cache/ps5-bazzite-toolbox-run.log` | what an isolated game says when launched from Steam or game mode | `--run` | `rm` |
-| `/var/lib/ps5-bazzite-toolbox/imagen/` | the image copies ([above](#rolling-back-in-testing)) | option 17 | option 17 when making another copy, or `sudo rm -rf` |
-| `/efi/anterior-toolbox/` | the kernel from before the last update, with its `LEEME.txt` | option 17 -> 1 | `sudo rm -rf /efi/anterior-toolbox` |
-| `<your versions folder>/<version>/` | the package of a version installed from GitHub, with its `.sha256` and `NOTAS.md`, if you accept saving it | option 17 -> 1 | `rm -rf` |
-| `<destination>/ps5-copia-<user>/` | the copy of your home folder: `casa/` (the folder or the `.tar.zst` files), `sistema/` (Decky service, Flatpaks, what you left out, sizes) and `ps5-copia.info` (date, user, image, format; it only exists if the copy finished) | option 20 -> 1, `--backup` | `rm -rf` |
+| `/var/lib/ps5-bazzite-toolbox/imagen/` | the image copies ([above](#rolling-back-in-testing)) | option 18 | option 18 when making another copy, or `sudo rm -rf` |
+| `/efi/anterior-toolbox/` | the kernel from before the last update, with its `LEEME.txt` | option 18 -> 1 | `sudo rm -rf /efi/anterior-toolbox` |
+| `<your versions folder>/<version>/` | the package of a version installed from GitHub, with its `.sha256` and `NOTAS.md`, if you accept saving it | option 18 -> 1 | `rm -rf` |
+| `<destination>/ps5-copia-<user>/` | the copy of your home folder: `casa/` (the folder or the `.tar.zst` files), `sistema/` (Decky service, Flatpaks, what you left out, sizes) and `ps5-copia.info` (date, user, image, format; it only exists if the copy finished) | option 21 -> 1, `--backup` | `rm -rf` |
 
 ### Reports it offers to save
 
@@ -1078,7 +1078,7 @@ save it. Without a terminal (launched from another script), it saves it in the c
 |---|---|---|
 | `ps5-diag-<date>.txt` | the diagnostic report, without passwords | options 1 and 2, `--check` |
 | `ps5-mem-<date>.csv` | one row every 2 s: CPU and GPU load, VRAM, GTT, RAM, swap, temperature and who uses the most (same columns as the web monitor) | option 4, `--mem` |
-| `update-<version>.log` | the output of the image updater, with its undo command | option 17 -> 1, `--update` |
+| `update-<version>.log` | the output of the image updater, with its undo command | option 18 -> 1, `--update` |
 
 An update download goes to `~/ps5-update-<version>/`; when it finishes well it offers to delete it, and if it fails it
 stays there so you can retry.
@@ -1129,14 +1129,14 @@ stays there so you can retry.
 Each published version is in [Releases](https://github.com/fitamix/ps5-bazzite-toolbox/releases) with its
 release notes, and the full history in [CHANGELOG.md](CHANGELOG.md). Numbering follows `MAJOR.MINOR.PATCH`:
 
-- **MINOR** (1.**1**.0): new settings blocks, options or checks. After updating, option 15 (`--setup`) offers only the
+- **MINOR** (1.**1**.0): new settings blocks, options or checks. After updating, option 16 (`--setup`) offers only the
   new things you still have pending.
 - **PATCH** (1.0.**1**): fixes, with nothing new to apply.
 - **MAJOR** (**2**.0.0): something that changes how it was used (renamed options, format of saved answers). The notes
   say what to do.
 
 When opening the menu, the toolbox checks (in 4 seconds at most, and silently if there is no network) whether there is
-a newer version and tells you. Option 18 (`--self-update`) shows the release notes, asks, downloads, checks the
+a newer version and tells you. Option 19 (`--self-update`) shows the release notes, asks, downloads, checks the
 SHA-256, saves the previous copy as `....v<version>` (only the last one) and replaces the installed one (or, if you did
 not install it, the file you run). Your saved answers are not touched.
 
