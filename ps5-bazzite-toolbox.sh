@@ -42,7 +42,7 @@
 # Setup blocks: locale cmdline wifi updates vram gpu40 zram swapdisco fans cpufreq warmreboot hdmi arranque bt steambt disk firewall brave edge nas bios media esde portproton atajos monitorweb
 set -uo pipefail
 
-TOOLBOX_VERSION=1.12.0                   # bump on every release (see CHANGELOG.md and release.sh)
+TOOLBOX_VERSION=1.12.1                   # bump on every release (see CHANGELOG.md and release.sh)
 TOOLBOX_REPO=fitamix/ps5-bazzite-toolbox
 TOOLBOX_BIN=$HOME/.local/bin/ps5-bazzite-toolbox                      # where --install puts it
 TOOLBOX_DESKTOP=$HOME/.local/share/applications/ps5-bazzite-toolbox.desktop
