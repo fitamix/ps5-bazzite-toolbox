@@ -95,7 +95,7 @@ there is one, a system command that does the same.
 | 9 | Switch to game mode now and always boot into it | `--session gamemode` | `sudo rm /etc/sddm.conf.d/zzz-ps5-session.conf` and restart the session |
 | **PortProton and Steam** | | | |
 | 10 | Install a Windows game (normal or isolated), test it and add it to Steam | `--add-game [Game.exe]` | — |
-| 11 | My games: change their isolation, frame generation, or uninstall them | `--games`, `--change-level Game.exe`, `--framegen Game.exe`, `--remove-game [Game.exe\|"Name"]` | — |
+| 11 | My games: change their isolation, frame generation, Windows libraries, or uninstall them | `--games`, `--change-level Game.exe`, `--framegen Game.exe`, `--libs [Game.exe]`, `--remove-game [Game.exe\|"Name"]` | — |
 | 12 | Sync the "PortProton" collection in Steam (closes Steam) | `--pp-collection [--dry-run\|--yes]` | — |
 | — | Launch a game as option 10 left it (used by Steam and the desktop) | `--run Game.exe` | — |
 | **Utilities** | | | |
@@ -824,7 +824,19 @@ After that, it asks at every step:
 
 **My games** (option 11, `--games`): a single list, by name, of your PortProton games with their level (normal,
 isolated with network or without), including those you installed before this version; pick one to change its
-isolation, its frame generation, or to uninstall it.
+isolation, its frame generation, its Windows libraries, or to uninstall it.
+
+**Windows libraries** (in "My games", `--libs [Game.exe]`, or when testing a new game with option 10: answer `l`):
+many games need libraries Windows ships and a new prefix doesn't, above all the "requires Microsoft Visual C++
+2015-2022 Redistributable" message. With a game, it uses its prefix and its Proton version (from its `.ppdb`; isolated
+games, theirs in the isolated copy); without one, you pick the prefix. It shows which ones it already has and offers
+the usual ones: `vcrun2022` (Visual C++ 2015-2022, the most requested), `vcrun2013`, `vcrun2012`, `vcrun2010`,
+`vcrun2008`, `vcrun2005`, `d3dcompiler_47`, `xact` + `xact_x64`, `physx`, `openal` and `dotnet48` (slow, ~1 GB).
+Not DirectX: Proton brings its own. It installs them with PortProton's `winetricks` inside its Flatpak and with a
+display (over SSH it takes the desktop's or Game Mode's): PortProton's menu for this, and the official Visual C++
+installer without a display, fail. It first copies the prefix's registry to `bak-libs-DATE` inside it (winetricks
+doesn't uninstall). With PortProton open it does nothing. `DEFAULT` is shared by most normal games: what is installed
+there serves them all.
 
 **Frame generation** (in "My games" or `--framegen Game.exe`): the Lossless Scaling one that PortProton ships
 (lsfg-vk, downloaded the first time). It makes up a frame between every two real ones: the game looks like it runs at

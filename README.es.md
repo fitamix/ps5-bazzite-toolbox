@@ -96,7 +96,7 @@ lo hay, un comando del sistema que hace lo mismo.
 | 9 | Pasar al modo juego ahora y arrancar siempre en él | `--session gamemode` | `sudo rm /etc/sddm.conf.d/zzz-ps5-session.conf` y reiniciar la sesión |
 | **PortProton y Steam** | | | |
 | 10 | Instalar un juego de Windows (normal o aislado), probarlo y añadirlo a Steam | `--add-game [Juego.exe]` | — |
-| 11 | Mis juegos: cambiar su aislamiento, la generación de fotogramas, o desinstalarlos | `--games`, `--change-level Juego.exe`, `--framegen Juego.exe`, `--remove-game [Juego.exe\|"Nombre"]` | — |
+| 11 | Mis juegos: cambiar su aislamiento, la generación de fotogramas, las librerías de Windows, o desinstalarlos | `--games`, `--change-level Juego.exe`, `--framegen Juego.exe`, `--libs [Juego.exe]`, `--remove-game [Juego.exe\|"Nombre"]` | — |
 | 12 | Sincronizar la colección «PortProton» de Steam (cierra Steam) | `--pp-collection [--dry-run\|--yes]` | — |
 | — | Lanzar un juego como lo dejó la opción 10 (lo usan Steam y el escritorio) | `--run Juego.exe` | — |
 | **Utilidades** | | | |
@@ -822,7 +822,19 @@ Después, pregunta en cada paso:
 
 **Mis juegos** (opción 11, `--games`): una sola lista, por nombre, de tus juegos de PortProton con su nivel (normal,
 aislado con red o sin red), también los que instalaste antes de esta versión; elige uno para cambiar su aislamiento,
-su generación de fotogramas o desinstalarlo.
+su generación de fotogramas, sus librerías de Windows o desinstalarlo.
+
+**Librerías de Windows** (en «Mis juegos», `--libs [Juego.exe]`, o al probar un juego nuevo con la opción 10:
+respuesta `l`): muchos juegos piden librerías que Windows trae y un prefijo nuevo no, sobre todo el aviso «necesita
+Microsoft Visual C++ 2015-2022 Redistributable». Con un juego, usa su prefijo y su versión de Proton (de su `.ppdb`;
+los aislados, el suyo de la copia aislada); sin él, te deja elegir el prefijo. Enseña cuáles tiene ya y ofrece las
+habituales: `vcrun2022` (Visual C++ 2015-2022, la que más piden), `vcrun2013`, `vcrun2012`, `vcrun2010`, `vcrun2008`,
+`vcrun2005`, `d3dcompiler_47`, `xact` + `xact_x64`, `physx`, `openal` y `dotnet48` (tarda y ocupa ~1 GB). DirectX no:
+Proton trae el suyo. Las instala con el `winetricks` de PortProton dentro de su Flatpak y con una pantalla (por SSH
+toma la del escritorio o el modo juego): el menú de PortProton para esto, y el instalador oficial de Visual C++ sin
+pantalla, fallan. Antes copia el registro del prefijo en `bak-libs-FECHA` dentro de él (winetricks no desinstala).
+Con PortProton abierto no hace nada. `DEFAULT` lo comparten casi todos los juegos normales: lo que se instale ahí les
+vale a todos.
 
 **Generación de fotogramas** (en «Mis juegos» o `--framegen Juego.exe`): la de Lossless Scaling que trae PortProton
 (lsfg-vk, que descarga la primera vez). Inventa un fotograma entre cada dos reales: el juego se ve al doble de fps

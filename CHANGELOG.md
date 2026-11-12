@@ -5,6 +5,16 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+### Añadido
+
+- **Librerías de Windows en un prefijo de PortProton** (`--libs [Juego.exe]`, en «Mis juegos» y al probar un juego
+  nuevo, respuesta `l`). Para los juegos que dicen que necesitan «Microsoft Visual C++ 2015-2022 Redistributable» u
+  otras librerías que Windows trae y un prefijo nuevo no. Ofrece las habituales (Visual C++ de 2005 a 2022,
+  `d3dcompiler_47`, XACT, PhysX, OpenAL y .NET 4.8), dice cuáles tiene ya el prefijo y las instala con el `winetricks`
+  de PortProton dentro de su Flatpak, con la versión de Proton del juego y una pantalla (por SSH, la de la sesión). El
+  menú de PortProton para esto nunca funcionó aquí, y el instalador de Visual C++ falla sin pantalla (estado 203).
+  Visto con Dead as Disco. Antes copia el registro del prefijo en `bak-libs-FECHA`.
+
 ## [1.11.2] - 2026-11-12
 
 ### Arreglado

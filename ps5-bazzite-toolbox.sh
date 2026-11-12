@@ -28,6 +28,7 @@
 #   bash ps5-bazzite-toolbox.sh --games                  # my games: change isolation or uninstall, from a list
 #   bash ps5-bazzite-toolbox.sh --change-level Juego.exe # change how an installed game runs (normal / isolated)
 #   bash ps5-bazzite-toolbox.sh --framegen Juego.exe     # frame generation (Lossless Scaling) for one game: on, off, tune
+#   bash ps5-bazzite-toolbox.sh --libs [Juego.exe]       # Windows libraries (Visual C++, XACT...) in a game's prefix, or pick one
 #   bash ps5-bazzite-toolbox.sh --run Juego.exe          # start a game as --add-game left it (isolated or not); asks nothing
 #   bash ps5-bazzite-toolbox.sh --pp-collection [--dry-run|--yes]   # sync Steam's "PortProton" collection
 #   bash ps5-bazzite-toolbox.sh --space [DIR]           # space taken by each folder in DIR (also the "espacio" command)
@@ -85,7 +86,7 @@ while [ $# -gt 0 ]; do
         --lang) case ${2:-} in es|en) TB_LANG=$2; LANG_SAVE=1 ;;
                     *) echo "$(L 'Uso: --lang es|en' 'Usage: --lang es|en')" >&2; exit 2 ;; esac; shift 2 ;;
         -V|--version) echo "ps5-bazzite-toolbox $TOOLBOX_VERSION"; exit 0 ;;
-        --add-game|--remove-game|--change-level|--framegen|--games|--run|--pp-collection|--space)       # the rest of the line goes to that tool
+        --add-game|--remove-game|--change-level|--framegen|--libs|--games|--run|--pp-collection|--space)       # the rest of the line goes to that tool
                   MODE=${1#--}; shift; ARGS=("$@"); break ;;
         -h|--help) awk 'NR > 1 { if (!/^#/) exit; sub(/^# ?/, ""); print }' "$0"; exit 0 ;;
         *) echo "$(L "Opción desconocida: $1" "Unknown option: $1")" >&2; exit 2 ;;
@@ -3229,10 +3230,20 @@ if [ $TEST = 1 ] && ask "$(L "¿Abrirlo ahora?" "Open it now?")" "$([ -f "$PPDB"
             fi
         fi
     fi
-    # PortProton closes after preparing a new prefix (recommended libraries...): "r" opens it again
+    # PortProton closes after preparing a new prefix (recommended libraries...): "r" opens it again; "l" first
+    # installs Windows libraries in its prefix (the toolbox's --libs), for a game that asks for Visual C++ & co.
     ans=s
-    [ $YES = 1 ] || { read -r -p "$(L "¿Ha arrancado bien? (s = sí, sigue · r = vuelve a abrirlo · n = no, para) [S/r/n] " "Did it start fine? (y = yes, continue · r = open it again · n = no, stop) [Y/r/n] ")" ans || ans=; }
-    case ${ans:-s} in [rR]*) continue ;; [nN]*) ;; *) break ;; esac              # n: stop and undo
+    if [ $YES = 0 ] && [ -n "$TOOLBOX_CMD" ]; then
+        read -r -p "$(L "¿Ha arrancado bien? (s = sí, sigue · r = vuelve a abrirlo · l = instala librerías (Visual C++…) y vuelve a abrirlo · n = no, para) [S/r/l/n] " "Did it start fine? (y = yes, continue · r = open it again · l = install libraries (Visual C++…) and open it again · n = no, stop) [Y/r/l/n] ")" ans || ans=
+    elif [ $YES = 0 ]; then
+        read -r -p "$(L "¿Ha arrancado bien? (s = sí, sigue · r = vuelve a abrirlo · n = no, para) [S/r/n] " "Did it start fine? (y = yes, continue · r = open it again · n = no, stop) [Y/r/n] ")" ans || ans=
+    fi
+    case ${ans:-s} in
+        [rR]*) continue ;;
+        [lL]*) [ -z "$TOOLBOX_CMD" ] || bash "$TOOLBOX_CMD" --libs "$EXE" || true; continue ;;
+        [nN]*) ;;
+        *) break ;;
+    esac                                                                          # n: stop and undo
     undo_level
     # isolated prefixes this attempt used: the proposed one and whatever PortProton's window left in the .ppdb (it
     # can switch prefix, e.g. when the Wine version is changed). Offered when the game was not installed before
@@ -4054,6 +4065,114 @@ pp_framegen() {
     done
     return 0
 }
+# Windows libraries (Visual C++, XACT...) in a PortProton prefix, with winetricks. PortProton's own menu for this
+# never worked here, and the official Visual C++ installer fails under Wine without a display (status 203). What
+# works: PortProton's own winetricks (data/tmp, newer than the system's) run INSIDE its Flatpak (cabextract is
+# there) with the game's Wine (data/dist/<PW_WINE_USE>) and a display (taken from the desktop or Game Mode when
+# this runs over SSH). DirectX 9-12 is not offered: Proton brings its own (DXVK, VKD3D).
+# "verbs|Spanish|English": what the list offers, in this order; Enter picks the first one if it is missing.
+PP_LIBS=(
+    "vcrun2022|Visual C++ 2015-2022: la que más piden («MSVCP140.dll», «VCRUNTIME140.dll», «Microsoft Visual C++ 2015-2022 Redistributable»)|Visual C++ 2015-2022: the most requested («MSVCP140.dll», «VCRUNTIME140.dll», «Microsoft Visual C++ 2015-2022 Redistributable»)"
+    "vcrun2013|Visual C++ 2013 («MSVCR120.dll»), juegos de 2013-2016|Visual C++ 2013 («MSVCR120.dll»), games from 2013-2016"
+    "vcrun2012|Visual C++ 2012 («MSVCR110.dll»)|Visual C++ 2012 («MSVCR110.dll»)"
+    "vcrun2010|Visual C++ 2010 («MSVCR100.dll»), juegos de 2010-2013|Visual C++ 2010 («MSVCR100.dll»), games from 2010-2013"
+    "vcrun2008|Visual C++ 2008 («MSVCR90.dll»)|Visual C++ 2008 («MSVCR90.dll»)"
+    "vcrun2005|Visual C++ 2005 («MSVCR80.dll»), juegos muy antiguos|Visual C++ 2005 («MSVCR80.dll»), very old games"
+    "d3dcompiler_47|Compilador de sombreadores de DirectX («d3dcompiler_47.dll»): algunos juegos y lanzadores|DirectX shader compiler («d3dcompiler_47.dll»): some games and launchers"
+    "xact xact_x64|XACT: sonido de juegos DirectX 9 (sin sonido, o se cierran al arrancar)|XACT: sound for DirectX 9 games (no sound, or they close on start)"
+    "physx|PhysX de NVIDIA («PhysXLoader.dll»), juegos de 2008-2015|NVIDIA PhysX («PhysXLoader.dll»), games from 2008-2015"
+    "openal|OpenAL («OpenAL32.dll»): sonido de algunos juegos|OpenAL («OpenAL32.dll»): sound for some games"
+    "dotnet48|.NET Framework 4.8: lanzadores y juegos hechos en .NET. Tarda (10-20 min) y ocupa ~1 GB|.NET Framework 4.8: launchers and games made in .NET. Slow (10-20 min) and takes ~1 GB"
+)
+pp_display() {                           # over SSH there is no display and installers fail: borrow the session's
+    [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] && return 0
+    local p v
+    for p in $(pgrep -u "$(id -u)" -x plasmashell) $(pgrep -u "$(id -u)" -x gamescope-wl) $(pgrep -u "$(id -u)" -x steam); do
+        while IFS= read -r v; do export "${v?}"; done < <(tr '\0' '\n' <"/proc/$p/environ" 2>/dev/null |
+            grep -E '^(DISPLAY|XAUTHORITY|WAYLAND_DISPLAY|XDG_RUNTIME_DIR)=')
+        [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] && return 0
+    done
+    return 1
+}
+# pp_libs [Game.exe]: with a game, its prefix and its Wine (from its .ppdb; isolated games keep theirs in ISO_SB);
+# without one, pick a prefix.
+pp_libs() {
+    local exe=${1:-} pfx='' pdir wine='' d i a v n verbs done_list ok_list='' bad_list='' bak
+    local -a dirs=() sel=() w=()
+    local wt=$PP_APP/data/tmp/winetricks
+    [ -f "$wt" ] || { echo "$(L "No encuentro el winetricks de PortProton ($wt): abre PortProton una vez." "Cannot find PortProton's winetricks ($wt): open PortProton once.")"; return 1; }
+    if [ -n "$exe" ]; then
+        [ -f "$exe" ] || { echo "$(L "No existe: $exe" "Does not exist: $exe")" >&2; return 1; }
+        exe=$(realpath "$exe")
+        pfx=$(ppdb_get "$exe.ppdb" PW_PREFIX_NAME); pfx=${pfx:-DEFAULT}
+        wine=$(ppdb_get "$exe.ppdb" PW_WINE_USE)
+        pdir=$PP_APP/data/prefixes/$pfx
+        { [ "$(iso_level "$exe")" != normal ] || [ ! -d "$pdir" ]; } && [ -d "$ISO_SB/data/prefixes/$pfx" ] &&
+            pdir=$ISO_SB/data/prefixes/$pfx
+    else
+        for d in "$PP_APP"/data/prefixes/*/ "$ISO_SB"/data/prefixes/*/; do [ -d "$d" ] && dirs+=("${d%/}"); done
+        [ ${#dirs[@]} -gt 0 ] || { echo "$(L "PortProton no tiene prefijos todavía: abre un juego con él primero." "PortProton has no prefixes yet: open a game with it first.")"; return 1; }
+        echo
+        for i in "${!dirs[@]}"; do
+            case ${dirs[$i]} in
+                "$ISO_SB"/*) v=$(L '(de un juego aislado)' "(an isolated game's)") ;;
+                */DEFAULT) v=$(L '(el de casi todos los juegos normales)' '(used by most normal games)') ;;
+                *) v='' ;;
+            esac
+            printf '  %2d) %-28s %s\n' $((i + 1)) "${dirs[$i]##*/}" "$v"
+        done
+        read -rp "$(L "¿En qué prefijo? (número, Intro = volver): " "Which prefix? (number, Enter = back): ")" a
+        [[ $a =~ ^[0-9]+$ ]] && [ "$a" -ge 1 ] && [ "$a" -le ${#dirs[@]} ] || return 0
+        pdir=${dirs[$((a - 1))]}
+    fi
+    [ -d "$pdir/drive_c" ] || { echo "$(L "El prefijo $pdir no existe todavía: abre el juego una vez con PortProton." "Prefix $pdir doesn't exist yet: open the game once with PortProton.")"; return 1; }
+    # the Wine: the game's, else the newest PortProton has
+    [ -n "$wine" ] && [ -x "$PP_APP/data/dist/$wine/bin/wine" ] ||
+        wine=$(ls -t "$PP_APP/data/dist" 2>/dev/null | while read -r v; do [ -x "$PP_APP/data/dist/$v/bin/wine" ] && { echo "$v"; break; }; done)
+    [ -n "$wine" ] || { echo "$(L "No encuentro ningún Wine/Proton en $PP_APP/data/dist." "Cannot find any Wine/Proton in $PP_APP/data/dist.")"; return 1; }
+    done_list=" $(tr '\n' ' ' <"$pdir/winetricks.log" 2>/dev/null) "
+    section
+    say "$(L "Librerías de Windows en el prefijo ${pdir##*/} ($pdir), con winetricks y $wine." "Windows libraries in prefix ${pdir##*/} ($pdir), with winetricks and $wine.")"
+    say "$(L "POR QUÉ: muchos juegos piden librerías que Windows trae instaladas y un prefijo nuevo no (p. ej. «necesita" "WHY: many games need libraries Windows ships and a new prefix doesn't (e.g. «requires Microsoft Visual C++")"
+    say "$(L "  Microsoft Visual C++ 2015-2022 Redistributable»). DirectX no hace falta: Proton trae el suyo." "  2015-2022 Redistributable»). DirectX isn't needed: Proton brings its own.")"
+    [[ ${pdir##*/} == DEFAULT ]] && say "$(L "  DEFAULT lo comparten casi todos tus juegos normales: lo que se instale aquí les vale a todos." "  DEFAULT is shared by most of your normal games: what is installed here serves them all.")"
+    say "$(L "DESHACER: winetricks no desinstala; antes se copia el registro del prefijo en bak-libs-FECHA dentro de él." "UNDO: winetricks doesn't uninstall; the prefix's registry is copied first to bak-libs-DATE inside it.")"
+    echo
+    for i in "${!PP_LIBS[@]}"; do
+        IFS='|' read -r verbs a v <<<"${PP_LIBS[$i]}"
+        n=$(for x in $verbs; do [[ $done_list == *" $x "* ]] || echo x; done | wc -l)
+        printf '  %2d) %-22s %s%s\n' $((i + 1)) "${verbs// /+}" "$(L "$a" "$v")" "$([ "$n" = 0 ] && L '  [ya está]' '  [installed]')"
+    done
+    IFS='|' read -r verbs _ <<<"${PP_LIBS[0]}"
+    [[ $done_list == *" $verbs "* ]] && a='' || a=1
+    read -rp "$(L "¿Cuáles? (números separados por espacios; Intro = ${a:-ninguna}; 0 = ninguna): " "Which ones? (numbers separated by spaces; Enter = ${a:-none}; 0 = none): ")" v
+    for i in ${v:-$a}; do
+        [[ $i =~ ^[0-9]+$ ]] && [ "$i" -ge 1 ] && [ "$i" -le ${#PP_LIBS[@]} ] || continue
+        IFS='|' read -r verbs _ <<<"${PP_LIBS[$((i - 1))]}"; read -ra w <<<"$verbs"; sel+=("${w[@]}")
+    done
+    [ ${#sel[@]} -gt 0 ] || { echo "$(L "No instalo nada." "Nothing installed.")"; return 0; }
+    if flatpak ps --columns=application 2>/dev/null | grep -qx ru.linux_gaming.PortProton; then
+        echo "$(L "PortProton (o un juego suyo) está abierto: ciérralo antes, para no cambiar el prefijo mientras se usa." "PortProton (or one of its games) is open: close it first, so the prefix isn't changed while in use.")"
+        return 1
+    fi
+    pp_display || echo "$(L "No hay pantalla (ni escritorio ni modo juego): algún instalador puede fallar." "No display (neither desktop nor Game Mode): some installers may fail.")"
+    bak=$pdir/bak-libs-$(date +%Y%m%d-%H%M%S)
+    mkdir -p "$bak" && cp -p "$pdir"/*.reg "$bak/" && { cp -p "$pdir/winetricks.log" "$bak/" 2>/dev/null || true; } ||
+        { echo "$(L "No pude copiar el registro del prefijo: no instalo nada." "Could not back up the prefix's registry: nothing installed.")"; return 1; }
+    for v in "${sel[@]}"; do
+        echo "$(L "== $v (descarga y se instala; puede tardar)…" "== $v (downloads and installs; it may take a while)...")"
+        # --force: chosen by hand (the log may say it is there while the game still asks for it)
+        flatpak run --filesystem="$pdir" --env=WINEPREFIX="$pdir" --env=WINE="$PP_APP/data/dist/$wine/bin/wine" \
+            --env=WINESERVER="$PP_APP/data/dist/$wine/bin/wineserver" --env=WINEDEBUG=-all \
+            --env=WINEDLLOVERRIDES='mscoree,mshtml=' --env=W_OPT_UNATTENDED=1 --command=bash ru.linux_gaming.PortProton \
+            -c 'cd /tmp && bash "$1" -q --force "$2" && "$WINESERVER" -w' _ "$wt" "$v" >"$bak/$v.log" 2>&1
+        if grep -qx "$v" "$pdir/winetricks.log" 2>/dev/null && ! grep -q 'Aborting' "$bak/$v.log"; then ok_list+=" $v"
+        else bad_list+=" $v"; tail -4 "$bak/$v.log" | sed 's/^/    /'; fi
+    done
+    [ -z "$ok_list" ] || echo "$(L "Instaladas:$ok_list. Cuentan la próxima vez que abras el juego." "Installed:$ok_list. They count the next time you open the game.")"
+    [ -z "$bad_list" ] || echo "$(L "Fallaron:$bad_list (registro completo en $bak)." "Failed:$bad_list (full log in $bak).")"
+    [ -z "$bad_list" ]
+}
 # "Mis juegos": one list, by name, of the games installed with the toolbox (ISO_LIST, any level) and PortProton's
 # other games (normal: PortProton starts them unisolated). Changing the level of one of those adds it to ISO_LIST.
 pp_my_games() {
@@ -4080,12 +4199,13 @@ pp_my_games() {
     read -rp "$(L "¿Cuál? (número, Intro = volver): " "Which one? (number, Enter = back)")" a
     [[ $a =~ ^[0-9]+$ ]] && [ "$a" -ge 1 ] && [ "$a" -le ${#rows[@]} ] || return 0
     IFS=$'\t' read -r nm lv e <<<"${rows[$((a - 1))]}"
-    echo "$(L "$nm:  1) Cambiar aislamiento   2) Desinstalar   3) Generación de fotogramas   0) Volver" "$nm:  1) Change isolation   2) Uninstall   3) Frame generation   0) Back")"
+    echo "$(L "$nm:  1) Cambiar aislamiento   2) Desinstalar   3) Generación de fotogramas   4) Librerías de Windows (Visual C++…)   0) Volver" "$nm:  1) Change isolation   2) Uninstall   3) Frame generation   4) Windows libraries (Visual C++…)   0) Back")"
     read -rp "$(L "Elige: " "Choose: ")" c
     case $c in
         1) if [ -f "$e" ]; then pp_change_level "$e"; else echo "$(L "El .exe ya no está: solo se puede desinstalar." "The .exe is gone: it can only be uninstalled.")"; fi ;;
         2) if [ -f "$e" ]; then pp_remove_game "$e"; else pp_remove_game "$nm"; fi ;;
         3) if [ -f "$e" ]; then pp_framegen "$e" "$lv"; else echo "$(L "El .exe ya no está: solo se puede desinstalar." "The .exe is gone: it can only be uninstalled.")"; fi ;;
+        4) if [ -f "$e" ]; then pp_libs "$e"; else echo "$(L "El .exe ya no está: solo se puede desinstalar." "The .exe is gone: it can only be uninstalled.")"; fi ;;
     esac
     return 0
 }
@@ -4707,7 +4827,7 @@ menu() {
    9) Pasar al modo juego ahora y arrancar siempre en él (cierra lo abierto)
  PortProton y Steam
   10) Instalar un juego de Windows: elige su aislamiento, pruébalo y, si va bien, a Steam y a la colección
-  11) Mis juegos: aislamiento, generación de fotogramas, o desinstalarlos (de Steam, PortProton y el disco)
+  11) Mis juegos: aislamiento, generación de fotogramas, librerías de Windows (Visual C++…), o desinstalarlos
   12) Sincronizar la colección «PortProton» de Steam (cierra Steam si está abierto)
  Utilidades
   13) Ver lo que ocupa cada carpeta (también: comando «espacio», o botón derecho en Dolphin)
@@ -4737,7 +4857,7 @@ MENU
    9) Switch to game mode now and always boot into it (closes what is open)
  PortProton and Steam
   10) Install a Windows game: pick its isolation, test it and, if it works, add it to Steam and the collection
-  11) My games: isolation, frame generation, or uninstall them (from Steam, PortProton and the disk)
+  11) My games: isolation, frame generation, Windows libraries (Visual C++…), or uninstall them
   12) Sync the Steam «PortProton» collection (closes Steam if it is open)
  Utilities
   13) See how much each folder takes (also: «espacio» command, or right-click in Dolphin)
@@ -4791,6 +4911,7 @@ case $MODE in                            # these need no root
     run) pp_run_game "${ARGS[@]}"; exit ;;
     change-level) pp_change_level "${ARGS[@]}"; exit ;;
     framegen) pp_framegen "${ARGS[@]}"; exit ;;
+    libs) pp_libs "${ARGS[@]}"; exit ;;
     games) pp_my_games; exit ;;
     pp-collection) pp_collection "${ARGS[@]}"; exit ;;
     space) space_report "${ARGS[@]}"; exit ;;
