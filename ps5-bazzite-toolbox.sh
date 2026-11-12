@@ -4096,11 +4096,40 @@ pp_display() {                           # over SSH there is no display and inst
 }
 # pp_libs [Game.exe]: with a game, its prefix and its Wine (from its .ppdb; isolated games keep theirs in ISO_SB);
 # without one, pick a prefix.
+pp_prefix_games() {                      # "prefix dir<TAB>game name<TAB>its Proton" for every game the toolbox knows
+    local lv e nm d pfx pdir
+    {
+        while IFS=$'\t' read -r lv e nm _; do [ -n "$e" ] && printf '%s\t%s\t%s\n' "$e" "${nm:-$(basename "${e%.*}")}" "$lv"; done \
+            < <(cat "$ISO_LIST" 2>/dev/null)
+        for d in "$PP_APP"/*.desktop; do         # PortProton's own list (normal games added without the toolbox)
+            [ -f "$d" ] && [ "${d##*/}" != PortProton.desktop ] || continue
+            e=$(sed -n 's/^Exec=.*PortProton "\(.*\)"$/\1/p' "$d" | head -1)
+            [ -n "$e" ] && printf '%s\t%s\tnormal\n' "$e" "$(basename "$d" .desktop)"
+        done
+    } | awk -F'\t' '!seen[$1]++' | while IFS=$'\t' read -r e nm lv; do
+        [ -f "$e.ppdb" ] || continue
+        pfx=$(ppdb_get "$e.ppdb" PW_PREFIX_NAME); pfx=${pfx:-DEFAULT}
+        pdir=$PP_APP/data/prefixes/$pfx
+        { [ "$lv" != normal ] || [ ! -d "$pdir" ]; } && [ -d "$ISO_SB/data/prefixes/$pfx" ] && pdir=$ISO_SB/data/prefixes/$pfx
+        printf '%s\t%s\t%s\n' "$pdir" "$nm" "$(ppdb_get "$e.ppdb" PW_WINE_USE)"
+    done
+}
+prefix_users() {                         # prefix_users DIR GAMES [MAX] -> "A, B, C (+n)"
+    local names n
+    names=$(awk -F'\t' -v p="$1" '$1 == p { print $2 }' <<<"$2" | sort -fu)
+    n=$(grep -c . <<<"$names")
+    [ "$n" -gt 0 ] || return 0
+    printf '%s' "$(head -n "${3:-4}" <<<"$names" | paste -sd, - | sed 's/,/, /g')"
+    [ "$n" -le "${3:-4}" ] || printf ' (+%d)' $((n - ${3:-4}))
+}
+# pp_libs [Game.exe]: the libraries live in the prefix (every game using it gets them). With a game, its prefix and
+# its Proton (from its .ppdb; isolated games keep theirs in ISO_SB); without one, a list of prefixes with their games.
 pp_libs() {
-    local exe=${1:-} pfx='' pdir wine='' d i a v n verbs done_list ok_list='' bad_list='' bak
+    local exe=${1:-} pfx='' pdir wine='' d i a v n verbs done_list ok_list='' bad_list='' bak games users
     local -a dirs=() sel=() w=()
     local wt=$PP_APP/data/tmp/winetricks
     [ -f "$wt" ] || { echo "$(L "No encuentro el winetricks de PortProton ($wt): abre PortProton una vez." "Cannot find PortProton's winetricks ($wt): open PortProton once.")"; return 1; }
+    games=$(pp_prefix_games)
     if [ -n "$exe" ]; then
         [ -f "$exe" ] || { echo "$(L "No existe: $exe" "Does not exist: $exe")" >&2; return 1; }
         exe=$(realpath "$exe")
@@ -4113,17 +4142,17 @@ pp_libs() {
         for d in "$PP_APP"/data/prefixes/*/ "$ISO_SB"/data/prefixes/*/; do [ -d "$d" ] && dirs+=("${d%/}"); done
         [ ${#dirs[@]} -gt 0 ] || { echo "$(L "PortProton no tiene prefijos todavía: abre un juego con él primero." "PortProton has no prefixes yet: open a game with it first.")"; return 1; }
         echo
+        say "$(L "Las librerías se instalan en un prefijo (la «carpeta de Windows» de PortProton) y valen para todos sus juegos." "Libraries go into a prefix (PortProton's \"Windows folder\") and serve every game in it.")"
         for i in "${!dirs[@]}"; do
-            case ${dirs[$i]} in
-                "$ISO_SB"/*) v=$(L '(de un juego aislado)' "(an isolated game's)") ;;
-                */DEFAULT) v=$(L '(el de casi todos los juegos normales)' '(used by most normal games)') ;;
-                *) v='' ;;
-            esac
-            printf '  %2d) %-28s %s\n' $((i + 1)) "${dirs[$i]##*/}" "$v"
+            users=$(prefix_users "${dirs[$i]}" "$games")
+            case ${dirs[$i]} in "$ISO_SB"/*) v=$(L ' (aislado)' ' (isolated)') ;; *) v='' ;; esac
+            printf '  %2d) %-24s %s\n' $((i + 1)) "${dirs[$i]##*/}$v" "${users:-$(L '(ningún juego conocido)' '(no known game)')}"
         done
         read -rp "$(L "¿En qué prefijo? (número, Intro = volver): " "Which prefix? (number, Enter = back): ")" a
         [[ $a =~ ^[0-9]+$ ]] && [ "$a" -ge 1 ] && [ "$a" -le ${#dirs[@]} ] || return 0
         pdir=${dirs[$((a - 1))]}
+        # its games' Proton: the one most of them use
+        wine=$(awk -F'\t' -v p="$pdir" '$1 == p && $3 != "" { print $3 }' <<<"$games" | sort | uniq -c | sort -rn | awk 'NR == 1 { print $2 }')
     fi
     [ -d "$pdir/drive_c" ] || { echo "$(L "El prefijo $pdir no existe todavía: abre el juego una vez con PortProton." "Prefix $pdir doesn't exist yet: open the game once with PortProton.")"; return 1; }
     # the Wine: the game's, else the newest PortProton has
@@ -4135,7 +4164,8 @@ pp_libs() {
     say "$(L "Librerías de Windows en el prefijo ${pdir##*/} ($pdir), con winetricks y $wine." "Windows libraries in prefix ${pdir##*/} ($pdir), with winetricks and $wine.")"
     say "$(L "POR QUÉ: muchos juegos piden librerías que Windows trae instaladas y un prefijo nuevo no (p. ej. «necesita" "WHY: many games need libraries Windows ships and a new prefix doesn't (e.g. «requires Microsoft Visual C++")"
     say "$(L "  Microsoft Visual C++ 2015-2022 Redistributable»). DirectX no hace falta: Proton trae el suyo." "  2015-2022 Redistributable»). DirectX isn't needed: Proton brings its own.")"
-    [[ ${pdir##*/} == DEFAULT ]] && say "$(L "  DEFAULT lo comparten casi todos tus juegos normales: lo que se instale aquí les vale a todos." "  DEFAULT is shared by most of your normal games: what is installed here serves them all.")"
+    users=$(prefix_users "$pdir" "$games" 8)
+    [ -z "$users" ] || say "$(L "  Lo que se instale aquí les vale a todos sus juegos: $users." "  What is installed here serves all its games: $users.")"
     say "$(L "DESHACER: winetricks no desinstala; antes se copia el registro del prefijo en bak-libs-FECHA dentro de él." "UNDO: winetricks doesn't uninstall; the prefix's registry is copied first to bak-libs-DATE inside it.")"
     echo
     for i in "${!PP_LIBS[@]}"; do
@@ -4829,6 +4859,7 @@ menu() {
   10) Instalar un juego de Windows: elige su aislamiento, pruébalo y, si va bien, a Steam y a la colección
   11) Mis juegos: aislamiento, generación de fotogramas, librerías de Windows (Visual C++…), o desinstalarlos
   12) Sincronizar la colección «PortProton» de Steam (cierra Steam si está abierto)
+  21) Librerías de Windows (Visual C++…) en un prefijo de PortProton, para todos sus juegos
  Utilidades
   13) Ver lo que ocupa cada carpeta (también: comando «espacio», o botón derecho en Dolphin)
  Ajustes de la consola (cambian el sistema; cada uno explica y pregunta)
@@ -4859,6 +4890,7 @@ MENU
   10) Install a Windows game: pick its isolation, test it and, if it works, add it to Steam and the collection
   11) My games: isolation, frame generation, Windows libraries (Visual C++…), or uninstall them
   12) Sync the Steam «PortProton» collection (closes Steam if it is open)
+  21) Windows libraries (Visual C++…) in a PortProton prefix, for all its games
  Utilities
   13) See how much each folder takes (also: «espacio» command, or right-click in Dolphin)
  Console settings (they change the system; each one explains and asks)
@@ -4889,6 +4921,7 @@ MENU
             10) pp_add_game ;;
             11) pp_my_games ;;
             12) pp_collection ;;
+            21) pp_libs ;;
             13) read -e -rp "$(L "Carpeta (Intro = $HOME): " "Folder (Enter = $HOME): ")" a; space_report "${a:-$HOME}" ;;
             14) STATUS_ONLY=1 ALL=0 ONLY=''; setup_run; STATUS_ONLY=0 ;;
             15) STATUS_ONLY=0 ALL=0 ONLY=''; setup_run ;;

@@ -98,6 +98,7 @@ lo hay, un comando del sistema que hace lo mismo.
 | 10 | Instalar un juego de Windows (normal o aislado), probarlo y añadirlo a Steam | `--add-game [Juego.exe]` | — |
 | 11 | Mis juegos: cambiar su aislamiento, la generación de fotogramas, las librerías de Windows, o desinstalarlos | `--games`, `--change-level Juego.exe`, `--framegen Juego.exe`, `--libs [Juego.exe]`, `--remove-game [Juego.exe\|"Nombre"]` | — |
 | 12 | Sincronizar la colección «PortProton» de Steam (cierra Steam) | `--pp-collection [--dry-run\|--yes]` | — |
+| 21 | Librerías de Windows (Visual C++…) en un prefijo de PortProton, para todos sus juegos | `--libs [Juego.exe]` | — |
 | — | Lanzar un juego como lo dejó la opción 10 (lo usan Steam y el escritorio) | `--run Juego.exe` | — |
 | **Utilidades** | | | |
 | 13 | Lo que ocupa cada carpeta (también el comando `espacio` y el botón derecho de Dolphin) | `--space [carpeta]` | `du -bsh -- */ .[!.]*/ \| sort -h` |
@@ -824,11 +825,12 @@ Después, pregunta en cada paso:
 aislado con red o sin red), también los que instalaste antes de esta versión; elige uno para cambiar su aislamiento,
 su generación de fotogramas, sus librerías de Windows o desinstalarlo.
 
-**Librerías de Windows** (en «Mis juegos», `--libs [Juego.exe]`, o al probar un juego nuevo con la opción 10:
-respuesta `l`): muchos juegos piden librerías que Windows trae y un prefijo nuevo no, sobre todo el aviso «necesita
-Microsoft Visual C++ 2015-2022 Redistributable». Con un juego, usa su prefijo y su versión de Proton (de su `.ppdb`;
-los aislados, el suyo de la copia aislada); sin él, te deja elegir el prefijo. Enseña cuáles tiene ya y ofrece las
-habituales: `vcrun2022` (Visual C++ 2015-2022, la que más piden), `vcrun2013`, `vcrun2012`, `vcrun2010`, `vcrun2008`,
+**Librerías de Windows** (opción 21 o `--libs`, por prefijo; también desde un juego: en «Mis juegos», con
+`--libs Juego.exe`, o al probar uno nuevo con la opción 10, respuesta `l`): las librerías van en el prefijo y valen
+para todos sus juegos, así que la lista de prefijos dice qué juegos usa cada uno. Muchos juegos piden librerías que Windows trae y un prefijo nuevo no,
+sobre todo el aviso «necesita Microsoft Visual C++ 2015-2022 Redistributable». Con un juego, usa su prefijo y su versión de Proton (de su `.ppdb`;
+los aislados, el suyo de la copia aislada) y dice qué otros juegos lo comparten; sin él, el Proton que más usan los
+juegos de ese prefijo. Enseña cuáles tiene ya y ofrece las habituales: `vcrun2022` (Visual C++ 2015-2022, la que más piden), `vcrun2013`, `vcrun2012`, `vcrun2010`, `vcrun2008`,
 `vcrun2005`, `d3dcompiler_47`, `xact` + `xact_x64`, `physx`, `openal` y `dotnet48` (tarda y ocupa ~1 GB). DirectX no:
 Proton trae el suyo. Las instala con el `winetricks` de PortProton dentro de su Flatpak y con una pantalla (por SSH
 toma la del escritorio o el modo juego): el menú de PortProton para esto, y el instalador oficial de Visual C++ sin

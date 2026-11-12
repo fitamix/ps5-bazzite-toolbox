@@ -7,8 +7,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ### Añadido
 
-- **Librerías de Windows en un prefijo de PortProton** (`--libs [Juego.exe]`, en «Mis juegos» y al probar un juego
-  nuevo, respuesta `l`). Para los juegos que dicen que necesitan «Microsoft Visual C++ 2015-2022 Redistributable» u
+- **Librerías de Windows en un prefijo de PortProton** (opción 21 o `--libs`, que enseña cada prefijo con los juegos
+  que lo usan; también desde un juego: en «Mis juegos», `--libs Juego.exe` o al probar uno nuevo, respuesta `l`). Para los juegos que dicen que necesitan «Microsoft Visual C++ 2015-2022 Redistributable» u
   otras librerías que Windows trae y un prefijo nuevo no. Ofrece las habituales (Visual C++ de 2005 a 2022,
   `d3dcompiler_47`, XACT, PhysX, OpenAL y .NET 4.8), dice cuáles tiene ya el prefijo y las instala con el `winetricks`
   de PortProton dentro de su Flatpak, con la versión de Proton del juego y una pantalla (por SSH, la de la sesión). El

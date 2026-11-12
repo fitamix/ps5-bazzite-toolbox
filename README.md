@@ -97,6 +97,7 @@ there is one, a system command that does the same.
 | 10 | Install a Windows game (normal or isolated), test it and add it to Steam | `--add-game [Game.exe]` | — |
 | 11 | My games: change their isolation, frame generation, Windows libraries, or uninstall them | `--games`, `--change-level Game.exe`, `--framegen Game.exe`, `--libs [Game.exe]`, `--remove-game [Game.exe\|"Name"]` | — |
 | 12 | Sync the "PortProton" collection in Steam (closes Steam) | `--pp-collection [--dry-run\|--yes]` | — |
+| 21 | Windows libraries (Visual C++…) in a PortProton prefix, for all its games | `--libs [Game.exe]` | — |
 | — | Launch a game as option 10 left it (used by Steam and the desktop) | `--run Game.exe` | — |
 | **Utilities** | | | |
 | 13 | How much space each folder takes (also the `espacio` command and the Dolphin right-click) | `--space [folder]` | `du -bsh -- */ .[!.]*/ \| sort -h` |
@@ -826,11 +827,12 @@ After that, it asks at every step:
 isolated with network or without), including those you installed before this version; pick one to change its
 isolation, its frame generation, its Windows libraries, or to uninstall it.
 
-**Windows libraries** (in "My games", `--libs [Game.exe]`, or when testing a new game with option 10: answer `l`):
-many games need libraries Windows ships and a new prefix doesn't, above all the "requires Microsoft Visual C++
+**Windows libraries** (option 21 or `--libs`, by prefix; also from a game: in "My games", with `--libs Game.exe`,
+or when testing a new one with option 10, answer `l`): libraries go into the prefix and serve all its games, so the
+prefix list says which games use each one. Many games need libraries Windows ships and a new prefix doesn't, above all the "requires Microsoft Visual C++
 2015-2022 Redistributable" message. With a game, it uses its prefix and its Proton version (from its `.ppdb`; isolated
-games, theirs in the isolated copy); without one, you pick the prefix. It shows which ones it already has and offers
-the usual ones: `vcrun2022` (Visual C++ 2015-2022, the most requested), `vcrun2013`, `vcrun2012`, `vcrun2010`,
+games, theirs in the isolated copy) and says which other games share it; without one, the Proton most of that
+prefix's games use. It shows which ones it already has and offers the usual ones: `vcrun2022` (Visual C++ 2015-2022, the most requested), `vcrun2013`, `vcrun2012`, `vcrun2010`,
 `vcrun2008`, `vcrun2005`, `d3dcompiler_47`, `xact` + `xact_x64`, `physx`, `openal` and `dotnet48` (slow, ~1 GB).
 Not DirectX: Proton brings its own. It installs them with PortProton's `winetricks` inside its Flatpak and with a
 display (over SSH it takes the desktop's or Game Mode's): PortProton's menu for this, and the official Visual C++
