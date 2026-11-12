@@ -4227,19 +4227,30 @@ pp_libs() {
     bak=$pdir/bak-libs-$(date +%Y%m%d-%H%M%S)
     mkdir -p "$bak" && cp -p "$pdir"/*.reg "$bak/" && { cp -p "$pdir/winetricks.log" "$bak/" 2>/dev/null || true; } ||
         { echo "$(L "No pude copiar el registro del prefijo: no instalo nada." "Could not back up the prefix's registry: nothing installed.")"; return 1; }
+    # Ctrl+C stops the library being installed (winetricks and its Wine die with it) and the ones after it
+    local rc stop=0 half=''
+    trap 'stop=1' INT
     for v in "${sel[@]}"; do
-        echo "$(L "== $v (descarga y se instala; puede tardar)…" "== $v (downloads and installs; it may take a while)...")"
-        # --force: chosen by hand (the log may say it is there while the game still asks for it)
+        [ $stop = 0 ] || break
+        echo "$(L "== $v (descarga y se instala; puede tardar varios minutos)…" "== $v (downloads and installs; it may take several minutes)...")"
+        # --force: chosen by hand (the log may say it is there while the game still asks for it). Shown as it goes:
+        # the downloads and the installers it runs; everything in $bak/$v.log
         flatpak run --filesystem="$pdir" --env=WINEPREFIX="$pdir" --env=WINE="$PP_APP/data/dist/$wine/bin/wine" \
             --env=WINESERVER="$PP_APP/data/dist/$wine/bin/wineserver" --env=WINEDEBUG=-all \
             --env=WINEDLLOVERRIDES='mscoree,mshtml=' --env=W_OPT_UNATTENDED=1 --command=bash ru.linux_gaming.PortProton \
-            -c 'cd /tmp && bash "$1" -q --force "$2" && "$WINESERVER" -w' _ "$wt" "$v" >"$bak/$v.log" 2>&1
-        if grep -qx "$v" "$pdir/winetricks.log" 2>/dev/null && ! grep -q 'Aborting' "$bak/$v.log"; then ok_list+=" $v"
+            -c 'cd /tmp && bash "$1" -q --force "$2" && "$WINESERVER" -w' _ "$wt" "$v" 2>&1 | tee "$bak/$v.log" |
+            sed -nu -e '/regedit\.exe/d' -e "s#^Downloading [^ ]*/\([^/ ]*\) .*#   $(L 'descargando' 'downloading') \1#p" \
+                    -e "s#^Executing .*/bin/wine[64]* \([^ ]*\.\(exe\|msi\)\).*#   $(L 'instalando' 'installing') \1#p"
+        rc=${PIPESTATUS[0]}
+        if [ $stop = 1 ]; then half=$v
+        elif [ "$rc" = 0 ] && ! grep -q 'Aborting' "$bak/$v.log"; then ok_list+=" $v"
         else bad_list+=" $v"; tail -4 "$bak/$v.log" | sed 's/^/    /'; fi
     done
+    trap - INT
     [ -z "$ok_list" ] || echo "$(L "Instaladas:$ok_list. Cuentan la próxima vez que abras el juego." "Installed:$ok_list. They count the next time you open the game.")"
     [ -z "$bad_list" ] || echo "$(L "Fallaron:$bad_list (registro completo en $bak)." "Failed:$bad_list (full log in $bak).")"
-    [ -z "$bad_list" ]
+    [ -z "$half" ] || echo "$(L "Parado con Ctrl+C: $half quedó a medias (vuelve a instalarla); las siguientes, sin tocar." "Stopped with Ctrl+C: $half was left half done (install it again); the next ones untouched.")"
+    [ -z "$bad_list$half" ]
 }
 # "Mis juegos": one list, by name, of the games installed with the toolbox (ISO_LIST, any level) and PortProton's
 # other games (normal: PortProton starts them unisolated). Changing the level of one of those adds it to ISO_LIST.

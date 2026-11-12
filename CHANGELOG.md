@@ -17,7 +17,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
   `vcrun2013`, buscada en el catálogo de winetricks), dice cuáles tiene ya el prefijo y las instala con el
   `winetricks` de PortProton dentro de su Flatpak, con la versión de Proton del juego y una pantalla (por SSH, la de
   la sesión). El menú de PortProton para esto nunca funcionó aquí, y el instalador de Visual C++ falla sin pantalla
-  (estado 203). Visto con Dead as Disco. Antes copia el registro del prefijo en `bak-libs-FECHA`.
+  (estado 203). Visto con Dead as Disco. Antes copia el registro del prefijo en `bak-libs-FECHA`. Enseña cada paso
+  (descarga, instalador) mientras trabaja, y con Ctrl+C para y dice cuál quedó a medias.
 
 ## [1.11.2] - 2026-11-12
 
