@@ -41,7 +41,7 @@
 # Setup blocks: locale cmdline wifi updates vram gpu40 zram swapdisco fans cpufreq warmreboot hdmi arranque bt steambt disk firewall brave edge nas bios media esde portproton atajos monitorweb
 set -uo pipefail
 
-TOOLBOX_VERSION=1.11.0                   # bump on every release (see CHANGELOG.md and release.sh)
+TOOLBOX_VERSION=1.11.1                   # bump on every release (see CHANGELOG.md and release.sh)
 TOOLBOX_REPO=fitamix/ps5-bazzite-toolbox
 TOOLBOX_BIN=$HOME/.local/bin/ps5-bazzite-toolbox                      # where --install puts it
 TOOLBOX_DESKTOP=$HOME/.local/share/applications/ps5-bazzite-toolbox.desktop
@@ -68,7 +68,9 @@ while [ $# -gt 0 ]; do
         --setup) MODE=setup; shift ;;
         --status) MODE=setup; STATUS_ONLY=1; shift ;;
         --all) MODE=setup; ALL=1; shift ;;
-        --only) MODE=setup; ONLY=${2//,/ }; shift 2 ;;
+        --only) [ -n "${2:-}" ] && [[ $2 != -* ]] ||
+                    { echo "$(L 'Uso: --only bloque1,bloque2 (p. ej. --only vram,nas)' 'Usage: --only block1,block2 (e.g. --only vram,nas)')" >&2; exit 2; }
+                MODE=setup; ONLY=${2//,/ }; shift 2 ;;
         --update) MODE=update; UPDATE_TAG=''
                   if [ $# -gt 1 ] && [[ $2 != -* ]]; then UPDATE_TAG=$2; shift; fi; shift ;;
         --rollback) MODE=rollback; shift ;;
@@ -1237,7 +1239,9 @@ apply_media() {
 ESDE_SYSTEMS=$HOME/ES-DE/custom_systems/es_systems.xml
 CITRA_LINE='<command label="Citra (Standalone)">%EMULATOR_CITRA% %ROM%</command>'
 citra_installed() { compgen -G "$HOME/Applications/citra-qt*.AppImage" >/dev/null || flatpak info org.citra_emu.citra >/dev/null 2>&1; }
-esde_windows_lines() { grep -c -E '_libretro\.dll|< command>' "$ESDE_SYSTEMS" 2>/dev/null; }
+esde_windows_lines() {                  # always one number: grep -c prints 0 AND fails when nothing matches
+    local n; n=$(grep -c -E '_libretro\.dll|< command>' "$ESDE_SYSTEMS" 2>/dev/null); echo "${n:-0}"
+}
 esde_citra_missing() {
     citra_installed && ! awk '/<name>n3ds<\/name>/,/<\/system>/' "$ESDE_SYSTEMS" | grep >/dev/null 'label="Citra (Standalone)"'
 }
@@ -1245,7 +1249,7 @@ desc_esde() {
     section
     say "$(L "Repara la lista de sistemas que EmuDeck deja a ES-DE ($ESDE_SYSTEMS):" "Repairs the system list EmuDeck leaves for ES-DE ($ESDE_SYSTEMS):")"
     say "$(L "- líneas de Windows: '%CORE_RETROARCH%\\xxx_libretro.dll' → '/xxx_libretro.so', y '< command>' → '</command>'" "- Windows lines: '%CORE_RETROARCH%\\xxx_libretro.dll' → '/xxx_libretro.so', and '< command>' → '</command>'")"
-    say "$(L "  (ahora hay $(esde_windows_lines || echo 0));" "  (now there are $(esde_windows_lines || echo 0));")"
+    say "$(L "  (ahora hay $(esde_windows_lines));" "  (now there are $(esde_windows_lines));")"
     say "$(L "- si Citra está instalado (~/Applications/citra-qt*.AppImage), añade 'Citra (Standalone)' a Nintendo 3DS" "- if Citra is installed (~/Applications/citra-qt*.AppImage), adds 'Citra (Standalone)' to Nintendo 3DS")"
     say "$(L "  ($(citra_installed && { esde_citra_missing && echo 'falta' || echo 'ya está'; } || echo 'Citra no instalado'))." "  ($(citra_installed && { esde_citra_missing && echo 'missing' || echo 'already there'; } || echo 'Citra not installed')).")"
     say "$(L "POR QUÉ: con esas líneas ES-DE busca un .dll que en Linux no existe ('citra_libretro.dll'), y las listas" "WHY: with those lines ES-DE looks for a .dll that doesn't exist on Linux ('citra_libretro.dll'), and lists")"

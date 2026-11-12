@@ -5,6 +5,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+## [1.11.1] - 2026-11-12
+
 ### Añadido
 
 - **Teclado del modo juego en el bloque `locale`.** El modo juego (gamescope) no lee el teclado del sistema: con un
@@ -12,6 +14,13 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
   sesión en el navegador de un plugin de Decky). El bloque escribe ahora la distribución del sistema en
   `~/.config/environment.d/90-ps5-bazzite-toolbox-keyboard.conf` (`XKB_DEFAULT_LAYOUT`), que el modo juego lee al
   arrancar. En una consola con `locale` ya aplicado, sale como pendiente hasta repetirlo.
+
+### Arreglado
+
+- **`--only` sin lista de bloques:** fallaba con `line 71: 2: unbound variable`; ahora explica cómo se usa
+  (`--only vram,nas`) y sale.
+- **Bloque `esde`:** el recuento de líneas de Windows salía como «(ahora hay 0» y «0)» en dos líneas cuando no quedaba
+  ninguna; ahora sale un solo número.
 
 ## [1.11.0] - 2026-11-11
 
@@ -331,7 +340,8 @@ Primera versión publicada.
 - Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
-[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.11.0...HEAD
+[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.11.1...HEAD
+[1.11.1]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.11.0...v1.11.1
 [1.11.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.10.4...v1.11.0
 [1.10.4]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.10.3...v1.10.4
 [1.10.3]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.10.2...v1.10.3
