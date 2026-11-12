@@ -832,7 +832,9 @@ sobre todo el aviso «necesita Microsoft Visual C++ 2015-2022 Redistributable».
 los aislados, el suyo de la copia aislada) y dice qué otros juegos lo comparten; sin él, el Proton que más usan los
 juegos de ese prefijo. Enseña cuáles tiene ya y ofrece las habituales: `vcrun2022` (Visual C++ 2015-2022, la que más piden), `vcrun2013`, `vcrun2012`, `vcrun2010`, `vcrun2008`,
 `vcrun2005`, `d3dcompiler_47`, `xact` + `xact_x64`, `physx`, `openal` y `dotnet48` (tarda y ocupa ~1 GB). DirectX no:
-Proton trae el suyo. Las instala con el `winetricks` de PortProton dentro de su Flatpak y con una pantalla (por SSH
+Proton trae el suyo. También acepta **cualquier otra** por su nombre de winetricks (`xna40`, `d3dx9_43`…) o por la
+DLL que dice el error (`MSVCR120.dll`): la busca en el catálogo del propio winetricks y, si hay varias que la
+traen, te deja elegir. `vcrun2015`, `vcrun2017` y `vcrun2019` ya no existen en winetricks: pasa a `vcrun2022`. Las instala con el `winetricks` de PortProton dentro de su Flatpak y con una pantalla (por SSH
 toma la del escritorio o el modo juego): el menú de PortProton para esto, y el instalador oficial de Visual C++ sin
 pantalla, fallan. Antes copia el registro del prefijo en `bak-libs-FECHA` dentro de él (winetricks no desinstala).
 Con PortProton abierto no hace nada. `DEFAULT` lo comparten casi todos los juegos normales: lo que se instale ahí les

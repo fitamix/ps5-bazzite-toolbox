@@ -4122,6 +4122,38 @@ prefix_users() {                         # prefix_users DIR GAMES [MAX] -> "A, B
     printf '%s' "$(head -n "${3:-4}" <<<"$names" | paste -sd, - | sed 's/,/, /g')"
     [ "$n" -le "${3:-4}" ] || printf ' (+%d)' $((n - ${3:-4}))
 }
+# winetricks' own catalog, read from its source: "verb<TAB>category<TAB>title<TAB>the dll it checks for" (lower case)
+wt_catalog() {
+    awk '/^w_metadata /     { if (v != "") print v "\t" c "\t" t "\t" f; v = $2; c = $3; t = ""; f = ""; next }
+         v != "" && /^[ \t]+title=/           { s = $0; sub(/^[ \t]+title="/, "", s); sub(/" *\\?$/, "", s); t = s }
+         v != "" && /^[ \t]+installed_file1=/ { s = $0; sub(/.*[\/\\]/, "", s); sub(/".*/, "", s); f = tolower(s) }
+         END { if (v != "") print v "\t" c "\t" t "\t" f }' "$1"
+}
+# wt_pick WINETRICKS NAME -> the verb to install for NAME: a winetricks name as is, or (for a DLL from an error
+# message, or a word) the libraries that provide or mention it, to choose from. Only libraries and fonts.
+wt_pick() {
+    local q c n a
+    q=$(tr '[:upper:]' '[:lower:]' <<<"$2"); q=${q%.dll}
+    case $q in vcrun2015|vcrun2017|vcrun2019)     # winetricks retired them ("!dont_use_2019!"): 2022 replaces them
+        echo "$(L "  $q ya no se usa en winetricks: vcrun2022 la sustituye (incluye 2015-2019)." "  $q is retired in winetricks: vcrun2022 replaces it (includes 2015-2019).")" >&2
+        echo vcrun2022; return 0 ;;
+    esac
+    c=$(wt_catalog "$1" | awk -F'\t' -v q="$q" '
+        $2 != "dlls" && $2 != "fonts" || $1 ~ /^!/ { next }
+        { t = tolower($3); s = 0 }
+        $1 == q { s = 4 }
+        !s && ($4 == q ".dll" || t ~ ("[(, ]" q "(\\.dll)?[,) ]")) { s = 3 }
+        !s && index($1, q) == 1 { s = 2 }
+        !s && index(t, q) { s = 1 }
+        s { print s "\t" $1 "\t" $3 }' | sort -t$'\t' -k1,1nr -k2,2 | head -8)
+    [ -n "$c" ] || { echo "$(L "  «$2»: no está en el catálogo de winetricks." "  «$2»: not in winetricks' catalog.")" >&2; return 1; }
+    [ "$(head -1 <<<"$c" | cut -f1)" = 4 ] && { head -1 <<<"$c" | cut -f2; return 0; }    # its exact name
+    echo "$(L "  «$2» puede ser:" "  «$2» may be:")" >&2
+    n=0; while IFS=$'\t' read -r _ a v; do n=$((n + 1)); printf '    %d) %-18s %s\n' $n "$a" "${v:0:90}" >&2; done <<<"$c"
+    read -rp "$(L "  ¿Cuál? (número, Intro = ninguna): " "  Which one? (number, Enter = none): ")" a </dev/tty
+    [[ $a =~ ^[0-9]+$ ]] && [ "$a" -ge 1 ] && [ "$a" -le "$n" ] || return 1
+    sed -n "${a}p" <<<"$c" | cut -f2
+}
 # pp_libs [Game.exe]: the libraries live in the prefix (every game using it gets them). With a game, its prefix and
 # its Proton (from its .ppdb; isolated games keep theirs in ISO_SB); without one, a list of prefixes with their games.
 pp_libs() {
@@ -4175,10 +4207,16 @@ pp_libs() {
     done
     IFS='|' read -r verbs _ <<<"${PP_LIBS[0]}"
     [[ $done_list == *" $verbs "* ]] && a='' || a=1
-    read -rp "$(L "¿Cuáles? (números separados por espacios; Intro = ${a:-ninguna}; 0 = ninguna): " "Which ones? (numbers separated by spaces; Enter = ${a:-none}; 0 = none): ")" v
+    say "$(L "Otra cualquiera: escribe su nombre de winetricks (p. ej. vcrun2019, xna40, d3dx9_43) o la DLL que dice el" "Any other: type its winetricks name (e.g. vcrun2019, xna40, d3dx9_43) or the DLL the error names")"
+    say "$(L "  error (p. ej. MSVCR120.dll): la busco en el catálogo de winetricks." "  (e.g. MSVCR120.dll): I look it up in winetricks' catalog.")"
+    read -rp "$(L "¿Cuáles? (números o nombres, separados por espacios; Intro = ${a:-ninguna}; 0 = ninguna): " "Which ones? (numbers or names, separated by spaces; Enter = ${a:-none}; 0 = none): ")" v
     for i in ${v:-$a}; do
-        [[ $i =~ ^[0-9]+$ ]] && [ "$i" -ge 1 ] && [ "$i" -le ${#PP_LIBS[@]} ] || continue
-        IFS='|' read -r verbs _ <<<"${PP_LIBS[$((i - 1))]}"; read -ra w <<<"$verbs"; sel+=("${w[@]}")
+        if [[ $i =~ ^[0-9]+$ ]]; then
+            [ "$i" -ge 1 ] && [ "$i" -le ${#PP_LIBS[@]} ] || continue
+            IFS='|' read -r verbs _ <<<"${PP_LIBS[$((i - 1))]}"; read -ra w <<<"$verbs"; sel+=("${w[@]}")
+        else
+            v=$(wt_pick "$wt" "$i") && [ -n "$v" ] && sel+=("$v")
+        fi
     done
     [ ${#sel[@]} -gt 0 ] || { echo "$(L "No instalo nada." "Nothing installed.")"; return 0; }
     if flatpak ps --columns=application 2>/dev/null | grep -qx ru.linux_gaming.PortProton; then

@@ -834,7 +834,9 @@ prefix list says which games use each one. Many games need libraries Windows shi
 games, theirs in the isolated copy) and says which other games share it; without one, the Proton most of that
 prefix's games use. It shows which ones it already has and offers the usual ones: `vcrun2022` (Visual C++ 2015-2022, the most requested), `vcrun2013`, `vcrun2012`, `vcrun2010`,
 `vcrun2008`, `vcrun2005`, `d3dcompiler_47`, `xact` + `xact_x64`, `physx`, `openal` and `dotnet48` (slow, ~1 GB).
-Not DirectX: Proton brings its own. It installs them with PortProton's `winetricks` inside its Flatpak and with a
+Not DirectX: Proton brings its own. It also takes **any other** by its winetricks name (`xna40`, `d3dx9_43`…) or by
+the DLL the error names (`MSVCR120.dll`): it looks it up in winetricks' own catalog and, if several provide it, lets
+you choose. `vcrun2015`, `vcrun2017` and `vcrun2019` no longer exist in winetricks: it uses `vcrun2022`. It installs them with PortProton's `winetricks` inside its Flatpak and with a
 display (over SSH it takes the desktop's or Game Mode's): PortProton's menu for this, and the official Visual C++
 installer without a display, fail. It first copies the prefix's registry to `bak-libs-DATE` inside it (winetricks
 doesn't uninstall). With PortProton open it does nothing. `DEFAULT` is shared by most normal games: what is installed
