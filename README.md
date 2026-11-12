@@ -205,7 +205,9 @@ The commands for each block are what the toolbox does, with the default values; 
 **WHAT IT DOES:** system language, keyboard (console, desktop and Game Mode), time zone and automatic network time.
 **WHY:** the image ships in English, with a US keyboard and UTC time. Also, Game Mode (gamescope) doesn't read the
 system keyboard: a physical keyboard types like a US one (e.g. no @ when logging in through a browser) until it is
-set in `~/.config/environment.d`, which it reads at startup.
+set in `~/.config/environment.d`, which it reads at startup. And the KDE desktop keeps its own language in
+`~/.config/plasma-localerc`, which stays English (`C.UTF-8`) even when the system's changes; whatever is started from
+the desktop inherits it (e.g. the language the toolbox gives a game when installing it from Dolphin).
 **It asks:** language (`es_ES.UTF-8`), keyboard (`es`) and time zone (`Europe/Madrid`).
 
 ```sh
@@ -216,9 +218,12 @@ sudo timedatectl set-timezone Europe/Madrid
 sudo timedatectl set-ntp true
 mkdir -p ~/.config/environment.d
 echo XKB_DEFAULT_LAYOUT=es > ~/.config/environment.d/90-ps5-bazzite-toolbox-keyboard.conf   # Game Mode
+kwriteconfig6 --file plasma-localerc --group Formats --key LANG es_ES.UTF-8            # desktop
+kwriteconfig6 --file plasma-localerc --group Translations --key LANGUAGE es_ES:es
 ```
 
-**UNDO:** the same commands with other values; for Game Mode, delete that file. Steam has its own language and time zone (see
+**UNDO:** the same commands with other values; for Game Mode, delete that file; for the desktop, copy the
+`~/.config/plasma-localerc.bak-*` the toolbox leaves over it. Steam has its own language and time zone (see
 [Things done by hand](#things-done-by-hand)).
 
 ### `cmdline`

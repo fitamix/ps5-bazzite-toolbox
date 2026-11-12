@@ -5,6 +5,19 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+## [1.11.2] - 2026-11-12
+
+### Arreglado
+
+- **Idioma de los juegos instalados desde el escritorio.** El escritorio KDE guarda su propio idioma en
+  `~/.config/plasma-localerc`, que en estas imágenes se queda en `C.UTF-8` (inglés) desde el primer arranque aunque el
+  sistema pase a español. Lo que se abre desde él lo hereda: al instalar un juego con «Instalar en PortProton y Steam»
+  de Dolphin, la caja creía que el sistema estaba en inglés y dejaba el emulador de Steam del juego en `english`
+  (visto con BLACKWOOD). Ahora, si el idioma recibido es `C` o `POSIX`, usa el del sistema (`/etc/locale.conf`).
+- **Bloque `locale`: también el idioma del escritorio.** Escribe el idioma en `plasma-localerc` (`LANG` y la lista de
+  traducciones, p. ej. `es_ES:es`), con copia `.bak-*`. Donde ya estaba aplicado, sale como pendiente si el escritorio
+  sigue en otro idioma. Cuenta la próxima vez que se entra en el escritorio.
+
 ## [1.11.1] - 2026-11-12
 
 ### Añadido
@@ -340,7 +353,8 @@ Primera versión publicada.
 - Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
-[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.11.1...HEAD
+[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.11.2...HEAD
+[1.11.2]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.11.1...v1.11.2
 [1.11.1]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.11.0...v1.11.1
 [1.11.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.10.4...v1.11.0
 [1.10.4]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.10.3...v1.10.4

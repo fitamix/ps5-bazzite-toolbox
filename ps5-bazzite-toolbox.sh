@@ -41,7 +41,7 @@
 # Setup blocks: locale cmdline wifi updates vram gpu40 zram swapdisco fans cpufreq warmreboot hdmi arranque bt steambt disk firewall brave edge nas bios media esde portproton atajos monitorweb
 set -uo pipefail
 
-TOOLBOX_VERSION=1.11.1                   # bump on every release (see CHANGELOG.md and release.sh)
+TOOLBOX_VERSION=1.11.2                   # bump on every release (see CHANGELOG.md and release.sh)
 TOOLBOX_REPO=fitamix/ps5-bazzite-toolbox
 TOOLBOX_BIN=$HOME/.local/bin/ps5-bazzite-toolbox                      # where --install puts it
 TOOLBOX_DESKTOP=$HOME/.local/share/applications/ps5-bazzite-toolbox.desktop
@@ -218,22 +218,32 @@ LANG_WANT=${SYS_LANG:-es_ES.UTF-8} KEYMAP_WANT=${SYS_KEYMAP:-es} TZ_WANT=${SYS_T
 # ~/.config/environment.d/*.conf before starting it, so the layout goes there.
 GS_KEYBOARD=$HOME/.config/environment.d/90-ps5-bazzite-toolbox-keyboard.conf
 x11_layout() { localectl status 2>/dev/null | sed -n 's/.*X11 Layout: //p'; }
+# The KDE desktop sets its own LANG from plasma-localerc, written at the first login: on these images that is C.UTF-8
+# (English), and everything started from the desktop inherits it (menus, and the game language guessed by --add-game).
+PLASMA_LOCALERC=$HOME/.config/plasma-localerc
+KWRITE=$(command -v kwriteconfig6 || command -v kwriteconfig5 || true)
+plasma_lang_ok() { [ -z "$KWRITE" ] || grep -qsx "LANG=$LANG_WANT" "$PLASMA_LOCALERC"; }
 desc_locale() {
     section
     say "$(L "Idioma del sistema, teclado (consola, escritorio y modo juego) y zona horaria, con hora por NTP." "System language, keyboard (console, desktop and Game Mode) and time zone, with time from NTP.")"
     say "$(L "Ahora: $(localectl status 2>/dev/null | sed -n 's/.*LANG=//p' | head -1), teclado $(localectl status 2>/dev/null | sed -n 's/.*VC Keymap: //p'), $(timedatectl show -p Timezone --value)" "Now: $(localectl status 2>/dev/null | sed -n 's/.*LANG=//p' | head -1), keyboard $(localectl status 2>/dev/null | sed -n 's/.*VC Keymap: //p'), $(timedatectl show -p Timezone --value)")"
     say "$(L "El modo juego no lee el teclado del sistema: se le dice en $GS_KEYBOARD (XKB_DEFAULT_LAYOUT)." "Game Mode doesn't read the system keyboard: it is set in $GS_KEYBOARD (XKB_DEFAULT_LAYOUT).")"
+    [ -n "$KWRITE" ] && say "$(L "El escritorio KDE tiene su propio idioma, en $PLASMA_LOCALERC (ahora: $(sed -n 's/^LANG=//p' "$PLASMA_LOCALERC" 2>/dev/null | head -1))." "The KDE desktop has its own language, in $PLASMA_LOCALERC (now: $(sed -n 's/^LANG=//p' "$PLASMA_LOCALERC" 2>/dev/null | head -1)).")"
     say "$(L "POR QUÉ: la imagen viene en inglés, con teclado US y hora UTC. En el modo juego, un teclado físico escribe" "WHY: the image ships in English, with a US keyboard and UTC time. In Game Mode a physical keyboard types")"
     say "$(L "  como uno US aunque el sistema esté en otro idioma (p. ej. no sale la @ al iniciar sesión en un navegador)." "  like a US one even when the system uses another layout (e.g. no @ when logging in through a browser).")"
-    say "$(L "DESHACER: vuelve a ejecutar el bloque con otros valores; para el modo juego, rm $GS_KEYBOARD." "UNDO: run the block again with other values; for Game Mode, rm $GS_KEYBOARD.")"
+    say "$(L "  El escritorio se queda en inglés (C.UTF-8) aunque cambie el sistema, y lo que se abre desde él también: al" "  The desktop stays in English (C.UTF-8) even when the system changes, and so does what is started from it: when")"
+    say "$(L "  instalar un juego desde Dolphin, la caja creía que el sistema estaba en inglés y le dejaba el idioma en english." "  installing a game from Dolphin, the toolbox thought the system was English and left the game's language as english.")"
+    say "$(L "DESHACER: vuelve a ejecutar el bloque con otros valores; para el modo juego, rm $GS_KEYBOARD;" "UNDO: run the block again with other values; for Game Mode, rm $GS_KEYBOARD;")"
+    say "$(L "  para el escritorio, copia encima el $PLASMA_LOCALERC.bak-* (o cámbialo en Preferencias → Región e idioma)." "  for the desktop, copy $PLASMA_LOCALERC.bak-* over it (or change it in System Settings → Region & Language).")"
     say "$(L "Steam tiene su propio idioma y zona horaria: cámbialos también en sus ajustes." "Steam has its own language and time zone: change them in its settings too.")"
-    say "$(L "El teclado del modo juego cuenta la próxima vez que entres en él." "The Game Mode keyboard takes effect the next time you enter it.")"
+    say "$(L "El teclado del modo juego y el idioma del escritorio cuentan la próxima vez que entres en cada uno." "The Game Mode keyboard and the desktop language take effect the next time you enter each one.")"
 }
 check_locale() {
     local l; l=$(localectl status 2>/dev/null)
     grep -q "LANG=$LANG_WANT" <<<"$l" && grep -q "VC Keymap: $KEYMAP_WANT\$" <<<"$l" &&
         [ "$(timedatectl show -p Timezone --value)" = "$TZ_WANT" ] &&
-        { grep -qsx "XKB_DEFAULT_LAYOUT=$(x11_layout)" "$GS_KEYBOARD" || return 1; }  # grep says 2 for a missing file: pending
+        { grep -qsx "XKB_DEFAULT_LAYOUT=$(x11_layout)" "$GS_KEYBOARD" || return 1; } &&  # grep says 2 for a missing file: pending
+        { plasma_lang_ok || return 1; }
 }
 apply_locale() {
     value SYS_LANG "$(L "Idioma (p. ej. es_ES.UTF-8, en_US.UTF-8)" "Language (e.g. es_ES.UTF-8, en_US.UTF-8)")" "$LANG_WANT"
@@ -247,7 +257,13 @@ apply_locale() {
     mkdir -p "${GS_KEYBOARD%/*}" &&
         printf '%s\n' "# ps5-bazzite-toolbox (bloque locale): teclado del modo juego; gamescope usa US si no se le dice." \
             "XKB_DEFAULT_LAYOUT=$x" >"$GS_KEYBOARD" &&
-        say "$(L "Teclado del modo juego: $x (cuenta la próxima vez que entres en él)." "Game Mode keyboard: $x (takes effect the next time you enter it).")"
+        say "$(L "Teclado del modo juego: $x (cuenta la próxima vez que entres en él)." "Game Mode keyboard: $x (takes effect the next time you enter it).")" || return 1
+    [ -n "$KWRITE" ] || return 0                   # no KDE desktop
+    local base=${SYS_LANG%%.*}                     # es_ES.UTF-8 -> es_ES; translations: es_ES first, then es
+    [ -f "$PLASMA_LOCALERC" ] && cp -p "$PLASMA_LOCALERC" "$PLASMA_LOCALERC.bak-$(date +%Y%m%d-%H%M%S)"
+    "$KWRITE" --file plasma-localerc --group Formats --key LANG "$SYS_LANG" &&
+        "$KWRITE" --file plasma-localerc --group Translations --key LANGUAGE "$base:${base%%_*}" &&
+        say "$(L "Idioma del escritorio: $SYS_LANG (cuenta la próxima vez que entres en él)." "Desktop language: $SYS_LANG (takes effect the next time you enter it).")"
 }
 
 # --- cmdline -------------------------------------------------------------------------------------
@@ -3285,8 +3301,10 @@ fi
 # Many Steam builds take their language from Steam, i.e. from the Steam emulator's config next to the game,
 # often left in English (seen with Gears of War: E-Day, RUNE's steam_emu.ini "Language=english": no Spanish
 # option in the game until it said "spanish"). Steam's names for the system language:
-steam_lang() {
-    case ${LANG:-} in
+steam_lang() {                          # a KDE session left at C.UTF-8 (plasma-localerc) says nothing: use the system's
+    local l=${LANG:-}
+    case $l in ''|C|C.*|POSIX) l=$(sed -n 's/^LANG=//p' /etc/locale.conf 2>/dev/null | tr -d '"' || true) ;; esac  # || true: this part runs with set -e
+    case $l in
         es_ES*|es_AD*) echo spanish ;; es_*) echo latam ;; pt_BR*) echo brazilian ;; pt_*) echo portuguese ;;
         fr_*) echo french ;; de_*) echo german ;; it_*) echo italian ;; ru_*) echo russian ;; pl_*) echo polish ;;
         ja_*) echo japanese ;; ko_*) echo koreana ;; zh_TW*|zh_HK*) echo tchinese ;; zh_*) echo schinese ;;
