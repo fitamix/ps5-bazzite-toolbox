@@ -5,6 +5,38 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+## [1.13.0] - 2026-11-13
+
+### Añadido
+
+- **Copias con el NAS sin trabar el sistema** (bloque de ajustes `copiar`, recomendado si tienes el bloque `nas`):
+  el comando `copiarNas ORIGEN... DESTINO` (y el enlace `~/NAS`). La dirección la da dónde está cada ruta; las del
+  NAS se escriben con `~/NAS/…` o `nas:RUTA`. Mide lo que hay que copiar, mira el espacio libre y pregunta; `rsync`
+  corre en segundo plano como unidad de usuario de systemd con la prioridad de disco más baja, así que el sistema no
+  se queda pillado con un disco USB (con FileZilla, la presión de disco llegaba al 53 %) y la copia sigue aunque
+  cierres la terminal o pases al modo juego (que cierra las ventanas del escritorio). Repetirla sigue donde iba.
+  `copiarNas -e` enseña y sigue las copias; `--parar` las para. Ayuda: `copiarNas -h`. También como `--copy`.
+- **Carátulas de Steam para los juegos no-Steam** (al añadir un juego a Steam, también desde Dolphin; en «Mis juegos»,
+  opción 5 de cada juego o `c` para todos los que no tienen portada; o `--art`): busca el juego en la tienda de Steam
+  (sin cuenta) y pone portada, horizontal, fondo y logo; lo que falte y el icono pequeño, de SteamGridDB con tu propia
+  clave (se pide una vez). Enseña lo que encuentra y pregunta cuál es; no sustituye carátulas sin preguntar. Antes los
+  juegos llegaban a Steam sin carátulas y había que ponerlas a mano con el plugin de Decky.
+- **Juegos .NET al prefijo DOTNET**: al instalar un juego, si su `.exe` es un programa .NET (C#, XNA, FNA; se ve en su
+  cabecera) propone usar el prefijo `DOTNET` de PortProton, que ya trae .NET 2.0-4.8 y 6-9 (lo descarga la primera
+  vez). En `--libs`, elegir .NET para un juego ofrece lo mismo en vez de instalarlo con winetricks. Visto con River City
+  Ransom: Underground: con Wine Mono se caía al arrancar, y `dotnet48` de winetricks en un prefijo nuevo no bastó
+  (Wine Mono seguía registrado y faltaba `mscoree.dll`); en `DOTNET` funciona.
+- **Papelera sin límite** (bloque de ajustes `papelera`): KDE la limita al 10 % del disco y, llena, Dolphin no deja
+  borrar una carpeta grande («la papelera está llena»). El bloque quita el límite (con copia de `ktrashrc`).
+- **Unifideck con Python 3.15** (bloque de ajustes `unifideck`, solo si lo tienes): esta imagen trae Python 3.15 y
+  Unifideck 0.8.0 solo acepta hasta la 3.14, así que no lanzaba ningún juego de Windows (Epic, GOG; «No Python 3.10+
+  interpreter found», su incidencia #518). El bloque añade la versión del sistema a su lista, con copia, y comprueba que
+  funciona. Al actualizar el plugin se pierde: repite el bloque. Cuando lo arreglen, el bloque ya no toca nada.
+
+### Arreglado
+
+- **Carátulas (`--art`)**: las preguntas no esperaban la respuesta (leían del propio script) y se cerraba con un error.
+
 ## [1.12.1] - 2026-11-12
 
 ### Cambiado
@@ -376,7 +408,8 @@ Primera versión publicada.
 - Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
-[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.12.1...HEAD
+[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.13.0...HEAD
+[1.13.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.12.1...v1.13.0
 [1.12.1]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.12.0...v1.12.1
 [1.12.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.11.2...v1.12.0
 [1.11.2]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.11.1...v1.11.2

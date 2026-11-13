@@ -96,7 +96,7 @@ lo hay, un comando del sistema que hace lo mismo.
 | 9 | Pasar al modo juego ahora y arrancar siempre en él | `--session gamemode` | `sudo rm /etc/sddm.conf.d/zzz-ps5-session.conf` y reiniciar la sesión |
 | **PortProton y Steam** | | | |
 | 10 | Instalar un juego de Windows (normal o aislado), probarlo y añadirlo a Steam | `--add-game [Juego.exe]` | — |
-| 11 | Mis juegos: cambiar su aislamiento, la generación de fotogramas, las librerías de Windows, o desinstalarlos | `--games`, `--change-level Juego.exe`, `--framegen Juego.exe`, `--libs [Juego.exe]`, `--remove-game [Juego.exe\|"Nombre"]` | — |
+| 11 | Mis juegos: cambiar su aislamiento, la generación de fotogramas, las librerías de Windows, las carátulas de Steam, o desinstalarlos | `--games`, `--change-level Juego.exe`, `--framegen Juego.exe`, `--libs [Juego.exe]`, `--art [--name "Nombre"]`, `--remove-game [Juego.exe\|"Nombre"]` | — |
 | 12 | Sincronizar la colección «PortProton» de Steam (cierra Steam) | `--pp-collection [--dry-run\|--yes]` | — |
 | 13 | Librerías de Windows (Visual C++…) en un prefijo de PortProton, para todos sus juegos | `--libs [Juego.exe]` | — |
 | — | Lanzar un juego como lo dejó la opción 10 (lo usan Steam y el escritorio) | `--run Juego.exe` | — |
@@ -189,14 +189,17 @@ pregunta con una respuesta recomendada (`[S/n]` = sí por defecto, `[s/N]` = no)
 | [`bt`](#bt) | Recarga el Bluetooth si arranca sin adaptador (PS5 original) | sí | no |
 | [`steambt`](#steambt) | Mantiene activado el Bluetooth de Steam (si no, apaga el adaptador y el mando no conecta) | sí | no |
 | [`disk`](#disk) | Quita la consulta SMART de KDE que bloquea discos USB | sí | no |
+| [`papelera`](#papelera) | Papelera sin límite de tamaño (Dolphin ya no dice «la papelera está llena») | sí | no |
 | [`firewall`](#firewall) | Arregla el cortafuegos, que arranca «fallido» por un módulo que falta en el kernel | sí | no |
 | [`brave`](#brave) | Brave sin pedir la contraseña de la Cartera de KDE | no | no |
 | [`edge`](#edge) | Microsoft Edge sin pedir la contraseña de la Cartera de KDE | no | no |
 | [`nas`](#nas) | Monta un NAS por SMB y enlaza las ROMs de EmuDeck | sí, si ya diste sus datos | no |
 | [`bios`](#bios) | BIOS de EmuDeck desde el NAS | no | no |
 | [`media`](#media) | Imágenes de ES-DE desde el NAS | no | no |
+| [`copiar`](#copiar) | El comando `copiarNas`: copias con el NAS en segundo plano, sin trabar el sistema | sí, con el bloque `nas` | no |
 | [`esde`](#esde) | Arregla el `es_systems.xml` que deja EmuDeck | sí | no |
 | [`portproton`](#portproton) | Sincronización rápida y trazado de rayos para todos los juegos de PortProton | sí | no |
+| [`unifideck`](#unifideck) | Unifideck (Decky) vuelve a lanzar juegos de Windows con el Python 3.15 de esta imagen | sí, si tienes Unifideck | no |
 | [`atajos`](#atajos) | Botón derecho de Dolphin y comando `espacio` | sí | no |
 | [`monitorweb`](#monitorweb) | El monitor en directo en el navegador del móvil, siempre disponible | no | no |
 
@@ -565,6 +568,15 @@ kwriteconfig6 --file kded6rc --group Module-smart --key autoload false
 
 **Deshacer:** `sudo rm /etc/polkit-1/rules.d/50-ps5-no-kde-smart.rules; sudo systemctl restart polkit; sudo systemctl enable --now smartd`.
 
+### `papelera`
+
+**Qué cambia:** quita el límite de tamaño de la papelera de KDE (`~/.config/ktrashrc`, el grupo de tu carpeta de
+papelera, `UseSizeLimit=false`).
+**Por qué:** por defecto es el 10 % del disco; al llenarse, Dolphin dice que la papelera está llena y no deja borrar
+una carpeta grande (un juego). Sin límite crece hasta que la vacías.
+
+**Deshacer:** `kwriteconfig6 --file ktrashrc --group "$(realpath ~/.local/share/Trash)" --key UseSizeLimit true`.
+
 ### `firewall`
 
 **Qué cambia:** quita de la zona del cortafuegos los servicios cuyo módulo no trae el kernel de la PS5 y reinicia
@@ -668,6 +680,32 @@ ln -s /var/mnt/nas/Emulation/downloaded_media ~/ES-DE/downloaded_media
 
 **Deshacer:** `rm ~/ES-DE/downloaded_media && mv ~/ES-DE/downloaded_media.local ~/ES-DE/downloaded_media`.
 
+### `copiar`
+
+**Qué cambia:** instala el comando `copiarNas` (`/usr/local/bin/copiarNas`) y el enlace `~/NAS` a la carpeta
+compartida del NAS. La dirección la da dónde está cada ruta; las del NAS se escriben con `~/NAS/...` (Tab las
+autocompleta) o `nas:RUTA` (relativa a la carpeta compartida):
+
+```sh
+copiarNas nas:juegos/X ~/Games          # del NAS a la PS5
+copiarNas nas:juegos/X                  # del NAS a la carpeta actual
+copiarNas ~/Descargas/X nas:juegos      # de la PS5 al NAS
+copiarNas -e                            # las copias en marcha y las últimas; sigue la que está en marcha
+copiarNas --parar                       # para las copias en marcha
+```
+
+Mide lo que hay que copiar, mira el espacio libre en el destino y pregunta (`-s`: sin preguntar). Después `rsync`
+corre como unidad de usuario de systemd con la **prioridad de disco más baja** (`IOSchedulingClass=idle`,
+`Nice=10`; `-n`: prioridad normal): solo usa el disco cuando nada más lo necesita. La copia sigue aunque cierres la
+terminal o pases al modo juego; Ctrl+C solo deja de mirar el progreso. Repetirla sigue donde iba (`--partial`; lo
+que ya está igual se salta). Hacia el NAS se saltan los enlaces (SMB no los guarda). Cada copia deja un registro en
+`~/.local/share/ps5-bazzite-toolbox/copias/` (las 30 últimas). Como `cp -r`: `carpeta` copia la carpeta dentro del
+destino, `carpeta/` solo lo que tiene dentro. Necesita el bloque `nas`.
+**Por qué:** con un disco USB, una copia grande (FileZilla, Dolphin) lo satura y el sistema se queda pillado a
+ratos; y las ventanas del escritorio se cierran al pasar al modo juego, cortando la copia.
+
+**Deshacer:** `sudo rm /usr/local/bin/copiarNas; rm ~/NAS`.
+
 ### `esde`
 
 **Qué cambia:** arregla `~/ES-DE/custom_systems/es_systems.xml`, que EmuDeck deja con rutas de Windows
@@ -708,6 +746,20 @@ unset _pp_kv
 ```
 
 **Deshacer:** borra ese bloque. Para un solo juego: `export PW_USE_RAY_TRACING="0"` en su `.ppdb`.
+
+### `unifideck`
+
+**Qué cambia:** [Unifideck](https://github.com/mubaraknumann/unifideck) (plugin de Decky para Epic, GOG… en Steam)
+lanza los juegos de Windows con el Python del sistema, pero solo acepta las versiones de su lista `ACCEPTED_VERSIONS`
+(hasta la 3.14 en la 0.8.0). Esta imagen trae Python 3.15, así que todos los juegos de Windows fallan con «No Python
+3.10+ interpreter found» (su [incidencia #518](https://github.com/mubaraknumann/unifideck/issues/518)). El bloque
+añade la versión del sistema a esa lista en `~/homebrew/plugins/Unifideck/.../selector.py`, con copia
+(`selector.py.orig-<versión>`), y comprueba que Unifideck encuentra Python (si no, restaura la copia). Solo si tienes
+Unifideck instalado.
+**Por qué:** temporal hasta que Unifideck lo arregle: al actualizar el plugin se pierde (repite el bloque; la
+comprobación de ajustes lo marca como pendiente). Cuando acepten tu Python, el bloque sale como hecho y no toca nada.
+
+**Deshacer:** copia `selector.py.orig-*` encima de `selector.py`.
 
 ### `atajos`
 
@@ -823,7 +875,23 @@ Después, pregunta en cada paso:
 
 **Mis juegos** (opción 11, `--games`): una sola lista, por nombre, de tus juegos de PortProton con su nivel (normal,
 aislado con red o sin red), también los que instalaste antes de esta versión; elige uno para cambiar su aislamiento,
-su generación de fotogramas, sus librerías de Windows o desinstalarlo.
+su generación de fotogramas, sus librerías de Windows, sus carátulas de Steam o desinstalarlo.
+
+**Carátulas de Steam** (al añadir un juego a Steam, en «Mis juegos» —un juego, o `c` para todos los no-Steam sin
+portada— o `--art [--name "Nombre"]`): busca el juego en la **tienda de Steam** (sin cuenta; casi todos los juegos de
+PC están) y descarga su portada, imagen horizontal, fondo y logo en la carpeta `grid/` de Steam. Lo que la tienda no
+tiene (juegos retirados o que no son de Steam) y el icono pequeño salen de **SteamGridDB** con tu propia clave de su
+API, gratis (steamgriddb.com → Preferencias → API), que se pide una vez y se guarda en
+`~/.config/ps5-bazzite-toolbox.conf` (`--art --key` la vuelve a pedir). Enseña lo que encuentra y pregunta cuál es;
+las carátulas que ya haya solo se sustituyen si dices que sí, y el icono solo se pone con Steam cerrado. Se ven al
+reiniciar Steam; el plugin SteamGridDB de Decky las puede cambiar después. **Deshacer:** borra
+`~/.local/share/Steam/userdata/*/config/grid/<id>*`.
+
+**Juegos .NET** (C#, XNA, FNA; se reconocen por la cabecera CLR de su `.exe`): al instalar uno, el toolbox propone el
+**prefijo `DOTNET`** de PortProton, que trae .NET 2.0-4.8 y 6-9 ya instalados (PortProton lo descarga la primera vez,
+unos 3 GB) y lo comparten todos tus juegos .NET. Con Wine Mono, el sustituto que tienen los demás prefijos, muchos
+fallan al arrancar; instalar `dotnet48` con winetricks en un prefijo nuevo no arregló River City Ransom: Underground,
+el prefijo `DOTNET` sí. Elegir .NET en `--libs` para un juego propone lo mismo.
 
 **Librerías de Windows** (opción 13 o `--libs`, por prefijo; también desde un juego: en «Mis juegos», con
 `--libs Juego.exe`, o al probar uno nuevo con la opción 10, respuesta `l`): las librerías van en el prefijo y valen
@@ -1095,13 +1163,16 @@ queda ahí para repetir.
 | `/usr/local/sbin/ps5-bt-guard`, `/etc/systemd/system/ps5-bt-guard.service` | `bt` | — |
 | `~/.local/share/ps5-bazzite-toolbox/steam-bt-on.sh`, `~/.config/systemd/user/ps5-steam-bt.service`; cambia `"Enabled"` de `"Bluetooth"` en `~/.local/share/Steam/config/config.vdf` | `steambt` | — |
 | `/etc/polkit-1/rules.d/50-ps5-no-kde-smart.rules`, `~/.config/kded6rc` | `disk` | — |
+| `~/.config/ktrashrc` (`UseSizeLimit` de tu papelera) | `papelera` | `ktrashrc.bak-<fecha>` |
 | `/etc/firewalld/zones/<zona>.xml` (la zona sin los servicios cuyo módulo falta) | `firewall` | — |
 | `~/.var/app/com.brave.Browser/config/brave-flags.conf` | `brave` | — |
 | `~/.var/app/com.microsoft.Edge/config/edge-flags.conf` | `edge` | — |
 | `/etc/fstab` (una línea), `/etc/samba/nas-<usuario>.cred` (contraseña del NAS, solo root), `/var/mnt/nas`, `~/.local/share/flatpak/overrides/global` | `nas` | — |
 | `~/Emulation/roms`, `~/Emulation/bios`, carpeta de imágenes de ES-DE | `nas`, `bios`, `media` | la carpeta local, como `….local` |
+| `/usr/local/bin/copiarNas`, `~/NAS`; registros en `~/.local/share/ps5-bazzite-toolbox/copias/` | `copiar` | — |
 | `~/ES-DE/custom_systems/es_systems.xml` | `esde` | `es_systems.xml.bak-<fecha>` |
 | `~/.var/app/ru.linux_gaming.PortProton/data/user.conf` | `portproton` | `user.conf.bak-<fecha>` |
+| `~/homebrew/plugins/Unifideck/py_modules/unifideck/launcher/proton/infrastructure/selector.py` | `unifideck` | `selector.py.orig-<versión>` |
 | `~/.local/share/kio/servicemenus/ps5-bazzite-toolbox-*.desktop`, `/usr/local/bin/espacio`, `portproton-collection.desktop` en el escritorio | `atajos` | — |
 | `~/.local/share/ps5-bazzite-toolbox/monitor-web.py`, `~/.config/systemd/user/ps5-monitor-web.service`, una regla del cortafuegos (puerto 8765, solo tu red) | `monitorweb` | — |
 | `~/.local/share/ps5-bazzite-toolbox/monitor/ps5-mem-<fecha>.csv` (o en `MONWEB_CSV_DIR`): las medidas de una sesión del monitor web, si dices que sí al parar | `monitorweb` | `rm` |

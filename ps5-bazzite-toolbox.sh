@@ -32,6 +32,8 @@
 #   bash ps5-bazzite-toolbox.sh --run Juego.exe          # start a game as --add-game left it (isolated or not); asks nothing
 #   bash ps5-bazzite-toolbox.sh --pp-collection [--dry-run|--yes]   # sync Steam's "PortProton" collection
 #   bash ps5-bazzite-toolbox.sh --space [DIR]           # space taken by each folder in DIR (also the "espacio" command)
+#   bash ps5-bazzite-toolbox.sh --copy SOURCE... DEST   # copies with the NAS in the background (also the "copiarNas" command; -h)
+#   bash ps5-bazzite-toolbox.sh --art [--name "Game"] [--key] # Steam artwork for non-Steam games (Steam store, SteamGridDB)
 #   bash ps5-bazzite-toolbox.sh --self-update [v1.1.0]  # update this toolbox from its GitHub releases
 #   bash ps5-bazzite-toolbox.sh --backup                # save your home folder (or what you pick) to another disk, the NAS, a folder
 #   bash ps5-bazzite-toolbox.sh --restore [DIR]         # bring a copy back, or another install's home folder (another disk)
@@ -39,10 +41,10 @@
 #   bash ps5-bazzite-toolbox.sh --version
 #   bash ps5-bazzite-toolbox.sh --lang es|en [...]      # interface language (before the other options); saved. Default: the system
 #                                               locale (LANG/LC_ALL/LC_MESSAGES starting with "es" = Spanish, else English)
-# Setup blocks: locale cmdline wifi updates vram gpu40 zram swapdisco fans cpufreq warmreboot hdmi arranque bt steambt disk firewall brave edge nas bios media esde portproton atajos monitorweb
+# Setup blocks: locale cmdline wifi updates vram gpu40 zram swapdisco fans cpufreq warmreboot hdmi arranque bt steambt disk papelera firewall brave edge nas bios media copiar esde portproton unifideck atajos monitorweb
 set -uo pipefail
 
-TOOLBOX_VERSION=1.12.1                   # bump on every release (see CHANGELOG.md and release.sh)
+TOOLBOX_VERSION=1.13.0                   # bump on every release (see CHANGELOG.md and release.sh)
 TOOLBOX_REPO=fitamix/ps5-bazzite-toolbox
 TOOLBOX_BIN=$HOME/.local/bin/ps5-bazzite-toolbox                      # where --install puts it
 TOOLBOX_DESKTOP=$HOME/.local/share/applications/ps5-bazzite-toolbox.desktop
@@ -86,7 +88,7 @@ while [ $# -gt 0 ]; do
         --lang) case ${2:-} in es|en) TB_LANG=$2; LANG_SAVE=1 ;;
                     *) echo "$(L 'Uso: --lang es|en' 'Usage: --lang es|en')" >&2; exit 2 ;; esac; shift 2 ;;
         -V|--version) echo "ps5-bazzite-toolbox $TOOLBOX_VERSION"; exit 0 ;;
-        --add-game|--remove-game|--change-level|--framegen|--libs|--games|--run|--pp-collection|--space)       # the rest of the line goes to that tool
+        --add-game|--remove-game|--change-level|--framegen|--libs|--games|--run|--pp-collection|--space|--copy|--art)       # the rest of the line goes to that tool
                   MODE=${1#--}; shift; ARGS=("$@"); break ;;
         -h|--help) awk 'NR > 1 { if (!/^#/) exit; sub(/^# ?/, ""); print }' "$0"; exit 0 ;;
         *) echo "$(L "Opción desconocida: $1" "Unknown option: $1")" >&2; exit 2 ;;
@@ -153,7 +155,7 @@ MONWEB_UNIT=$HOME/.config/systemd/user/ps5-monitor-web.service
 MONWEB_CSV_DIR=${MONWEB_CSV_DIR:-$HOME/.local/share/ps5-bazzite-toolbox/monitor}   # a session's CSV, when you say so
 BRAVE_FLAGS=$HOME/.var/app/com.brave.Browser/config/brave-flags.conf
 EDGE_FLAGS=$HOME/.var/app/com.microsoft.Edge/config/edge-flags.conf
-BLOCKS="locale cmdline wifi updates vram gpu40 zram swapdisco fans cpufreq warmreboot hdmi arranque bt steambt disk firewall brave edge nas bios media esde portproton atajos monitorweb"
+BLOCKS="locale cmdline wifi updates vram gpu40 zram swapdisco fans cpufreq warmreboot hdmi arranque bt steambt disk papelera firewall brave edge nas bios media copiar esde portproton unifideck atajos monitorweb"
 
 # ======================================== settings (setup) ========================================
 # --- saved answers -------------------------------------------------------------------------------
@@ -977,6 +979,28 @@ EOF
     return 0
 }
 
+# --- papelera ------------------------------------------------------------------------------------
+# KDE caps the trash at 10 % of the disk by default (ktrashrc, group = the trash folder's real path): past it, Dolphin
+# refuses to move anything else there ("the trash is full") and a big game folder can't be deleted. This takes the cap
+# off for the home trash; it then grows until you empty it.
+trash_dir() { realpath -m "${XDG_DATA_HOME:-$HOME/.local/share}/Trash"; }
+desc_papelera() {
+    section
+    say "$(L "Quita el límite de tamaño de la papelera de KDE ($(trash_dir), en ~/.config/ktrashrc)." "Removes the size limit of KDE's trash ($(trash_dir), in ~/.config/ktrashrc).")"
+    say "$(L "POR QUÉ: por defecto es el 10 % del disco; al llenarse, Dolphin dice que la papelera está llena y no deja" "WHY: by default it is 10 % of the disk; once full, Dolphin says the trash is full and won't let")"
+    say "$(L "borrar una carpeta grande (un juego). Sin límite crece hasta que la vacías (ocupa disco mientras tanto)." "you delete a big folder (a game). Without a limit it grows until you empty it (it takes disk space meanwhile).")"
+    say "$(L "DESHACER: kwriteconfig6 --file ktrashrc --group $(trash_dir) --key UseSizeLimit true" "UNDO: kwriteconfig6 --file ktrashrc --group $(trash_dir) --key UseSizeLimit true")"
+}
+check_papelera() {
+    command -v kreadconfig6 >/dev/null || return 2                  # not KDE
+    [ "$(kreadconfig6 --file ktrashrc --group "$(trash_dir)" --key UseSizeLimit --default true)" = false ]
+}
+apply_papelera() {
+    [ -f ~/.config/ktrashrc ] && cp -p ~/.config/ktrashrc ~/.config/ktrashrc.bak-"$(date +%Y%m%d-%H%M%S)"
+    kwriteconfig6 --file ktrashrc --group "$(trash_dir)" --key UseSizeLimit false || return 1
+    say "$(L "Hecho. Si Dolphin estaba abierto, ciérralo y ábrelo. Papelera ahora: $(du -sh "$(trash_dir)" 2>/dev/null | cut -f1)." "Done. If Dolphin was open, close and reopen it. Trash now: $(du -sh "$(trash_dir)" 2>/dev/null | cut -f1).")"
+}
+
 # --- firewall ------------------------------------------------------------------------------------
 # Bazzite's zone FedoraWorkstation has samba-client, whose NetBIOS conntrack helper (nf_conntrack_netbios_ns) the PS5
 # kernel lacks: firewalld can't build its rules ("Could not process rule: No such file or directory"), falls back to
@@ -1246,6 +1270,44 @@ apply_media() {
     say "$(L "Medios de ES-DE: $d → $m/$NAS_MEDIA ($(ls "$m/$NAS_MEDIA" | wc -l) sistemas)" "ES-DE media: $d → $m/$NAS_MEDIA ($(ls "$m/$NAS_MEDIA" | wc -l) systems)")"
     [ -d "$d.local" ] && say "$(L "Cuando compruebes que ES-DE muestra las imágenes: rm -rf '$d.local'" "Once you check that ES-DE shows the images: rm -rf '$d.local'")"
     return 0
+}
+
+# --- copiar ----------------------------------------------------------------------------------------
+# The copiarNas command, to copy to and from the NAS without freezing the system: they call this toolbox (--copy), so they follow
+# its updates. The copy itself is copy_nas, next to space_report.
+COPY_BIN=/usr/local/bin/copiarNas
+COPY_OLD="/usr/local/bin/copiarDelNas /usr/local/bin/copiarHaciaNas"   # the first version had three commands
+NAS_LINK=$HOME/NAS
+desc_copiar() {
+    section
+    say "$(L "Instala el comando copiarNas (en $COPY_BIN) y el enlace ~/NAS a la carpeta compartida del NAS ($(nas_mnt))." "Installs the command copiarNas (in $COPY_BIN) and the link ~/NAS to the NAS shared folder ($(nas_mnt)).")"
+    say "$(L "copiarNas ORIGEN DESTINO: la dirección la da dónde está cada uno (rutas del NAS con ~/NAS/… o nas:…)." "copiarNas SOURCE DEST: the direction comes from where each one is (NAS paths with ~/NAS/… or nas:…).")"
+    say "$(L "Copia con rsync: mide lo que hay que copiar, mira el espacio libre, pregunta, y la copia sigue sola en segundo" "It copies with rsync: it measures what has to be copied, checks the free space, asks, and the copy goes on by itself in the")"
+    say "$(L "plano (aunque cierres la terminal o pases al modo juego) con la prioridad de disco más baja: solo usa el disco" "background (even if you close the terminal or switch to Game Mode) at the lowest disk priority: it only uses the disk")"
+    say "$(L "cuando nada más lo necesita. Si se corta, repetirla sigue donde iba." "when nothing else needs it. If it stops, running it again resumes it.")"
+    say "$(L "POR QUÉ: con un disco USB, una copia grande (FileZilla, Dolphin) lo satura y el sistema se queda pillado a" "WHY: on a USB disk, a big copy (FileZilla, Dolphin) saturates it and the system freezes now and")"
+    say "$(L "ratos; y las ventanas del escritorio se cierran al pasar al modo juego, cortando la copia." "then; and desktop windows are closed when switching to Game Mode, cutting the copy.")"
+    say "$(L "Uso: copiarNas -h. Requiere el bloque nas." "Usage: copiarNas -h. Requires the nas block.")"
+    say "$(L "DESHACER: sudo rm $COPY_BIN; rm ~/NAS" "UNDO: sudo rm $COPY_BIN; rm ~/NAS")"
+}
+check_copiar() {
+    [ -n "$TOOLBOX_SELF" ] && [ -f "$TOOLBOX_SELF" ] || return 2       # run from a pipe: nothing to point at
+    local m f; m=$(nas_mnt) || return 2; [ -n "$m" ] || return 2
+    grep -qs -F "$TOOLBOX_SELF" "$COPY_BIN" || return 1
+    for f in $COPY_OLD; do [ ! -e "$f" ] || return 1; done
+    [ ! -e "$NAS_LINK" ] && [ ! -L "$NAS_LINK" ] && return 1
+    [ ! -L "$NAS_LINK" ] || [ "$(readlink "$NAS_LINK")" = "$m" ] || return 1
+}
+apply_copiar() {
+    local m; m=$(nas_mnt) || { say "$(L "Primero el bloque nas." "First the nas block.")"; return 1; }
+    printf '#!/bin/sh\n# copiarNas: copias con el NAS sin trabar el sistema (ps5-bazzite-toolbox.sh --copy). Ayuda: copiarNas -h\nexec bash "%s" --copy "$@"\n' \
+        "$TOOLBOX_SELF" | sudo tee "$COPY_BIN" >/dev/null && sudo chmod 755 "$COPY_BIN" || return 1
+    # shellcheck disable=SC2086
+    sudo rm -f $COPY_OLD
+    if [ -L "$NAS_LINK" ] || [ ! -e "$NAS_LINK" ]; then ln -sfn "$m" "$NAS_LINK" || return 1
+    else # shellcheck disable=SC2088
+        say "$(L "~/NAS ya existe y no es un enlace: lo dejo como está (usa nas:… en las rutas)." "~/NAS already exists and is not a link: left as it is (use nas:… in the paths).")"; fi
+    say "$(L "Listo. Prueba: copiarNas -h" "Done. Try: copiarNas -h")"
 }
 
 # --- esde ----------------------------------------------------------------------------------------
@@ -1792,6 +1854,43 @@ EOF
     say "$(L "Ábrelo en el móvil (conectado a tu wifi): http://$(lan_ip):$MONWEB_PORT" "Open it on your phone (connected to your wifi): http://$(lan_ip):$MONWEB_PORT")"
 }
 
+# --- unifideck ------------------------------------------------------------------------------------
+# Unifideck (Decky plugin, github.com/mubaraknumann/unifideck) launches Epic/GOG Windows games through umu, run by the
+# system's Python, but only accepts the versions in ACCEPTED_VERSIONS (up to 3.14 in 0.8.0). Bazzite now ships
+# Python 3.15 only, so every Windows launch fails ("No Python 3.10+ interpreter found"; upstream issue #518). This adds
+# the system's version to that list, with a copy of the file. Temporary: an update of the plugin undoes it (repeat the
+# block), and once upstream accepts the version the check is already met and nothing is touched.
+UNIFIDECK_SEL=$HOME/homebrew/plugins/Unifideck/py_modules/unifideck/launcher/proton/infrastructure/selector.py
+sys_py() { python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null; }
+desc_unifideck() {
+    section
+    say "$(L "Unifideck (plugin de Decky) no acepta el Python de esta imagen ($(sys_py)) para lanzar los juegos de Windows" "Unifideck (Decky plugin) doesn't accept this image's Python ($(sys_py)) to launch Windows games")"
+    say "$(L "(Epic, GOG): fallan todos con «No Python 3.10+ interpreter found». Añade $(sys_py) a su lista de versiones" "(Epic, GOG): they all fail with «No Python 3.10+ interpreter found». Adds $(sys_py) to its list of versions")"
+    say "$(L "(ACCEPTED_VERSIONS en $UNIFIDECK_SEL), con copia del fichero." "(ACCEPTED_VERSIONS in $UNIFIDECK_SEL), with a copy of the file.")"
+    say "$(L "POR QUÉ: incidencia #518 de Unifideck, abierta. Al actualizar el plugin se pierde: repite este bloque. Cuando" "WHY: Unifideck issue #518, open. Updating the plugin undoes it: repeat this block. When")"
+    say "$(L "lo arreglen, este bloque sale como hecho y no toca nada." "they fix it, this block shows as done and touches nothing.")"
+    say "$(L "DESHACER: copia selector.py.orig-* (en la misma carpeta) encima de selector.py." "UNDO: copy selector.py.orig-* (in the same folder) over selector.py.")"
+}
+check_unifideck() {
+    [ -f "$UNIFIDECK_SEL" ] || return 2                            # no Unifideck
+    local v; v=$(sys_py); [ -n "$v" ] || return 2
+    grep -q "^ACCEPTED_VERSIONS = {.*\"$v\"" "$UNIFIDECK_SEL"
+}
+apply_unifideck() {
+    local v ver orig sudo_=''
+    check_unifideck && return 0                                   # already accepted: nothing to add
+    v=$(sys_py); ver=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "${UNIFIDECK_SEL%%/py_modules/*}/package.json" | head -1)
+    grep -q '^ACCEPTED_VERSIONS = {.*}' "$UNIFIDECK_SEL" ||
+        { say "$(L "No encuentro ACCEPTED_VERSIONS en $UNIFIDECK_SEL: esta versión de Unifideck es distinta; no la toco." "Cannot find ACCEPTED_VERSIONS in $UNIFIDECK_SEL: this Unifideck version is different; not touching it.")"; return 1; }
+    [ -w "$UNIFIDECK_SEL" ] || sudo_=sudo                           # Decky may install plugins as root
+    orig="$UNIFIDECK_SEL.orig-${ver:-x}"
+    [ -e "$orig" ] || $sudo_ cp -p "$UNIFIDECK_SEL" "$orig" || return 1
+    $sudo_ sed -i "s/^\(ACCEPTED_VERSIONS = {[^}]*\)}/\1, \"$v\"}  # ps5-bazzite-toolbox: Python $v (Unifideck #518)/" "$UNIFIDECK_SEL" || return 1
+    (cd "${UNIFIDECK_SEL%%/unifideck/*}" && python3 -c 'from unifideck.launcher.proton.infrastructure.selector import find_python_3_10_plus as f; f()') ||
+        { say "$(L "Unifideck sigue sin encontrar Python: restauro el original." "Unifideck still finds no Python: restoring the original.")"; $sudo_ cp -p "$orig" "$UNIFIDECK_SEL"; return 1; }
+    say "$(L "Hecho: Unifideck acepta Python $v (copia en $orig). Vale desde el próximo juego que lances." "Done: Unifideck accepts Python $v (copy in $orig). It applies from the next game you launch.")"
+}
+
 # --- atajos --------------------------------------------------------------------------------------
 # Desktop shortcuts that call this toolbox, so they follow it when it is updated.
 TOOLBOX_SELF=$(realpath "$0" 2>/dev/null)
@@ -1899,7 +1998,8 @@ default_for() {
         brave|edge) echo N ;;
         monitorweb) echo N ;;            # a server always listening: only if you want it            # loses the browser's saved logins: only if the wallet prompt bothers you
         nas) [ -n "${NAS_IP:-}" ] && echo S || echo N ;;
-        bios|media) echo N ;;            # a choice, not a fix: only if you want them shared from the NAS
+        bios|media) echo N ;;
+        copiar) [ -n "$(nas_mnt)" ] && echo S || echo N ;;            # a choice, not a fix: only if you want them shared from the NAS
         gpu40) echo N ;;                 # silicon lottery: only if you want to try it
         swapdisco) echo N ;;             # disk space and, on USB, stall risk: only if games get killed for memory
         *) echo S ;;
@@ -3168,6 +3268,39 @@ if [ "$LEVEL" != normal ]; then
     if grep -qs '^export PW_PREFIX_NAME=' "$PPDB"; then sed -i "s|^export PW_PREFIX_NAME=.*|export PW_PREFIX_NAME=\"$PFX\"|" "$PPDB"
     else printf 'export PW_PREFIX_NAME="%s"\n' "$PFX" >>"$PPDB"; fi
 fi
+# .NET games (C#, XNA, FNA: the .exe carries a CLR header) work in PortProton's DOTNET prefix: a ready-made prefix
+# with .NET 2.0-4.8 and 6-9 that PortProton downloads the first time it is used. Wine Mono, in any other prefix, lacks
+# parts of .NET, and winetricks dotnet48 in a new prefix left River City Ransom: Underground on Wine Mono (2026-11-13).
+is_dotnet() {                             # is_dotnet EXE -> 0 if it is a .NET assembly (CLR runtime header present)
+    python3 - "$1" <<'PY'
+import struct, sys
+try:
+    d = open(sys.argv[1], "rb").read(4096)
+    pe = struct.unpack_from("<I", d, 0x3C)[0]
+    if d[:2] != b"MZ" or d[pe:pe + 4] != b"PE\0\0":
+        sys.exit(1)
+    opt = pe + 24
+    dirs = opt + (96 if struct.unpack_from("<H", d, opt)[0] == 0x10B else 112)
+    rva, size = struct.unpack_from("<II", d, dirs + 14 * 8)    # data directory 14: CLR runtime header
+    sys.exit(0 if rva and size else 1)
+except Exception:
+    sys.exit(1)
+PY
+}
+if [ "$CHANGE" = 0 ] && [ "${PFX:-DEFAULT}" != DOTNET ] && is_dotnet "$EXE"; then
+    section "$(L "Juego .NET" ".NET game")"
+    say "$(L "$(basename "$EXE") es un programa .NET (C#, XNA o FNA). Con Wine Mono, el sustituto que traen los prefijos," "$(basename "$EXE") is a .NET program (C#, XNA or FNA). With Wine Mono, the stand-in the prefixes have,")"
+    say "$(L "muchos fallan al arrancar. PortProton tiene el prefijo DOTNET, con .NET 2.0-4.8 y 6-9 ya instalados (lo" "many fail at start. PortProton has the DOTNET prefix, with .NET 2.0-4.8 and 6-9 already installed (it")"
+    say "$(L "descarga la primera vez, unos 3 GB); lo comparten todos tus juegos .NET." "downloads it the first time, about 3 GB); all your .NET games share it.")"
+    if [ "$LEVEL" != normal ]; then
+        say "$(L "Aislado: su prefijo propio ($PFX) no tiene .NET; si no arranca, instala dotnet48 con --libs." "Isolated: its own prefix ($PFX) has no .NET; if it doesn't start, install dotnet48 with --libs.")"
+    elif ask "$(L "¿Usar el prefijo DOTNET (en vez de ${PFX:-DEFAULT})?" "Use the DOTNET prefix (instead of ${PFX:-DEFAULT})?")" S; then
+        if grep -qs '^export PW_PREFIX_NAME=' "$PPDB"; then sed -i 's|^export PW_PREFIX_NAME=.*|export PW_PREFIX_NAME="DOTNET"|' "$PPDB"
+        else printf 'export PW_PREFIX_NAME="DOTNET"\n' >>"$PPDB"; fi
+        PFX=DOTNET
+        say "$(L "  Prefijo DOTNET (en $PPDB)." "  DOTNET prefix (in $PPDB).")"
+    fi
+fi
 desk_entry() {                            # desk_entry FILE -> PortProton's own shortcut, or the isolated one
     if [ "$LEVEL" = normal ]; then
         printf '[Desktop Entry]\nName=%s\nExec=flatpak run %s "%s"\nType=Application\nCategories=Game\nStartupNotify=true\nPath=%s\nIcon=%s\n' \
@@ -3495,6 +3628,13 @@ for u in users:
     os.replace(tmp, path)
     print(L(f"  Usuario {os.path.basename(u)}: añadido «{name}» (id {appid}).", f"  User {os.path.basename(u)}: added «{name}» (id {appid})."))
 PY
+    if [ -n "$TOOLBOX_CMD" ]; then
+        say "$(L "Carátulas: busca el juego en la tienda de Steam (y en SteamGridDB, con tu clave) y le pone portada, horizontal," "Artwork: looks the game up in the Steam store (and SteamGridDB, with your key) and sets cover, horizontal,")"
+        say "$(L "fondo, logo e icono. Te enseña lo que encuentra antes. Luego puedes cambiarlas con el plugin de Decky." "background, logo and icon. Shows what it finds first. You can change them later with the Decky plugin.")"
+        if ask "$(L "  ¿Buscar sus carátulas?" "  Look up its artwork?")" S; then
+            "$TOOLBOX_CMD" --art --name "$NAME" $([ "$YES" = 1 ] && echo --yes) || say "$(L "  Sin carátulas (mira el mensaje de arriba)." "  No artwork (see the message above).")"
+        fi
+    fi
 fi
 
 # --- 4. collection ----------------------------------------------------------------------------------
@@ -4219,6 +4359,19 @@ pp_libs() {
         fi
     done
     [ ${#sel[@]} -gt 0 ] || { echo "$(L "No instalo nada." "Nothing installed.")"; return 0; }
+    # .NET by hand in a normal game's prefix: PortProton's ready-made DOTNET prefix is the reliable way (winetricks
+    # dotnet48 in a new prefix left Wine Mono in charge for River City Ransom: Underground, 2026-11-13)
+    if [ -n "$exe" ] && [ "$pfx" != DOTNET ] && [ "$(iso_level "$exe")" = normal ] && printf '%s\n' "${sel[@]}" | grep -q '^dotnet'; then
+        echo "$(L "Para .NET, PortProton tiene el prefijo DOTNET con .NET 2.0-4.8 y 6-9 ya instalados (lo baja la primera vez," "For .NET, PortProton has the DOTNET prefix with .NET 2.0-4.8 and 6-9 already installed (it downloads it the first time,")"
+        echo "$(L "unos 3 GB): más fiable que instalarlo con winetricks. Las partidas que el juego guarde en $pfx no pasan solas." "about 3 GB): more reliable than installing it with winetricks. Saves the game keeps in $pfx don't move by themselves.")"
+        if yesno "$(L "¿Paso el juego al prefijo DOTNET en vez de instalar .NET en $pfx?" "Move the game to the DOTNET prefix instead of installing .NET into $pfx?")" S; then
+            if grep -qs '^export PW_PREFIX_NAME=' "$exe.ppdb"; then sed -i 's|^export PW_PREFIX_NAME=.*|export PW_PREFIX_NAME="DOTNET"|' "$exe.ppdb"
+            else printf 'export PW_PREFIX_NAME="DOTNET"\n' >>"$exe.ppdb"; fi
+            echo "$(L "Hecho: $(basename "$exe") usa ahora el prefijo DOTNET. Ábrelo con PortProton (la primera vez descarga el prefijo)." "Done: $(basename "$exe") now uses the DOTNET prefix. Open it with PortProton (the first time it downloads the prefix).")"
+            mapfile -t sel < <(printf '%s\n' "${sel[@]}" | grep -v '^dotnet')
+            [ ${#sel[@]} -gt 0 ] || return 0
+        fi
+    fi
     if flatpak ps --columns=application 2>/dev/null | grep -qx ru.linux_gaming.PortProton; then
         echo "$(L "PortProton (o un juego suyo) está abierto: ciérralo antes, para no cambiar el prefijo mientras se usa." "PortProton (or one of its games) is open: close it first, so the prefix isn't changed while in use.")"
         return 1
@@ -4254,6 +4407,306 @@ pp_libs() {
 }
 # "Mis juegos": one list, by name, of the games installed with the toolbox (ISO_LIST, any level) and PortProton's
 # other games (normal: PortProton starts them unisolated). Changing the level of one of those adds it to ISO_LIST.
+# --- Steam artwork for non-Steam games ---------------------------------------------------------------------------
+# Steam shows a non-Steam game's artwork from userdata/<user>/config/grid/<id>{p.jpg,.jpg,_hero.jpg,_logo.png}, where
+# <id> is the shortcut's appid. The art is looked up first in the Steam store (no key: most PC games are there; the
+# store CDN serves library_600x900_2x, header, library_hero and logo by appid), then whatever is missing (and the
+# small icon, which the store doesn't give) in SteamGridDB, with the user's own API key (SGDB_KEY in $CONF).
+# Asks which match is right before writing; existing art is only replaced if you say so. The Decky SteamGridDB
+# plugin can change it afterwards as usual.
+SGDB_API=https://www.steamgriddb.com/api/v2
+ART_ICONS=$HOME/.local/share/ps5-bazzite-toolbox/iconos
+sgdb_key_ok() { curl -fs -m 15 -o /dev/null -H "Authorization: Bearer $1" "$SGDB_API/search/autocomplete/portal"; }
+sgdb_key_ask() {                         # asks once for the SteamGridDB key ("-" = never ask again)
+    [ -n "${SGDB_KEY+x}" ] && return 0
+    [ -t 0 ] || return 0
+    section
+    say "$(L "Carátulas de SteamGridDB: para los juegos que no están en la tienda de Steam (y para el icono pequeño)." "SteamGridDB artwork: for games that aren't in the Steam store (and for the small icon).")"
+    say "$(L "Necesita tu clave de su API (gratis): entra en steamgriddb.com con tu cuenta de Steam →" "It needs your API key (free): sign in at steamgriddb.com with your Steam account →")"
+    say "$(L "Preferencias → API (https://www.steamgriddb.com/profile/preferences/api) → genera una y pégala aquí." "Preferences → API (https://www.steamgriddb.com/profile/preferences/api) → generate one and paste it here.")"
+    say "$(L "Se guarda en $CONF (solo la lee tu usuario). Sin clave solo se usa la tienda de Steam." "It is kept in $CONF (only your user can read it). Without a key only the Steam store is used.")"
+    local k
+    read -rsp "$(L "  Clave (no se muestra; Intro = ahora no; - = no volver a preguntar): " "  Key (not shown; Enter = not now; - = don't ask again): ")" k </dev/tty; echo
+    case $k in
+        '') return 0 ;;
+        -) remember SGDB_KEY - ;;
+        *) if sgdb_key_ok "$k"; then remember SGDB_KEY "$k"; chmod 600 "$CONF"; say "$(L "  Clave correcta y guardada." "  Key OK and saved.")"
+           else say "$(L "  SteamGridDB no acepta esa clave (o no responde): no la guardo." "  SteamGridDB doesn't accept that key (or doesn't answer): not saved.")"; fi ;;
+    esac
+}
+pp_art() {                               # pp_art [--name "Steam name"] [--yes] [--key]: one game, or every one without art
+    local name='' yes=0 sd=${STEAM_DIR:-$HOME/.local/share/Steam}
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --name) name=${2:-}; shift 2 ;;
+            --yes|-y) yes=1; shift ;;
+            --key) unset SGDB_KEY; sed -i '/^SGDB_KEY=/d' "$CONF"; shift ;;
+            *) name=$1; shift ;;
+        esac
+    done
+    [ -d "$sd/userdata" ] || { echo "$(L "No encuentro Steam ($sd/userdata)." "Cannot find Steam ($sd/userdata).")" >&2; return 1; }
+    [ $yes = 1 ] || sgdb_key_ask
+    local key=${SGDB_KEY:-}; [ "$key" = - ] && key=''
+    if [ -z "$name" ]; then
+        section
+        say "$(L "Busca carátulas para los juegos no-Steam de tu biblioteca que no tienen (portada, horizontal, fondo y logo)," "Looks up artwork for the non-Steam games in your library that have none (cover, horizontal, background and logo),")"
+        say "$(L "primero en la tienda de Steam y luego en SteamGridDB$([ -n "$key" ] || printf ' (sin clave: no)'). Pregunta en cada juego cuál es." "first in the Steam store and then in SteamGridDB$([ -n "$key" ] || printf ' (no key: skipped)'). Asks for each game which one it is.")"
+        say "$(L "Se ven al reiniciar Steam. DESHACER: borra los ficheros <id>* de ~/.local/share/Steam/userdata/*/config/grid/." "They show after restarting Steam. UNDO: delete the <id>* files in ~/.local/share/Steam/userdata/*/config/grid/.")"
+    fi
+    STEAM_DIR=$sd SGDB_KEY=$key SGDB_API=$SGDB_API ART_ICONS=$ART_ICONS ART_NAME=$name ART_YES=$yes TB_LANG=$TB_LANG \
+        python3 - <<'__ART_PY__'
+# Artwork for non-Steam shortcuts: Steam store (by appid) first, SteamGridDB (user's key) for what is missing.
+import glob, json, os, re, shutil, struct, subprocess, sys, time, urllib.parse, urllib.request
+
+E = os.environ
+L = lambda es, en: es if E.get("TB_LANG", "en") == "es" else en
+# the script itself is python's stdin (heredoc): answers are read from the terminal
+try:
+    TTY = open("/dev/tty")
+except OSError:
+    TTY = None
+YES = E.get("ART_YES") == "1" or TTY is None
+
+def inp(q):
+    sys.stdout.write(q); sys.stdout.flush()
+    line = TTY.readline() if TTY else ""
+    return line.rstrip("\n")
+KEY = E.get("SGDB_KEY", "")
+UA = {"User-Agent": "ps5-bazzite-toolbox"}
+SLOTS = [  # (file suffix, label, Steam CDN files, SteamGridDB endpoint and filter)
+    ("p", L("portada", "cover"), ["library_600x900_2x.jpg", "library_600x900.jpg"], ("grids", "dimensions=600x900")),
+    ("", L("horizontal", "horizontal"), ["header.jpg"], ("grids", "dimensions=460x215,920x430")),
+    ("_hero", L("fondo", "background"), ["library_hero.jpg"], ("heroes", "")),
+    ("_logo", "logo", ["logo.png"], ("logos", "")),
+]
+
+def ask(q, default=True):
+    if YES:
+        return default
+    a = inp(f"{q} [{L('S/n', 'Y/n') if default else L('s/N', 'y/N')}] ").strip().lower()
+    return default if not a else a[0] in "sy"
+
+def get(url, key=False, raw=False):
+    h = dict(UA)
+    if key:
+        h["Authorization"] = f"Bearer {KEY}"
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers=h), timeout=20) as r:
+            return r.read() if raw else json.load(r)
+    except Exception:
+        return None
+
+# ---- shortcuts.vdf (binary VDF), read and, for the icon only, written back exactly
+def parse(d, i):
+    items = []
+    while True:
+        t = d[i]; i += 1
+        if t == 0x08:
+            return items, i
+        e = d.index(b"\0", i); k = d[i:e]; i = e + 1
+        if t == 0x00:
+            v, i = parse(d, i)
+        elif t == 0x01:
+            e = d.index(b"\0", i); v = d[i:e]; i = e + 1
+        elif t == 0x02:
+            v = d[i:i + 4]; i += 4
+        elif t == 0x07:
+            v = d[i:i + 8]; i += 8
+        else:
+            raise ValueError(f"VDF 0x{t:02x}")
+        items.append((t, k, v))
+
+def dump(items):
+    out = bytearray()
+    for t, k, v in items:
+        out += bytes([t]) + k + b"\0"
+        out += dump(v) if t == 0 else (v + b"\0" if t == 1 else v)
+    return bytes(out + b"\x08")
+
+def field(entry, key):
+    for t, k, v in entry:
+        if k.lower() == key.lower():
+            return v
+    return None
+
+games = {}   # appid -> {"name", "icon", "users": [(user dir, vdf path)]}
+for vdf in glob.glob(os.path.join(E["STEAM_DIR"], "userdata", "*", "config", "shortcuts.vdf")):
+    try:
+        root, _ = parse(open(vdf, "rb").read(), 0)
+    except Exception:
+        continue
+    for t, k, e in field(root, b"shortcuts") or []:
+        if t != 0:
+            continue
+        aid = field(e, b"appid")
+        if not aid:
+            continue
+        aid = struct.unpack("<I", aid)[0]
+        g = games.setdefault(aid, {"name": (field(e, b"AppName") or b"").decode("utf-8", "replace"),
+                                   "icon": (field(e, b"icon") or b"").decode("utf-8", "replace"), "users": []})
+        g["users"].append(os.path.dirname(vdf))
+
+def grid_has(aid, suffix, cfgs):
+    return any(glob.glob(os.path.join(c, "grid", f"{aid}{suffix}.*")) for c in cfgs)
+
+want = E.get("ART_NAME", "").strip()
+if want:
+    todo = [a for a, g in games.items() if g["name"].lower() == want.lower()]
+    if not todo:
+        sys.exit(L(f"  No encuentro «{want}» entre los juegos no-Steam de Steam.", f"  Cannot find «{want}» among Steam's non-Steam games."))
+else:
+    todo = [a for a, g in games.items() if not grid_has(a, "p", g["users"])]
+    if not todo:
+        print(L("  Todos tus juegos no-Steam tienen ya portada.", "  All your non-Steam games already have a cover."))
+        sys.exit(0)
+    print(L(f"  Sin carátulas: {len(todo)} juego(s).", f"  Without artwork: {len(todo)} game(s)."))
+
+TAGS = r"insaneramzes|tenoke|plaza|codex|skidrow|rune|flt|doge|elamigos|fitgirl|dodi|xghost|steamrip|repack|gog|lp|multi\d*|rus|eng|win|setup|portable"
+def clean(n):
+    n = re.sub(r"\[[^]]*\]|\([^)]*\)", " ", n)
+    n = re.sub(r"[._]+", " ", n)
+    n = re.sub(r"-[A-Za-z0-9]+$", " ", n.strip())
+    n = re.sub(rf"\b({TAGS})\b", " ", n, flags=re.I)
+    n = re.sub(r"\bv?\d+(\.\d+){1,}\S*", " ", n)          # versions
+    n = re.sub(r"\b(19|20)\d\d\b\s*$", " ", n.strip())     # trailing year
+    return re.sub(r"\s+", " ", n).strip(" -")
+
+norm = lambda s: re.sub(r"[^a-z0-9]+", "", s.lower())
+
+def steam_year(appid):
+    r = get(f"https://store.steampowered.com/api/appdetails?appids={appid}&filters=release_date")
+    date = (((r or {}).get(str(appid)) or {}).get("data") or {}).get("release_date", {}).get("date", "")
+    m = re.search(r"\b(19|20)\d\d\b", date)
+    return m.group(0) if m else ""
+
+def candidates(term):
+    out = []
+    r = get("https://store.steampowered.com/api/storesearch/?" + urllib.parse.urlencode({"term": term, "l": "spanish", "cc": "ES"}))
+    for it in (r or {}).get("items", [])[:5]:
+        out.append({"src": "Steam", "steam": it["id"], "sgdb": None, "name": it["name"], "year": ""})
+    if KEY:
+        r = get(f"{E['SGDB_API']}/search/autocomplete/{urllib.parse.quote(term)}", key=True)
+        for it in ((r or {}).get("data") or [])[:5]:
+            year = time.strftime("%Y", time.gmtime(it["release_date"])) if it.get("release_date") else ""
+            same = next((c for c in out if norm(c["name"]) == norm(it["name"])), None)
+            if same:
+                same["sgdb"] = it["id"]; same["year"] = same["year"] or year
+            else:
+                out.append({"src": "SteamGridDB", "steam": None, "sgdb": it["id"], "name": it["name"], "year": year})
+    # the store search has no dates: one small request per Steam result, in parallel
+    from concurrent.futures import ThreadPoolExecutor
+    need = [c for c in out if c["steam"] and not c["year"]]
+    with ThreadPoolExecutor(max_workers=5) as ex:
+        for c, y in zip(need, ex.map(lambda c: steam_year(c["steam"]), need)):
+            c["year"] = y
+    best = next((i for i, c in enumerate(out) if norm(c["name"]) == norm(term)), 0)
+    return out, best
+
+def choose(name):
+    term = clean(name) or name
+    while True:
+        print(f"\n  «{name}»" + (L(f" → buscando «{term}»", f" → searching «{term}»") if norm(term) != norm(name) else "") + ":")
+        cs, best = candidates(term)
+        if not cs:
+            print(L("    No encuentro nada.", "    Nothing found."))
+            if YES:
+                return None
+            t = inp(L("    Escribe otro nombre para buscar (Intro = saltar): ", "    Type another name to search (Enter = skip): ")).strip()
+            if not t:
+                return None
+            term = t
+            continue
+        for i, c in enumerate(cs, 1):
+            year = f" ({c['year']})" if c["year"] else ""
+            print(f"    {i}) {c['name']}{year}  — {c['src']} {c['steam'] or c['sgdb']}")
+        if YES:
+            return cs[best] if norm(cs[best]["name"]) == norm(term) else None
+        a = inp(L(f"    ¿Cuál es? (Intro = {best + 1}, número, 0 = ninguna, u otro nombre para buscar): ",
+                    f"    Which one? (Enter = {best + 1}, number, 0 = none, or another name to search): ")).strip()
+        if not a:
+            return cs[best]
+        if a == "0":
+            return None
+        if a.isdigit() and 1 <= int(a) <= len(cs):
+            return cs[int(a) - 1]
+        term = a
+
+def ext(url, data):
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return ".png"
+    return ".jpg" if data[:3] == b"\xff\xd8\xff" else os.path.splitext(urllib.parse.urlparse(url).path)[1].lower() or ".jpg"
+
+def sgdb_one(kind, gid, filt, mimes):
+    q = "&".join(x for x in (filt, f"mimes={mimes}", "types=static", "nsfw=false", "humor=false") if x)
+    r = get(f"{E['SGDB_API']}/{kind}/game/{gid}?{q}", key=True)
+    for it in ((r or {}).get("data") or []):
+        d = get(it["url"], raw=True)
+        if d:
+            return it["url"], d
+    return None
+
+steam_running = subprocess.run(["pgrep", "-x", "steam"], capture_output=True).returncode == 0
+icons_set = 0
+for aid in todo:
+    g = games[aid]
+    if want and grid_has(aid, "p", g["users"]) and not ask(L("  Ya tiene carátulas. ¿Sustituirlas?", "  It already has artwork. Replace it?"), False):
+        continue
+    c = choose(g["name"])
+    if not c:
+        print(L("    Sin carátulas para este.", "    No artwork for this one."))
+        continue
+    gid = c["sgdb"]
+    if KEY and c["steam"] and not gid:
+        r = get(f"{E['SGDB_API']}/games/steam/{c['steam']}", key=True)
+        gid = ((r or {}).get("data") or {}).get("id")
+    got = []
+    for suffix, label, files, (kind, filt) in SLOTS:
+        res = None
+        if c["steam"]:
+            for f in files:
+                u = f"https://shared.steamstatic.com/store_item_assets/steam/apps/{c['steam']}/{f}"
+                d = get(u, raw=True)
+                if d:
+                    res = (u, d); break
+        if not res and gid:
+            res = sgdb_one(kind, gid, filt, "image/png" if suffix == "_logo" else "image/png,image/jpeg")
+        if not res:
+            continue
+        u, d = res
+        for cfg in g["users"]:
+            gd = os.path.join(cfg, "grid"); os.makedirs(gd, exist_ok=True)
+            for old in glob.glob(os.path.join(gd, f"{aid}{suffix}.*")):
+                os.remove(old)
+            open(os.path.join(gd, f"{aid}{suffix}{ext(u, d)}"), "wb").write(d)
+        got.append(label)
+    # the small icon (shortcuts.vdf "icon"): only if it has none, from SteamGridDB, with Steam closed
+    icon_ok = g["icon"] and os.path.isfile(g["icon"])
+    if not icon_ok and gid:
+        res = sgdb_one("icons", gid, "", "image/png")
+        if res and steam_running:
+            print(L("    (el icono necesita Steam cerrado: repítelo con Steam cerrado para ponerlo)", "    (the icon needs Steam closed: repeat it with Steam closed to set it)"))
+        elif res:
+            os.makedirs(E["ART_ICONS"], exist_ok=True)
+            ipath = os.path.join(E["ART_ICONS"], f"{aid}.png")
+            open(ipath, "wb").write(res[1])
+            for cfg in g["users"]:
+                vdf = os.path.join(cfg, "shortcuts.vdf")
+                data = open(vdf, "rb").read()
+                root, _ = parse(data, 0)
+                if dump(root) != data:
+                    continue
+                for t, k, e in field(root, b"shortcuts") or []:
+                    if t == 0 and field(e, b"appid") == struct.pack("<I", aid):
+                        e[:] = [(tt, kk, ipath.encode() if kk.lower() == b"icon" else vv) for tt, kk, vv in e]
+                shutil.copy2(vdf, f"{vdf}.bak-{time.strftime('%Y%m%d-%H%M%S')}")
+                open(vdf + ".tmp", "wb").write(dump(root)); os.replace(vdf + ".tmp", vdf)
+            got.append(L("icono", "icon")); icons_set += 1
+    print(L(f"    {c['name']}: {', '.join(got) or 'nada descargado'}.", f"    {c['name']}: {', '.join(got) or 'nothing downloaded'}."))
+if steam_running:
+    print(L("  Steam está abierto: las carátulas nuevas se ven al reiniciarlo.", "  Steam is open: the new artwork shows after restarting it."))
+__ART_PY__
+}
+
 pp_my_games() {
     local list e d nm lv a c i
     local -a rows
@@ -4275,16 +4728,18 @@ pp_my_games() {
         case $lv in red) lv="$(L "aislado con red" "isolated with network")" ;; sin-red) lv="$(L "aislado sin red" "isolated without network")" ;; esac
         printf '  %2d) %-40s %s%s\n' $((i + 1)) "$nm" "$lv" "$([ -f "$e" ] || L '  (el .exe ya no está)' '  (the .exe is gone)')"
     done
-    read -rp "$(L "¿Cuál? (número, Intro = volver): " "Which one? (number, Enter = back)")" a
+    read -rp "$(L "¿Cuál? (número; c = carátulas de Steam a todos los que no tienen; Intro = volver): " "Which one? (number; c = Steam artwork for all that have none; Enter = back): ")" a
+    [[ $a == [cC] ]] && { pp_art; return 0; }
     [[ $a =~ ^[0-9]+$ ]] && [ "$a" -ge 1 ] && [ "$a" -le ${#rows[@]} ] || return 0
     IFS=$'\t' read -r nm lv e <<<"${rows[$((a - 1))]}"
-    echo "$(L "$nm:  1) Cambiar aislamiento   2) Desinstalar   3) Generación de fotogramas   4) Librerías de Windows (Visual C++…)   0) Volver" "$nm:  1) Change isolation   2) Uninstall   3) Frame generation   4) Windows libraries (Visual C++…)   0) Back")"
+    echo "$(L "$nm:  1) Cambiar aislamiento   2) Desinstalar   3) Generación de fotogramas   4) Librerías de Windows (Visual C++…)   5) Carátulas de Steam   0) Volver" "$nm:  1) Change isolation   2) Uninstall   3) Frame generation   4) Windows libraries (Visual C++…)   5) Steam artwork   0) Back")"
     read -rp "$(L "Elige: " "Choose: ")" c
     case $c in
         1) if [ -f "$e" ]; then pp_change_level "$e"; else echo "$(L "El .exe ya no está: solo se puede desinstalar." "The .exe is gone: it can only be uninstalled.")"; fi ;;
         2) if [ -f "$e" ]; then pp_remove_game "$e"; else pp_remove_game "$nm"; fi ;;
         3) if [ -f "$e" ]; then pp_framegen "$e" "$lv"; else echo "$(L "El .exe ya no está: solo se puede desinstalar." "The .exe is gone: it can only be uninstalled.")"; fi ;;
         4) if [ -f "$e" ]; then pp_libs "$e"; else echo "$(L "El .exe ya no está: solo se puede desinstalar." "The .exe is gone: it can only be uninstalled.")"; fi ;;
+        5) pp_art --name "$nm" ;;
     esac
     return 0
 }
@@ -4390,6 +4845,164 @@ space_report() {
     echo "$(L "Lo que ocupa cada carpeta de $(pwd):" "Space used by each folder in $(pwd):")"
     du -bsh -- */ .[!.]*/ 2>/dev/null | sort -h
     echo "Total: $(du -bsh . 2>/dev/null | cut -f1)"
+}
+
+# Copies to and from the NAS (the copiarNas command of the copiar block). rsync runs as a
+# systemd user unit at idle disk priority: the system stays fluid on a USB disk, and the copy survives closing the
+# terminal or switching to Game Mode. Each copy writes a log in COPY_LOGS; -e shows them, --parar stops them.
+COPY_LOGS=$HOME/.local/share/ps5-bazzite-toolbox/copias
+copy_usage() {
+    if [ "$TB_LANG" = es ]; then cat <<'EOF'
+Copias con el NAS sin trabar el sistema (rsync en segundo plano, prioridad de disco mínima).
+
+  copiarNas [-s] [-n] ORIGEN... DESTINO    la dirección la da dónde está cada uno
+  copiarNas nas:RUTA                       del NAS a la carpeta actual
+  copiarNas -e                             las copias en marcha y las últimas; sigue la que está en marcha
+  copiarNas --parar                        para las copias en marcha (repetirla luego sigue donde iba)
+
+Rutas del NAS: ~/NAS/... (Tab autocompleta) o nas:RUTA (relativa a la carpeta compartida).
+  copiarNas nas:PS5/juegos/X ~/Games       del NAS a la PS5
+  copiarNas ~/Downloads/X nas:PS5/juegos   de la PS5 al NAS
+Como cp -r: «carpeta» copia la carpeta dentro de DESTINO; «carpeta/» copia solo lo que tiene dentro.
+  -s  no preguntar      -n  prioridad normal (más rápida, pero el sistema puede ir a tirones)
+Ctrl+C deja de mirar el progreso; la copia sigue. Lo ya copiado no se vuelve a copiar.
+EOF
+    else cat <<'EOF'
+Copies with the NAS without freezing the system (rsync in the background, lowest disk priority).
+
+  copiarNas [-s] [-n] SOURCE... DEST       the direction comes from where each one is
+  copiarNas nas:PATH                       from the NAS to the current folder
+  copiarNas -e                             running and recent copies; follows the running one
+  copiarNas --parar                        stops the running copies (running it again later resumes it)
+
+NAS paths: ~/NAS/... (Tab completes them) or nas:PATH (relative to the shared folder).
+  copiarNas nas:PS5/games/X ~/Games        from the NAS to the PS5
+  copiarNas ~/Downloads/X nas:PS5/games    from the PS5 to the NAS
+Like cp -r: "folder" copies the folder into DEST; "folder/" copies only what is inside it.
+  -s  don't ask      -n  normal priority (faster, but the system may stutter)
+Ctrl+C stops watching the progress; the copy goes on. What is already copied is not copied again.
+EOF
+    fi
+}
+copy_on_nas() { case $1/ in "$2"/*) return 0 ;; esac; return 1; }   # copy_on_nas PATH MOUNT
+copy_real() {                            # copy_real PATH -> absolute, links resolved, the trailing / kept
+    local r; r=$(realpath -m -- "$1") || return 1
+    case $1 in */) r=${r%/}/ ;; esac; echo "$r"
+}
+copy_path() {                            # copy_path ARG MOUNT -> absolute path; nas:REL is REL inside the share
+    case $1 in nas:*) copy_real "$2/${1#nas:}" ;; *) copy_real "${1/#\~/$HOME}" ;; esac
+}
+copy_running() { systemctl --user list-units --plain --no-legend --state=active 'copiar-*.service' 2>/dev/null | awk '{ print $1 }'; }
+copy_last_line() { tail -c 600 "$1" 2>/dev/null | tr '\r' '\n' | grep -v '^[[:space:]]*$' | tail -1; }
+copy_follow() {                          # copy_follow UNIT LOG -> shows the progress until it ends (Ctrl+C = stop watching)
+    local unit=$1 log=$2 pid rc
+    pid=$(systemctl --user show -p MainPID --value "$unit" 2>/dev/null)
+    if [ -n "$pid" ] && [ "$pid" != 0 ]; then
+        echo "$(L "Progreso (Ctrl+C deja de mirar; la copia sigue — copiarNas -e para volver a verla):" "Progress (Ctrl+C stops watching; the copy goes on — copiarNas -e to see it again):")"
+        trap 'echo; echo "$(L "Sigue copiando en segundo plano. copiarNas -e para verla, copiarNas --parar para pararla." "Still copying in the background. copiarNas -e to see it, copiarNas --parar to stop it.")"; exit 0' INT
+        tail -n 0 -f --pid="$pid" "$log" 2>/dev/null
+        trap - INT
+    fi
+    echo
+    rc=$(sed -n 's/^== fin: //p' "$log" | tail -1)
+    case $rc in
+        0) echo "$(L "${G}Copia terminada.$N" "${G}Copy finished.$N")" ;;
+        '') echo "$(L "La copia no ha dejado resultado (¿parada?). Repetirla sigue donde iba. Registro: $log" "The copy left no result (stopped?). Running it again resumes it. Log: $log")" ;;
+        23|24) echo "$(L "${Y}Terminada, pero algunos ficheros no se han podido copiar$N (código $rc; mira $log)." "${Y}Finished, but some files could not be copied$N (code $rc; see $log).")" ;;
+        *) echo "$(L "${R}La copia ha fallado$N (código $rc de rsync). Registro: $log" "${R}The copy failed$N (rsync code $rc). Log: $log")"; return 1 ;;
+    esac
+}
+copy_status() {
+    local f u n=0 last=''
+    ls "$COPY_LOGS"/*.log >/dev/null 2>&1 || { echo "$(L "No hay copias registradas." "No copies recorded.")"; return 0; }
+    echo "$(L "Últimas copias:" "Latest copies:")"
+    for f in $(ls -t "$COPY_LOGS"/*.log | head -8); do
+        u=copiar-$(basename "$f" .log).service
+        printf '  %s  %s\n' "$(basename "$f" .log)" "$(sed -n 's/^# //p' "$f" | head -1)"
+        if systemctl --user is-active -q "$u" 2>/dev/null; then
+            printf '      %s%s%s  %s\n' "$Y" "$(L 'en marcha' 'running')" "$N" "$(copy_last_line "$f")"; n=$((n + 1)); [ -n "$last" ] || last=$f
+        else
+            case $(sed -n 's/^== fin: //p' "$f" | tail -1) in
+                0) printf '      %s%s%s\n' "$G" "$(L 'terminada' 'finished')" "$N" ;;
+                '') printf '      %s\n' "$(L 'cortada (repetirla sigue donde iba)' 'cut short (running it again resumes it)')" ;;
+                *) printf '      %s%s%s (%s)\n' "$R" "$(L 'con errores' 'with errors')" "$N" "$f" ;;
+            esac
+        fi
+    done
+    [ $n -gt 0 ] && [ -t 1 ] && { echo; copy_follow "copiar-$(basename "$last" .log).service" "$last"; }
+    return 0
+}
+copy_stop() {
+    local units u; units=$(copy_running)
+    [ -n "$units" ] || { echo "$(L "No hay copias en marcha." "No copies running.")"; return 0; }
+    echo "$(L "Copias en marcha:" "Running copies:")"
+    for u in $units; do echo "  ${u%.service}: $(u=${u#copiar-}; sed -n 's/^# //p' "$COPY_LOGS/${u%.service}.log" 2>/dev/null | head -1)"; done
+    yesno "$(L "¿Pararlas? (lo copiado se queda; repetir la copia sigue donde iba)" "Stop them? (what is copied stays; running the copy again resumes it)")" S || return 1
+    for u in $units; do systemctl --user stop "$u"; done
+    echo "$(L "Paradas." "Stopped.")"
+}
+copy_nas() {                             # copy_nas [-s] [-n] SOURCE... [DEST]
+    case ${1:-} in del|hacia|auto) shift ;; esac        # the first wrappers passed a direction: now it comes from the paths
+    local dir yes=0 prio=idle m a p dest='' onnas=0 total avail dfdir id log unit opts=() srcs=() args=()
+    while [ $# -gt 0 ]; do
+        case $1 in
+            -h|--help|--ayuda) copy_usage; return 0 ;;
+            -e|--estado|--status) copy_status; return ;;
+            --parar|--stop) copy_stop; return ;;
+            -s) yes=1 ;;
+            -n) prio=normal ;;
+            --) shift; args+=("$@"); break ;;
+            -*) echo "$(L "Opción desconocida: $1 (ayuda: -h)" "Unknown option: $1 (help: -h)")" >&2; return 2 ;;
+            *) args+=("$1") ;;
+        esac
+        shift
+    done
+    [ ${#args[@]} -gt 0 ] || { copy_usage; return 2; }
+    m=$(nas_mnt); [ -n "$m" ] || { echo "$(L "No hay NAS montado: aplica antes el bloque nas (ajustes)." "No NAS mounted: apply the nas block first (settings).")" >&2; return 1; }
+    nas_dir_ok "$m" || { echo "$(L "No llego al NAS ($m): ¿está encendido?" "Can't reach the NAS ($m): is it on?")" >&2; return 1; }
+    m=$(realpath "$m")
+    # the last argument is the destination when there are two or more; with one, it is the current folder
+    if [ ${#args[@]} -ge 2 ]; then dest=$(copy_path "${args[-1]}" "$m"); unset 'args[-1]'; else dest=$PWD; fi
+    for a in "${args[@]}"; do
+        p=$(copy_path "$a" "$m")
+        timeout 30 test -e "$p" || { echo "$(L "No existe: $a" "Does not exist: $a")" >&2; return 1; }
+        copy_on_nas "$p" "$m" && onnas=1
+        srcs+=("$p")
+    done
+    dest=${dest%/}
+    copy_on_nas "$dest" "$m" && onnas=1
+    [ $onnas = 1 ] || { echo "$(L "Ni el origen ni el destino están en el NAS: escribe sus rutas con ~/NAS/… o nas:… (ayuda: -h)." "Neither the source nor the destination is on the NAS: write its paths with ~/NAS/… or nas:… (help: -h).")" >&2; return 2; }
+    copy_on_nas "$dest" "$m" && dir=hacia || dir=del
+    # SMB keeps neither links nor Unix permissions: towards the NAS, links are skipped (the ROMs one points at the NAS itself)
+    if [ $dir = hacia ]; then opts=(-rt --modify-window=1); else opts=(-rlt); fi
+    opts+=(--partial --mkpath --info=progress2 --info=stats1 --human-readable)
+    echo "$(L "Midiendo lo que hay que copiar…" "Measuring what has to be copied…")"
+    total=$(du -sbc -- "${srcs[@]}" 2>/dev/null | tail -1 | cut -f1)
+    dfdir=$dest; while [ ! -d "$dfdir" ]; do dfdir=$(dirname "$dfdir"); done
+    avail=$(df -B1 --output=avail "$dfdir" 2>/dev/null | tail -1 | tr -d ' ')
+    echo "$(L "Origen:" "Source:")"; printf '  %s\n' "${srcs[@]}"
+    echo "$(L "Destino:" "Destination:") $dest/"
+    echo "$(L "Tamaño: $(hsize "$total") (lo que ya esté igual en el destino no se vuelve a copiar). Libre allí: $(hsize "$avail")." "Size: $(hsize "$total") (what is already the same at the destination is not copied again). Free there: $(hsize "$avail").")"
+    [ "$prio" = idle ] && echo "$(L "Prioridad de disco mínima: si algo más usa mucho el disco (un juego cargando), la copia espera." "Lowest disk priority: if something else uses the disk a lot (a game loading), the copy waits.")"
+    if [ "${total:-0}" -gt "${avail:-0}" ]; then
+        echo "$(L "${Y}Puede no caber.$N" "${Y}It may not fit.$N")"
+        [ $yes = 1 ] && return 1
+        yesno "$(L "¿Copiar de todos modos?" "Copy anyway?")" N || return 1
+    elif [ $yes = 0 ]; then
+        yesno "$(L "¿Empiezo la copia?" "Start the copy?")" S || return 1
+    fi
+    mkdir -p "$COPY_LOGS" || return 1
+    ls -t "$COPY_LOGS"/*.log 2>/dev/null | tail -n +30 | xargs -r rm -f       # keep the last 30 logs
+    id=$(date +%Y%m%d-%H%M%S); log=$COPY_LOGS/$id.log; unit=copiar-$id
+    { echo "# $(basename "${srcs[0]%/}")$([ ${#srcs[@]} -gt 1 ] && echo " (+$((${#srcs[@]} - 1)))") → $dest/"
+      printf '# %s\n' "${srcs[@]}"; } >"$log"
+    local props=(-p "StandardOutput=append:$log" -p "StandardError=append:$log")
+    [ "$prio" = idle ] && props+=(-p IOSchedulingClass=idle -p Nice=10)
+    systemd-run --user --quiet --collect --unit="$unit" "${props[@]}" -- \
+        bash -c 'rsync "$@"; rc=$?; echo; echo "== fin: $rc"' rsync "${opts[@]}" -- "${srcs[@]}" "$dest/" ||
+        { echo "$(L "No he podido lanzar la copia." "Could not start the copy.")" >&2; return 1; }
+    sleep 1
+    copy_follow "$unit.service" "$log"
 }
 
 # Black screen with the console still running: moving to another virtual console and back makes the GPU set
@@ -4997,6 +5610,8 @@ case $MODE in                            # these need no root
     games) pp_my_games; exit ;;
     pp-collection) pp_collection "${ARGS[@]}"; exit ;;
     space) space_report "${ARGS[@]}"; exit ;;
+    copy) copy_nas "${ARGS[@]}"; exit ;;
+    art) pp_art "${ARGS[@]}"; exit ;;
     self-update) self_update "$UPDATE_TAG"; exit ;;
     backup) bk_save; exit ;;
     restore) bk_restore "$UPDATE_TAG"; exit ;;
