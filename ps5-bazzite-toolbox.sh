@@ -44,7 +44,7 @@
 # Setup blocks: locale cmdline wifi updates vram gpu40 zram swapdisco fans cpufreq warmreboot hdmi arranque bt steambt disk papelera firewall brave edge nas bios media copiar esde portproton unifideck atajos monitorweb
 set -uo pipefail
 
-TOOLBOX_VERSION=1.13.0                   # bump on every release (see CHANGELOG.md and release.sh)
+TOOLBOX_VERSION=1.14.0                   # bump on every release (see CHANGELOG.md and release.sh)
 TOOLBOX_REPO=fitamix/ps5-bazzite-toolbox
 TOOLBOX_BIN=$HOME/.local/bin/ps5-bazzite-toolbox                      # where --install puts it
 TOOLBOX_DESKTOP=$HOME/.local/share/applications/ps5-bazzite-toolbox.desktop
@@ -356,7 +356,7 @@ desc_updates() {
     say "$(L "POR QUÉ: la imagen no es ostree (ujust update y rpm-ostree no sirven) y esos paquetes llevan" "WHY: the image is not ostree (ujust update and rpm-ostree don't work) and those packages carry")"
     say "$(L "parches para la PS5: un dnf upgrade los sustituiría por los normales y podría no arrancar." "PS5 patches: a dnf upgrade would replace them with the stock ones and it might not boot.")"
     say "$(L "Las actualizaciones de la imagen se hacen con su propio update.sh (ver el README del autor)." "Image updates are done with its own update.sh (see the author's README).")"
-    say "$(L "En una instalación bootc no aplica: ahí las actualizaciones son las del autor (opción 18) y se deshacen." "On a bootc install it does not apply: there updates are the author's (option 18) and can be undone.")"
+    say "$(L "En una instalación bootc no aplica: ahí las actualizaciones son las del autor (opción 62) y se deshacen." "On a bootc install it does not apply: there updates are the author's (option 62) and can be undone.")"
     say "$(L "DESHACER: sudo systemctl unmask uupd.timer rpm-ostreed-automatic.timer; borra 90-ps5-hold.conf." "UNDO: sudo systemctl unmask uupd.timer rpm-ostreed-automatic.timer; delete 90-ps5-hold.conf.")"
 }
 check_updates() {
@@ -454,7 +454,7 @@ desc_gpu40() {
     say "$(L "unidades); en otras salen puntitos verdes u otros fallos gráficos, un tinte morado o cuelgues." "units); on others you get green dots or other graphical glitches, a purple tint or crashes.")"
     say "$(L "Pruébalo con varios juegos exigentes un buen rato; si ves algo de eso, vuelve a 36 aquí mismo." "Try it with several demanding games for a good while; if you see any of that, go back to 36 right here.")"
     say "$(L "Solo PS5 original y Slim (en la Pro ya están todas activas). Las actualizaciones de la imagen lo respetan." "Original PS5 and Slim only (on a Pro all are already active). Image updates respect it.")"
-    say "$(L "DESHACER: vuelve a este bloque (menú 17 → gpu40) y elige 36, o copia un $CMDLINE.bak-* encima." "UNDO: come back to this block (menu 17 → gpu40) and choose 36, or copy a $CMDLINE.bak-* over it.")"
+    say "$(L "DESHACER: vuelve a este bloque (menú 52 → gpu40) y elige 36, o copia un $CMDLINE.bak-* encima." "UNDO: come back to this block (menu 52 → gpu40) and choose 36, or copy a $CMDLINE.bak-* over it.")"
     say "$(L "Cuenta solo tras APAGAR y arrancar con el cargador. Comprobar: sudo dmesg | grep active_cu_number" "Takes effect only after POWERING OFF and booting with the loader. Check: sudo dmesg | grep active_cu_number")"
 }
 check_gpu40() {
@@ -566,7 +566,7 @@ desc_swapdisco() {
     say "$(L "que se pasan de memoria (Switch 2: Lichii con Zelda OoT pide más de 14 GB)." "that overrun memory (Switch 2: Lichii with Zelda OoT asks for more than 14 GB).")"
     say "$(L "RIESGO: si el disco va por USB y se escribe mucho en la swap, los atascos del USB pueden congelar todo el" "RISK: if the disk is on USB and a lot is written to swap, USB stalls can freeze the whole")"
     say "$(L "sistema unos segundos. Si notas eso (ratón parado), quítala. Ocupa en el disco el tamaño que elijas." "system for a few seconds. If you notice that (mouse stuck), remove it. It takes the size you choose on the disk.")"
-    say "$(L "DESHACER: este bloque con tamaño 0 (menú 17 → swapdisco), o a mano: sudo swapoff $SWAPFILE;" "UNDO: this block with size 0 (menu 17 → swapdisco), or by hand: sudo swapoff $SWAPFILE;")"
+    say "$(L "DESHACER: este bloque con tamaño 0 (menú 52 → swapdisco), o a mano: sudo swapoff $SWAPFILE;" "UNDO: this block with size 0 (menu 52 → swapdisco), or by hand: sudo swapoff $SWAPFILE;")"
     say "sudo sed -i '\\|^$SWAP_MARK\$|,+1d' /etc/fstab; sudo rm $SWAPFILE"
 }
 check_swapdisco() {
@@ -1402,13 +1402,13 @@ EOF
 }
 
 # --- monitorweb ----------------------------------------------------------------------------------
-# The live monitor (option 4) in a phone's browser, always reachable at http://<console>:8765 with nothing to start:
+# The live monitor (option 41) in a phone's browser, always reachable at http://<console>:8765 with nothing to start:
 # a small Python server, a user service (no root) and a firewall rule for the home network only. It only measures
 # while a page asks for it ("Empezar"); unwatched for 10 min it stops by itself, and then the page asks whether to
 # keep the session's CSV on the console. The script is kept here as text.
 monweb_script() { cat <<'__MONWEB__'
 #!/usr/bin/env python3
-# PS5 Bazzite toolbox — the live monitor (menu option 4) in a phone's browser: http://<PS5 address>:PORT
+# PS5 Bazzite toolbox — the live monitor (menu option 41) in a phone's browser: http://<PS5 address>:PORT
 # Waiting it does nothing (blocked on the socket). "Empezar" on the page starts a sample every 2 s; with no page
 # asking for 10 min (phone locked, tab or browser closed) it stops by itself. A page in a background tab keeps
 # asking every 15 s (browsers may slow that to once a minute), so looking at another tab doesn't stop it. Once stopped, the page asks whether to keep the
@@ -1792,7 +1792,7 @@ desc_monitorweb() {
     section
     case $TB_LANG in
         es)
-    say "El monitor en directo (opción 4) en el navegador del móvil: http://$(lan_ip || echo '<IP de la consola>'):$MONWEB_PORT"
+    say "El monitor en directo (opción 41) en el navegador del móvil: http://$(lan_ip || echo '<IP de la consola>'):$MONWEB_PORT"
     say "Guárdalo en la pantalla de inicio. «Empezar» mide cada 2 s (CPU, GPU, VRAM, RAM, swap, temperatura,"
     say "qué gasta más, picos y qué te limita); sin ninguna página abierta 10 min, para solo. Al parar pregunta si guardar"
     say "las medidas en la PS5 ($MONWEB_CSV_DIR/ps5-mem-FECHA.csv)."
@@ -1804,7 +1804,7 @@ desc_monitorweb() {
     say "  sudo firewall-cmd --permanent --remove-rich-rule='$(monweb_rule)'; sudo firewall-cmd --reload"
             ;;
         *)
-    say "The live monitor (option 4) in your phone's browser: http://$(lan_ip || echo '<console IP>'):$MONWEB_PORT"
+    say "The live monitor (option 41) in your phone's browser: http://$(lan_ip || echo '<console IP>'):$MONWEB_PORT"
     say "Save it to the home screen. \"Start\" samples every 2 s (CPU, GPU, VRAM, RAM, swap, temperature,"
     say "what uses the most, peaks and what limits you); with no page open for 10 min, it stops by itself. When stopped it asks whether to save"
     say "the measurements on the PS5 ($MONWEB_CSV_DIR/ps5-mem-DATE.csv)."
@@ -1843,7 +1843,7 @@ WantedBy=default.target
 EOF
     systemctl --user daemon-reload && systemctl --user enable ps5-monitor-web && systemctl --user restart ps5-monitor-web || return 1
     if monweb_fw && [ "$(fw_state)" != running ]; then
-        echo "  $(L 'El cortafuegos está fallido y no admite abrir el puerto: aplica antes el bloque firewall (opción 17 → firewall).' 'The firewall is in a failed state and cannot open the port: apply the firewall block first (option 17 → firewall).')"
+        echo "  $(L 'El cortafuegos está fallido y no admite abrir el puerto: aplica antes el bloque firewall (opción 52 → firewall).' 'The firewall is in a failed state and cannot open the port: apply the firewall block first (option 52 → firewall).')"
         return 1
     fi
     if monweb_fw; then
@@ -1908,7 +1908,7 @@ run_then_close() {
     printf '%s' "bash \"$TOOLBOX_SELF\" $*; rc=\$?; if [ \$rc = 0 ]; then echo; echo \"$closing\"; sleep $secs; else echo; echo \"Error (\$rc). $errmsg\"; read -r _; fi"
 }
 # The desktop "Colección PortProton" shortcut of v1.x: no longer made (adding, changing and removing a game already
-# sync the collection; menu option 12 does it by hand). apply_atajos removes it.
+# sync the collection; menu option 15 does it by hand). apply_atajos removes it.
 COLL_DESKTOP="$(desk_dir)/portproton-collection.desktop"
 desc_atajos() {
     section
@@ -1919,7 +1919,7 @@ desc_atajos() {
     say "- Dolphin, botón derecho sobre una carpeta: «Ver lo que ocupa cada carpeta» ($SM_SPACE);"
     say "- el comando «espacio [carpeta]» en cualquier terminal ($SPACE_BIN);"
     say "La colección «PortProton» de Steam se actualiza sola al instalar, cambiar o desinstalar un juego (y a mano,"
-    say "opción 12): el acceso «Colección PortProton» del escritorio ya no hace falta y este bloque lo quita si lo hay."
+    say "opción 15): el acceso «Colección PortProton» del escritorio ya no hace falta y este bloque lo quita si lo hay."
     say "POR QUÉ: tenerlos tras instalar desde cero; antes eran scripts sueltos en ~ (add-proton-game.sh,"
     say "portproton-collection.sh, verEspacioCadaDirectorio.sh), que este bloque ya no necesita."
     say "Si mueves el toolbox de sitio, repite este bloque. DESHACER: rm '$SM_GAME' '$SM_SPACE'; sudo rm $SPACE_BIN"
@@ -1930,7 +1930,7 @@ desc_atajos() {
     say "- Dolphin, right-click on a folder: \"See what each folder takes up\" ($SM_SPACE);"
     say "- the command \"espacio [folder]\" in any terminal ($SPACE_BIN);"
     say "The Steam \"PortProton\" collection updates itself when you install, change or uninstall a game (and by hand,"
-    say "option 12): the desktop \"PortProton Collection\" shortcut is no longer needed and this block removes it if present."
+    say "option 15): the desktop \"PortProton Collection\" shortcut is no longer needed and this block removes it if present."
     say "WHY: to have them after a fresh install; they used to be loose scripts in ~ (add-proton-game.sh,"
     say "portproton-collection.sh, verEspacioCadaDirectorio.sh), which this block no longer needs."
     say "If you move the toolbox, repeat this block. UNDO: rm '$SM_GAME' '$SM_SPACE'; sudo rm $SPACE_BIN"
@@ -2213,7 +2213,7 @@ for b in $BLOCKS; do
         0) ok "$(L "$b: aplicado" "$b: applied")" ;;
         2) info "$(L "$b: no aplica en esta consola" "$b: not applicable on this console")" ;;
         *) if [ "${!skipvar:-0}" = 1 ]; then info "$(L "$b: no aplicado (lo decidiste)" "$b: not applied (your choice)")"
-           else warn "$(L "$b: pendiente (menú 16, o --setup)" "$b: pending (menu 16, or --setup)")"; fi ;;
+           else warn "$(L "$b: pendiente (menú 51, o --setup)" "$b: pending (menu 51, or --setup)")"; fi ;;
     esac
 done
 if warm_on && ! check_hdmi; then warn "$(L "Reinicio en caliente sin ps5-hdmi-kick: la imagen puede salir en negro (bloque hdmi)" "Warm reboot without ps5-hdmi-kick: the picture may come up black (block hdmi)")"; fi
@@ -2238,7 +2238,7 @@ if [ "$NEED_BT" = 1 ] && [ -t 0 ]; then
     read -rp "$(L 'El Bluetooth no tiene adaptador. ¿Recargar su driver ahora (btusb)? [S/n] ' 'Bluetooth has no adapter. Reload its driver now (btusb)? [Y/n] ')" a
     if [[ $a != [nN]* ]]; then
         sudo modprobe -r btusb && sleep 2 && sudo modprobe btusb && sleep 5
-        if bt_present; then echo "$(L "Adaptador recuperado. Para que se haga solo en cada arranque: menú 17 → bt." "Adapter recovered. To make it happen by itself on every boot: menu 17 → bt.")"
+        if bt_present; then echo "$(L "Adaptador recuperado. Para que se haga solo en cada arranque: menú 52 → bt." "Adapter recovered. To make it happen by itself on every boot: menu 52 → bt.")"
         else echo "$(L "Sigue sin adaptador: apaga y arranca con el cargador (un arranque en frío reinicia el chip)." "Still no adapter: power off and boot with the charger (a cold boot resets the chip).")"; fi
     fi
 fi
@@ -2266,7 +2266,7 @@ for b in ${ONLY:-$BLOCKS}; do
     case $st in
         0) printf "$(L '✔ %-10s aplicado\n' '✔ %-10s applied\n')" "$b" ;;
         2) printf "$(L '– %-10s no aplica en esta consola\n' '– %-10s not applicable on this console\n')" "$b" ;;
-        3) printf "$(L '– %-10s no aplicado (lo decidiste; menú 17 o --only %s para volver a preguntar)\n' '– %-10s not applied (your choice; menu 17 or --only %s to ask again)\n')" "$b" "$b" ;;
+        3) printf "$(L '– %-10s no aplicado (lo decidiste; menú 52 o --only %s para volver a preguntar)\n' '– %-10s not applied (your choice; menu 52 or --only %s to ask again)\n')" "$b" "$b" ;;
         *) printf "$(L '✘ %-10s pendiente\n' '✘ %-10s pending\n')" "$b" ;;
     esac
     [ $STATUS_ONLY = 1 ] && continue
@@ -2463,18 +2463,18 @@ mem_watch() {
     { [ "$min_ra" -lt 512 ] || [ "$peak_s" -gt $(( ${su0:-0} + 512 )) ]; } && ram_short=1
     [ "$vt" -gt 0 ] && [ $((peak_v * 100 / vt)) -ge 90 ] && vram_full=1
     if [ "$st" -gt 0 ] && [ "$peak_s" -ge $((st - 64)) ]; then
-        echo "$(L "  → La swap se llenó: si el juego pide más memoria, el sistema lo cierra. Agrándala (menú 17 → zram)" "  → Swap filled up: if the game asks for more memory, the system kills it. Enlarge it (menu 17 → zram)")"
-        echo "$(L "    o añade swap en disco (menú 17 → swapdisco)." "    or add disk swap (menu 17 → swapdisco).")"
+        echo "$(L "  → La swap se llenó: si el juego pide más memoria, el sistema lo cierra. Agrándala (menú 52 → zram)" "  → Swap filled up: if the game asks for more memory, the system kills it. Enlarge it (menu 52 → zram)")"
+        echo "$(L "    o añade swap en disco (menú 52 → swapdisco)." "    or add disk swap (menu 52 → swapdisco).")"
     fi
-    [ "$peak_d" -ge 256 ] && awk -v d="$peak_d" -v f="$(L '  → Usó %.1f GB de swap en disco: el juego siguió, pero más lento en esos momentos. Si el sistema\n    entero se congeló (ratón parado), quítala (menú 17 → swapdisco, tamaño 0).\n' '  → It used %.1f GB of disk swap: the game kept going, but slower at those moments. If the whole\n    system froze (mouse stuck), remove it (menu 17 → swapdisco, size 0).\n')" 'BEGIN { printf f, d / 1024 }'
+    [ "$peak_d" -ge 256 ] && awk -v d="$peak_d" -v f="$(L '  → Usó %.1f GB de swap en disco: el juego siguió, pero más lento en esos momentos. Si el sistema\n    entero se congeló (ratón parado), quítala (menú 52 → swapdisco, tamaño 0).\n' '  → It used %.1f GB of disk swap: the game kept going, but slower at those moments. If the whole\n    system froze (mouse stuck), remove it (menu 52 → swapdisco, size 0).\n')" 'BEGIN { printf f, d / 1024 }'
     if [ $ram_short = 1 ] && [ $vram_full = 1 ]; then
         echo "$(L "  → Van justas las dos (VRAM llena y Linux tirando de swap): moverlas no ayuda, la memoria total no da" "  → Both are tight (VRAM full and Linux using swap): moving them doesn't help, total memory isn't enough")"
         echo "$(L "    para más con esta calidad. Baja texturas o calidad en el juego. Sin errores de la GPU, puede valer así." "    for more at this quality. Lower textures or quality in the game. With no GPU errors, it may be fine as is.")"
     elif [ $ram_short = 1 ]; then
-        echo "$(L "  → Se acabó la RAM (no la VRAM): Linux tiró de swap. Baja la VRAM a su pico + 1 GB (menú 17 → vram)" "  → RAM ran out (not VRAM): Linux used swap. Lower VRAM to its peak + 1 GB (menu 17 → vram)")"
+        echo "$(L "  → Se acabó la RAM (no la VRAM): Linux tiró de swap. Baja la VRAM a su pico + 1 GB (menú 52 → vram)" "  → RAM ran out (not VRAM): Linux used swap. Lower VRAM to its peak + 1 GB (menu 52 → vram)")"
         echo "$(L "    para dar esa memoria a Linux, y la calidad de texturas del juego." "    to give that memory to Linux, and lower the game's texture quality.")"
     elif [ $vram_full = 1 ]; then
-        echo "$(L "  → La VRAM se llenó y a Linux le sobra RAM: sube la VRAM (menú 17 → vram) o baja la resolución del juego." "  → VRAM filled up and Linux has RAM to spare: raise VRAM (menu 17 → vram) or lower the game's resolution.")"
+        echo "$(L "  → La VRAM se llenó y a Linux le sobra RAM: sube la VRAM (menú 52 → vram) o baja la resolución del juego." "  → VRAM filled up and Linux has RAM to spare: raise VRAM (menu 52 → vram) or lower the game's resolution.")"
     fi
     if [ $n -gt 0 ] && [ $((n_gpu * 100 / n)) -ge 50 ]; then
         echo "$(L "  → La GPU va al máximo la mayor parte del tiempo: ella marca los FPS. Para ganar, baja resolución o" "  → The GPU is maxed out most of the time: it sets the FPS. To gain, lower resolution or")"
@@ -2528,7 +2528,7 @@ toolbox_notice() {                       # one line in the menu when a newer rel
     command -v python3 >/dev/null || return 0
     tmp=$(mktemp -d)
     if toolbox_release '' "$tmp" 4 && tag=$(<"$tmp/tag") && toolbox_newer "$tag"; then
-        printf "%s$(L '  Hay una versión nueva de esta caja de herramientas: %s (tienes v%s). Opción 19 para actualizarla.' '  A newer version of this toolbox is available: %s (you have v%s). Option 19 to update it.')%s\n" \
+        printf "%s$(L '  Hay una versión nueva de esta caja de herramientas: %s (tienes v%s). Opción 61 para actualizarla.' '  A newer version of this toolbox is available: %s (you have v%s). Option 61 to update it.')%s\n" \
             "$Y" "$tag" "$TOOLBOX_VERSION" "$N"
     fi
     rm -rf "$tmp"
@@ -2596,7 +2596,7 @@ install_self() {
     say "$(L "al menú de aplicaciones de KDE ($TOOLBOX_DESKTOP)." "to the KDE applications menu ($TOOLBOX_DESKTOP).")"
     [ -f "$TOOLBOX_BIN" ] && say "$(L "Sustituye la que ya hay instalada ($("$TOOLBOX_BIN" --version 2>/dev/null))." "It replaces the one already installed ($("$TOOLBOX_BIN" --version 2>/dev/null)).")"
     say "$(L 'POR QUÉ: abrirla desde cualquier terminal con «ps5-bazzite-toolbox» o desde el menú, sin acordarte de la' 'WHY: open it from any terminal with "ps5-bazzite-toolbox" or from the menu, without having to remember the')"
-    say "$(L 'ruta. Las actualizaciones (opción 19) y los atajos del bloque atajos usan siempre esa copia.' 'path. Updates (option 19) and the shortcuts of the atajos block always use that copy.')"
+    say "$(L 'ruta. Las actualizaciones (opción 61) y los atajos del bloque atajos usan siempre esa copia.' 'path. Updates (option 61) and the shortcuts of the atajos block always use that copy.')"
     say "$(L "DESHACER: ps5-bazzite-toolbox --uninstall (o rm $TOOLBOX_BIN $TOOLBOX_DESKTOP)." "UNDO: ps5-bazzite-toolbox --uninstall (or rm $TOOLBOX_BIN $TOOLBOX_DESKTOP).")"
     yesno "$(L '¿Instalarla?' 'Install it?')" S || return 1
     mkdir -p "$(dirname "$TOOLBOX_BIN")" && install -m 755 "$TOOLBOX_SELF" "$TOOLBOX_BIN" || return 1
@@ -2633,7 +2633,7 @@ uninstall_self() {
 offer_install() {                        # once, from the menu: run from a downloaded file and not installed yet
     [ -n "$TOOLBOX_SELF" ] && [ -f "$TOOLBOX_SELF" ] && [ "$TOOLBOX_SELF" != "$TOOLBOX_BIN" ] || return 0
     if [ -f "$TOOLBOX_BIN" ]; then
-        printf "%s$(L '  Estás usando %s; la instalada es %s («ps5-bazzite-toolbox»). Opción 20 para sustituirla por esta.' '  You are using %s; the installed one is %s ("ps5-bazzite-toolbox"). Option 20 to replace it with this one.')%s\n" \
+        printf "%s$(L '  Estás usando %s; la instalada es %s («ps5-bazzite-toolbox»). Opción 63 para sustituirla por esta.' '  You are using %s; the installed one is %s ("ps5-bazzite-toolbox"). Option 63 to replace it with this one.')%s\n" \
             "$Y" "$TOOLBOX_SELF" "$("$TOOLBOX_BIN" --version 2>/dev/null)" "$N"
         return 0
     fi
@@ -2815,13 +2815,13 @@ PY
     if [ -n "$bk" ] && [ "$bk" != "$(uname -r)" ] && ! grep -q 'OLD=\$(uname -r)' "$up"; then
         echo "$(L "El actualizador de $tag solo se instala sobre su kernel ($bk) y ahora tienes $(uname -r)." "The updater of $tag only installs on top of its own kernel ($bk) and you now have $(uname -r).")" >&2
         if img_snap_list | awk -F'\t' -v k="$bk" '$3 == k { f = 1 } END { exit !f }'; then
-            echo "$(L 'Tienes una copia guardada con ese kernel: vuelve antes a ella (opción 18 → volver), apaga, arranca' 'You have a saved copy with that kernel: first go back to it (option 18 → go back), power off, boot')" >&2
+            echo "$(L 'Tienes una copia guardada con ese kernel: vuelve antes a ella (opción 62 → volver), apaga, arranca' 'You have a saved copy with that kernel: first go back to it (option 62 → go back), power off, boot')" >&2
             echo "$(L 'con el cargador y repite esto.' 'with the loader and repeat this.')" >&2
         else echo "$(L 'No hay ninguna copia guardada con ese kernel: así no se puede instalar.' 'There is no saved copy with that kernel: it cannot be installed this way.')" >&2; fi
         echo "$(L "Los ficheros descargados siguen en $dir." "The downloaded files are still in $dir.")" >&2
         return 1
     fi
-    echo "$(L '==> Copia de la imagen actual (para poder volver a ella con la opción 18)…' '==> Copy of the current image (so you can go back to it with option 18)…')"
+    echo "$(L '==> Copia de la imagen actual (para poder volver a ella con la opción 62)…' '==> Copy of the current image (so you can go back to it with option 62)…')"
     img_snap_take "$(dirname "$up")" ||
         { yesno "$(L 'No se ha podido guardar la copia. ¿Actualizar de todos modos (sin poder volver)?' 'Could not save the copy. Update anyway (without being able to go back)?')" N || return 1; }
 
@@ -2945,7 +2945,7 @@ img_snap_take() {                        # img_snap_take [BUNDLE_DIR [NOTE [PATH
                     "$(L '  1. Conecta esta memoria USB a un ordenador.' '  1. Connect this USB drive to a computer.')" \
                     "$(L '  2. Copia los ficheros de esta carpeta a la raiz de la particion (sustituyendo los que hay).' '  2. Copy the files of this folder to the root of the partition (replacing the existing ones).')" \
                     "$(L "  3. Vuelve a ponerla en la PS5 y arranca con el cargador: arrancara el kernel $k." "  3. Put it back in the PS5 and boot with the loader: kernel $k will boot.")" \
-                    "$(L '  4. Ya en Linux, ejecuta la caja de herramientas, opcion 18 -> volver, para dejarlo todo como estaba.' '  4. Once in Linux, run the toolbox, option 18 -> go back, to leave everything as it was.')" |
+                    "$(L '  4. Ya en Linux, ejecuta la caja de herramientas, opcion 62 -> volver, para dejarlo todo como estaba.' '  4. Once in Linux, run the toolbox, option 62 -> go back, to leave everything as it was.')" |
                     sudo tee "/efi/$IMG_PREV_EFI/LEEME.txt" >/dev/null &&
                 echo "$(L "    Y el kernel actual, en la partición de arranque: /efi/$IMG_PREV_EFI (por si el nuevo no arranca; ver LEEME.txt)." "    And the current kernel, on the boot partition: /efi/$IMG_PREV_EFI (in case the new one does not boot; see LEEME.txt).")"
         else
@@ -2967,7 +2967,7 @@ img_rollback() {
     need_sudo || return 1
     list=$(img_snap_list)
     if [ -z "$list" ]; then
-        echo "$(L 'No hay copias guardadas. Se hacen solas al actualizar con la opción 18 (desde la v1.5.0 de esta caja).' 'There are no saved copies. They are made automatically when updating with option 18 (since v1.5.0 of this toolbox).')"
+        echo "$(L 'No hay copias guardadas. Se hacen solas al actualizar con la opción 62 (desde la v1.5.0 de esta caja).' 'There are no saved copies. They are made automatically when updating with option 62 (since v1.5.0 of this toolbox).')"
         local bk; bk=$(sudo ls -1d /var/lib/ps5-update-backup/*/ 2>/dev/null | sort | tail -1)
         [ -n "$bk" ] && echo "$(L "Queda la copia del actualizador del autor ($bk): solo kernel y módulos. Su comando para deshacer está en el registro de la actualización (update-<versión>.log), si lo guardaste." "The author's updater copy remains ($bk): kernel and modules only. Its undo command is in the update log (update-<version>.log), if you saved it.")"
         return 0
@@ -2987,8 +2987,8 @@ img_rollback() {
     say "$(L "Vuelve a $v (kernel $k), tal como estaba el $dt: kernel, initrd, cmdline.txt, módulos, los scripts y" "Goes back to $v (kernel $k), as it was on $dt: kernel, initrd, cmdline.txt, modules, the image scripts and")" \
         "$(L 'servicios de la imagen y /etc/ps5-bazzite-deck. Lo que la versión actual añadió se borra.' 'services and /etc/ps5-bazzite-deck. Whatever the current version added is deleted.')"
     say "$(L 'Los ajustes de esas partes cambiados después de esa fecha (p. ej. con el bloque gpu40 o fans) vuelven' 'Settings of those parts changed after that date (e.g. with the gpu40 or fans block) go back')" \
-        "$(L 'a como estaban; revísalos luego con la opción 15. Bazzite, Steam, juegos y tus ficheros no se tocan.' 'to how they were; check them afterwards with option 15. Bazzite, Steam, games and your files are not touched.')"
-    say "$(L 'Antes se guarda una copia de cómo está ahora, así que también esto se puede deshacer (opción 18 → volver).' 'First a copy of how it is now is saved, so this can also be undone (option 18 → go back).')"
+        "$(L 'a como estaban; revísalos luego con la opción 51. Bazzite, Steam, juegos y tus ficheros no se tocan.' 'to how they were; check them afterwards with option 51. Bazzite, Steam, games and your files are not touched.')"
+    say "$(L 'Antes se guarda una copia de cómo está ahora, así que también esto se puede deshacer (opción 62 → volver).' 'First a copy of how it is now is saved, so this can also be undone (option 62 → go back).')"
     say "$(L 'EN PRUEBAS: la vuelta aún no se ha probado en una consola de verdad. Si algo falla, la copia de antes' 'EXPERIMENTAL: going back has not been tested on a real console yet. If something fails, the previous copy')" \
         "$(L "queda en $IMG_SNAPS y el kernel anterior, si cupo, en /efi/$IMG_PREV_EFI." "stays in $IMG_SNAPS and the previous kernel, if it fitted, in /efi/$IMG_PREV_EFI.")"
     yesno "$(L "¿Volver a $v?" "Go back to $v?")" N || return 0
@@ -3021,7 +3021,7 @@ img_rollback() {
     sync
     VERSION=${v#v}
     sudo test -e /etc/ps5-bazzite-deck/warm-reboot && sudo touch /run/ps5-reboot-to-ps5   # the kernel needs a cold start
-    echo; echo "$(L "${G}Vuelto a $v.${N} Para deshacerlo: opción 18 → volver, y elige la copia «antes de volver a $v»." "${G}Went back to $v.${N} To undo it: option 18 → go back, and pick the copy \"antes de volver a $v\" (before going back).")"
+    echo; echo "$(L "${G}Vuelto a $v.${N} Para deshacerlo: opción 62 → volver, y elige la copia «antes de volver a $v»." "${G}Went back to $v.${N} To undo it: option 62 → go back, and pick the copy \"antes de volver a $v\" (before going back).")"
     echo "$(L 'Ahora hay que APAGAR y arrancar con el cargador (el kernel cambia: hace falta un arranque en frío).' 'Now you must POWER OFF and boot with the loader (the kernel changes: a cold start is needed).')"
     yesno "$(L '¿Apagar ahora?' 'Power off now?')" N && sudo poweroff
     return 0
@@ -3031,7 +3031,7 @@ BOOTC_IMG=ghcr.io/vivalavent/ps5-bazzite-bootc
 bootc_ref() { sudo bootc status --format=json 2>/dev/null | jq -r '.spec.image.image // .status.booted.image.image.image // empty'; }
 bootc_after() {
     echo "$(L '  Al reiniciar, la PS5 pasa primero por su sistema: luego lanza el cargador bazzite-bootc-loader como siempre.' '  On reboot, the PS5 goes through its own system first: then launch the bazzite-bootc-loader loader as usual.')"
-    echo "$(L '  Si la nueva no te convence: opción 18 → volver a la anterior (sudo bootc rollback).' '  If you do not like the new one: option 18 → go back to the previous one (sudo bootc rollback).')"
+    echo "$(L '  Si la nueva no te convence: opción 62 → volver a la anterior (sudo bootc rollback).' '  If you do not like the new one: option 62 → go back to the previous one (sudo bootc rollback).')"
 }
 bootc_v25_fix() {                        # v2.5, and some installs from the v2.5.1/v2.6.1 images, can't stage updates
     # (v2.6.3 notes): greenboot's rollback trigger is masked but still required. Offer the author's fix.
@@ -3084,7 +3084,7 @@ bootc_menu() {                           # bootc_menu [upgrade|rollback|switch [
                 section
                 say "$(L "Cambia la imagen que sigue esta consola a $BOOTC_IMG:$tag y la descarga; entra al reiniciar." "Changes the image this console follows to $BOOTC_IMG:$tag and downloads it; takes effect on reboot.")"
                 say "$(L 'Con una versión fija (vX.Y) ya no recibe las semanales: vuelve con «stable».' 'With a pinned release (vX.Y) it no longer gets the weekly ones: go back with "stable".')"
-                say "$(L 'DESHACER: opción 18 → volver a la anterior, o cambiar otra vez.' 'UNDO: option 18 → go back to the previous one, or switch again.')"
+                say "$(L 'DESHACER: opción 62 → volver a la anterior, o cambiar otra vez.' 'UNDO: option 62 → go back to the previous one, or switch again.')"
                 yesno "$(L "¿Cambio a $tag?" "Switch to $tag?")" S && sudo bootc switch "$BOOTC_IMG:$tag" && bootc_after ;;
     esac
 }
@@ -3539,7 +3539,7 @@ say "$(L "Crea $SH (lo que lanza Steam" "Creates $SH (what Steam runs")$([ "$LEV
 say "$(L "«$NAME». Steam tiene que estar cerrado: al cerrarse reescribe su lista y borraría el juego nuevo." "«$NAME». Steam must be closed: when it quits it rewrites its list and would delete the new game.")"
 say "$(L "Deshacer: quitar el juego en Steam (o restaurar shortcuts.vdf.bak-<fecha>) y borrar el .sh." "Undo: remove the game in Steam (or restore shortcuts.vdf.bak-<date>) and delete the .sh.")"
 [ "$LEVEL" = normal ] || [ "$TOOLBOX_CMD" = "$HOME/.local/bin/ps5-bazzite-toolbox" ] ||
-    say "$(L "Ojo: Steam llamará a $TOOLBOX_CMD; si lo mueves o lo borras, el juego no arranca (instálala: opción 20)." "Careful: Steam will call $TOOLBOX_CMD; if you move or delete it, the game will not start (install it: option 20).")"
+    say "$(L "Ojo: Steam llamará a $TOOLBOX_CMD; si lo mueves o lo borras, el juego no arranca (instálala: opción 63)." "Careful: Steam will call $TOOLBOX_CMD; if you move or delete it, the game will not start (install it: option 63).")"
 if ask "$(L "¿Añadirlo a Steam?" "Add it to Steam?")" S; then
     write_sh
     if pgrep -x steam >/dev/null 2>&1; then
@@ -4153,7 +4153,7 @@ pp_framegen() {
     local exe=${1:-} lv=${2:-} f kv a
     [ -n "$exe" ] || { echo "$(L "Uso: --framegen Juego.exe" "Usage: --framegen Game.exe")" >&2; return 2; }
     f="$exe.ppdb"
-    [ -f "$f" ] || { echo "$(L "No está $f: abre el juego una vez con PortProton (o instálalo con la opción 10)." "$f is missing: open the game once with PortProton (or install it with option 10).")"; return 1; }
+    [ -f "$f" ] || { echo "$(L "No está $f: abre el juego una vez con PortProton (o instálalo con la opción 11)." "$f is missing: open the game once with PortProton (or install it with option 11).")"; return 1; }
     section
     case $TB_LANG in
         es)
@@ -4721,7 +4721,7 @@ pp_my_games() {
         printf '%s\tnormal\t%s\n' "$(basename "$d" .desktop)" "$e" >>"$list"
     done
     mapfile -t rows < <(sort -f -t$'\t' -k1,1 "$list"); rm -f "$list"
-    [ ${#rows[@]} -gt 0 ] || { echo "$(L "No hay juegos instalados (opción 10 o, en Dolphin, «Instalar en PortProton y Steam»)." "No games installed (option 10 or, in Dolphin, «Install in PortProton and Steam»).")"; return 0; }
+    [ ${#rows[@]} -gt 0 ] || { echo "$(L "No hay juegos instalados (opción 11 o, en Dolphin, «Instalar en PortProton y Steam»)." "No games installed (option 11 or, in Dolphin, «Install in PortProton and Steam»).")"; return 0; }
     echo
     for i in "${!rows[@]}"; do
         IFS=$'\t' read -r nm lv e <<<"${rows[$i]}"
@@ -5180,13 +5180,13 @@ bk_save() {
     case $TB_LANG in
         es)
     say "Copia tu carpeta personal, entera o lo que elijas, a otro disco, al NAS o a una carpeta, para recuperarla"
-    say "aquí o en otra instalación (la opción 21 → recuperar). Se guardan también el servicio de Decky y la lista de"
+    say "aquí o en otra instalación (la opción 31 → recuperar). Se guardan también el servicio de Decky y la lista de"
     say "Flatpaks del sistema. Los enlaces que salen de tu carpeta (ROMs en el NAS) se guardan como enlace."
     say "POR QUÉ: para cambiar de disco o de instalación (p. ej. a bootc) sin perder juegos, partidas ni ajustes."
     say "No cambia nada en tu carpeta. DESHACER: borra la carpeta de la copia." ;;
         *)
     say "Copies your home folder, all of it or what you pick, to another disk, the NAS or a folder, to recover it"
-    say "here or on another install (option 21 → restore). Decky's service and the list of system Flatpaks are"
+    say "here or on another install (option 31 → restore). Decky's service and the list of system Flatpaks are"
     say "saved too. Links that leave your folder (ROMs on the NAS) are saved as links."
     say "WHY: to change disk or install (e.g. to bootc) without losing games, saves or settings."
     say "It changes nothing in your folder. UNDO: delete the copy's folder." ;;
@@ -5258,7 +5258,7 @@ bk_save() {
       echo "imagen=${VERSION:-?}"; echo "kernel=$(uname -r)"; echo "toolbox=$TOOLBOX_VERSION"; echo "equipo=$(hostname)"
       echo "tamano=$need"; echo "resultado=$rc"; } >"$BK_DEST/$BK_INFO"
     rm -f "$list"
-    if [ "$rc" = 0 ]; then echo "$(L "  ${G}Copia hecha${N} en $BK_DEST. Para recuperarla: opción 21 → recuperar, y esa carpeta." "  ${G}Copy done${N} in $BK_DEST. To restore it: option 21 → restore, and that folder.")"
+    if [ "$rc" = 0 ]; then echo "$(L "  ${G}Copia hecha${N} en $BK_DEST. Para recuperarla: opción 31 → recuperar, y esa carpeta." "  ${G}Copy done${N} in $BK_DEST. To restore it: option 31 → restore, and that folder.")"
     else echo "$(L "  ${R}La copia ha terminado con errores (código $rc).${N} Lo que ha fallado sale arriba; repítela." "  ${R}The copy finished with errors (code $rc).${N} What failed is shown above; repeat it.")"; fi
     return "$rc"
 }
@@ -5377,13 +5377,13 @@ bk_restore_do() {
     section
     case $TB_LANG in
         es)
-    say "Trae a $BK_TO lo que elijas de una copia (opción 21 → guardar) o de la carpeta personal de otro disco"
+    say "Trae a $BK_TO lo que elijas de una copia (opción 31 → guardar) o de la carpeta personal de otro disco"
     say "(p. ej. el de tu instalación anterior, enchufado ahora). Sobrescribe los ficheros que se llamen igual; lo"
     say "demás de tu carpeta se queda. Después ofrece reinstalar Decky y los Flatpaks del sistema y aplicar tus ajustes."
     say "POR QUÉ: para tener en esta instalación tus juegos, partidas y ajustes como estaban."
     say "DESHACER: no se deshace solo; si dudas, haz antes una copia de esta carpeta." ;;
         *)
-    say "Brings to $BK_TO what you pick from a copy (option 21 → save) or from another disk's home folder"
+    say "Brings to $BK_TO what you pick from a copy (option 31 → save) or from another disk's home folder"
     say "(e.g. your previous install's, plugged in now). It overwrites files with the same name; the rest of"
     say "your folder stays. Afterwards it offers to reinstall Decky and the system Flatpaks and to apply your settings."
     say "WHY: to have your games, saves and settings in this install as they were."
@@ -5454,8 +5454,8 @@ bk_restore_do() {
     bk_restore_system
     p=$(bk_links "$BK_TO" | while IFS=$'\t' read -r l t; do [ -e "$BK_TO/$l" ] || echo "$l -> $t"; done | head -20)
     [ -z "$p" ] || { echo "$(L "  Estos enlaces apuntan a sitios que ahora no están (el NAS sin montar, otro disco):" "  These links point to places that are not there now (NAS not mounted, another disk):")"; sed 's/^/    /' <<<"$p"
-                     echo "$(L "  Los del NAS funcionan en cuanto se monte: bloque nas de los ajustes (opción 17 → nas)." "  The NAS ones work as soon as it is mounted: nas block of the settings (option 17 → nas).")"; }
-    if yesno "$(L "  ¿Aplico ahora tus ajustes guardados (la opción 16, uno a uno, preguntando)?" "  Apply your saved settings now (option 16, one by one, asking)?")" S; then
+                     echo "$(L "  Los del NAS funcionan en cuanto se monte: bloque nas de los ajustes (opción 52 → nas)." "  The NAS ones work as soon as it is mounted: nas block of the settings (option 52 → nas).")"; }
+    if yesno "$(L "  ¿Aplico ahora tus ajustes guardados (la opción 51, uno a uno, preguntando)?" "  Apply your saved settings now (option 51, one by one, asking)?")" S; then
         # shellcheck disable=SC1090
         need_sudo && { . "$CONF"; STATUS_ONLY=0 ALL=0 ONLY=''; setup_run; }
     fi
@@ -5498,105 +5498,115 @@ bk_menu() {
 }
 
 # --- menu ----------------------------------------------------------------------------------------------------
+# --- main menu ----------------------------------------------------------------------------------------------------
+# Stable codes by area: each area has its ten (room for 9) and a new option goes at the end of its area, so no other
+# number moves. Every option also has a word that can be typed instead (the same as its command-line option, where
+# there is one). Areas: "ten|es|en"; options: "code|word|needs sudo|es|en".
+MENU_AREAS=(
+    "1|JUEGOS DE WINDOWS (PortProton y Steam)|WINDOWS GAMES (PortProton and Steam)"
+    "2|PANTALLA Y SESIÓN|SCREEN AND SESSION"
+    "3|FICHEROS|FILES"
+    "4|DIAGNÓSTICO (solo mira, no cambia nada)|DIAGNOSTICS (looks only, changes nothing)"
+    "5|AJUSTES|SETTINGS"
+    "6|SISTEMA Y TOOLBOX|SYSTEM AND TOOLBOX"
+)
+MENU_ITEMS=(
+    "11|instalar|0|Instalar un juego de Windows: aislamiento, prueba y, si va bien, a Steam con sus carátulas|Install a Windows game: isolation, test and, if it works, to Steam with its artwork"
+    "12|juegos|0|Mis juegos: aislamiento, generación de fotogramas, librerías, carátulas o desinstalar|My games: isolation, frame generation, libraries, artwork or uninstall"
+    "13|art|0|Carátulas de Steam para los juegos no-Steam que no tienen|Steam artwork for the non-Steam games that have none"
+    "14|libs|0|Librerías de Windows (Visual C++, .NET…) en un prefijo de PortProton|Windows libraries (Visual C++, .NET…) in a PortProton prefix"
+    "15|coleccion|0|Sincronizar la colección «PortProton» de Steam (cierra Steam si está abierto)|Sync Steam's «PortProton» collection (closes Steam if it is open)"
+    "21|modojuego|1|Pasar al modo juego ahora y arrancar siempre en él (cierra lo abierto)|Switch to game mode now and always boot into it (closes what is open)"
+    "22|escritorio|1|Pasar al escritorio KDE ahora y arrancar siempre en él (cierra lo abierto)|Switch to the KDE desktop now and always boot into it (closes what is open)"
+    "23|pantalla|1|Pantalla en negro: recuperar la imagen (cambia de consola y vuelve; no cierra nada)|Black screen: recover the picture (switches console and back; closes nothing)"
+    "24|sesion|1|Pantalla en negro que no se arregla con el 23: reiniciar la sesión (cierra Steam y lo abierto)|Black screen that 23 doesn't fix: restart the session (closes Steam and what is open)"
+    "25|modo|1|Ver en qué modo arranca la consola y qué sesión hay ahora|See which mode the console boots into and which session is running now"
+    "31|backup|0|Copia de seguridad de tu carpeta personal: guardar (eligiendo qué) o recuperar, también de otro disco|Backup of your home folder: save (choosing what) or restore, also from another disk"
+    "32|copias|0|Copias con el NAS (copiarNas): ver las de ahora y las últimas|Copies with the NAS (copiarNas): see the current and recent ones"
+    "33|espacio|0|Ver lo que ocupa cada carpeta (también: comando «espacio», o botón derecho en Dolphin)|See how much each folder takes (also: «espacio» command, or right-click in Dolphin)"
+    "41|monitor|1|Monitor en directo: CPU, GPU, VRAM, RAM, swap, temperatura y qué gasta más (Ctrl+C vuelve)|Live monitor: CPU, GPU, VRAM, RAM, swap, temperature and what uses the most (Ctrl+C returns)"
+    "42|anterior|1|Revisar el arranque anterior (tras un cuelgue o un apagado forzado)|Check the previous boot (after a hang or a forced shutdown)"
+    "43|revision|1|Revisión completa de este arranque (y guarda el informe)|Full check of this boot (and save the report)"
+    "44|kernel|1|Vigilar el kernel en directo (mientras juegas o copias ficheros; Ctrl+C vuelve)|Watch the kernel live (while you play or copy files; Ctrl+C returns)"
+    "51|ajustes|1|Ver cómo están los ajustes y aplicar los que falten|See how the settings are and apply the missing ones"
+    "52|ajuste|1|Cambiar un ajuste concreto (VRAM, idioma, NAS…; aunque ya esté hecho o dijeras que no)|Change a specific setting (VRAM, language, NAS…; even if done or you said no)"
+    "61|actualizar|0|Actualizar la toolbox (muestra las novedades y pregunta)|Update the toolbox (shows what's new and asks)"
+    "62|linux|1|Actualizar Linux (la imagen PS5 Bazzite) a otra versión, o volver a la anterior|Update Linux (the PS5 Bazzite image) to another version, or go back to the previous one"
+    "63|toolbox|0|Instalar la toolbox como comando «ps5-bazzite-toolbox» y en el menú de aplicaciones, o desinstalarla|Install the toolbox as the «ps5-bazzite-toolbox» command and in the applications menu, or uninstall it"
+)
+menu_show() {
+    local a it ten es en code word _ d=''
+    [ -t 1 ] && d=$'\e[2m'
+    for a in "${MENU_AREAS[@]}"; do
+        IFS='|' read -r ten es en <<<"$a"
+        printf ' %s%s%s\n' "$B" "$(L "$es" "$en")" "$N"
+        for it in "${MENU_ITEMS[@]}"; do
+            IFS='|' read -r code word _ es en <<<"$it"
+            [ "${code:0:1}" = "$ten" ] && printf '  %3s) %s  %s%s%s\n' "$code" "$(L "$es" "$en")" "$d" "$word" "$N"
+        done
+    done
+    printf '    0) %s\n' "$(L "Salir" "Quit")"
+}
+menu_pick() {                            # menu_pick ANSWER -> "code sudo" of the option (by number or word)
+    local a code word su _ ans=${1,,}
+    for a in "${MENU_ITEMS[@]}"; do
+        IFS='|' read -r code word su _ <<<"$a"
+        [ "$ans" = "$code" ] || [ "$ans" = "$word" ] && { echo "$code $su"; return 0; }
+    done
+    return 1
+}
+menu_run() {                             # menu_run CODE -> 0, or 2 to leave the menu
+    local a
+    case $1 in
+        11) pp_add_game ;;
+        12) pp_my_games ;;
+        13) pp_art ;;
+        14) pp_libs ;;
+        15) pp_collection ;;
+        21|22|24)
+            read -rp "$(L "Se cerrará Steam y todo lo abierto en pantalla. ¿Seguir? [s/N] " "Steam and everything open on screen will be closed. Continue? [y/N] ")" a
+            [[ $a == [sSyY]* ]] || return 0
+            case $1 in 21) session gamemode ;; 22) session desktop ;; 24) session restart ;; esac ;;
+        23) screen_kick ;;
+        25) session_status ;;
+        31) bk_menu ;;
+        32) copy_status ;;
+        33) read -e -rp "$(L "Carpeta (Intro = $HOME): " "Folder (Enter = $HOME): ")" a; space_report "${a:-$HOME}" ;;
+        41) mem_watch ;;
+        42) BOOT=-1; run_checks ;;
+        43) BOOT=0; run_checks ;;
+        44) trap ':' INT; watch_kernel; trap - INT ;;
+        51) STATUS_ONLY=1 ALL=0 ONLY=''; setup_run; STATUS_ONLY=0
+            echo; yesno "$(L "¿Aplico ahora los que faltan, uno a uno (preguntando cada uno)?" "Apply the missing ones now, one by one (asking for each)?")" S &&
+                { ALL=0 ONLY=''; setup_run; } ;;
+        52) echo "$(L "Ajustes: $BLOCKS" "Settings: $BLOCKS")"
+            read -rp "$(L "¿Cuáles? (separados por espacios o comas): " "Which ones? (separated by spaces or commas): ")" a
+            [ -n "$a" ] && { STATUS_ONLY=0 ALL=0 ONLY=${a//,/ }; setup_run; ONLY=''; } ;;
+        61) self_update && { echo "$(L "Saliendo para que abras la versión nueva." "Exiting so you can open the new version.")"; return 2; } ;;
+        62) img_menu ;;
+        63) if [ "$TOOLBOX_SELF" = "$TOOLBOX_BIN" ]; then uninstall_self && return 2; else install_self; fi ;;
+    esac
+    return 0
+}
 menu() {
-    local c a notice_done=''
+    local c p notice_done=''
     while :; do
-        printf "$(L '\n%sPS5 Bazzite Deck — caja de herramientas v%s%s (imagen %s%s, kernel %s)\n' '\n%sPS5 Bazzite Deck — toolbox v%s%s (image %s%s, kernel %s)\n')" \
+        printf "$(L '\n%sPS5 Bazzite Deck — toolbox v%s%s (imagen %s%s, kernel %s)\n' '\n%sPS5 Bazzite Deck — toolbox v%s%s (image %s%s, kernel %s)\n')" \
             "$B" "$TOOLBOX_VERSION" "$N" "${VERSION:+v$VERSION}" "$([ $IS_BOOTC = 1 ] && echo ' bootc')" "$(uname -r)"
-        [ -n "$notice_done" ] || { offer_install; toolbox_notice; notice_done=1; }
-        case $TB_LANG in
-            es) cat <<'MENU'
- Diagnóstico (solo mira, no cambia nada)
-   1) Revisión completa de este arranque (y guarda el informe)
-   2) Revisar el arranque anterior (tras un cuelgue o un apagado forzado)
-   3) Vigilar el kernel en directo (mientras juegas o copias ficheros; Ctrl+C vuelve aquí)
-   4) Vigilar en directo: CPU, GPU, VRAM, RAM, swap, temperatura y qué gasta más (Ctrl+C vuelve aquí)
- Pantalla y sesión gráfica
-   5) Ver en qué modo arranca la consola y qué sesión hay ahora
-   6) Pantalla en negro: recuperar la imagen (cambia de consola y vuelve; no cierra nada)
-   7) Pantalla en negro que no se arregla con el 6: reiniciar la sesión (cierra Steam y lo abierto)
-   8) Pasar al escritorio KDE ahora y arrancar siempre en él (cierra lo abierto)
-   9) Pasar al modo juego ahora y arrancar siempre en él (cierra lo abierto)
- PortProton y Steam
-  10) Instalar un juego de Windows: elige su aislamiento, pruébalo y, si va bien, a Steam y a la colección
-  11) Mis juegos: aislamiento, generación de fotogramas, librerías de Windows (Visual C++…), o desinstalarlos
-  12) Sincronizar la colección «PortProton» de Steam (cierra Steam si está abierto)
-  13) Librerías de Windows (Visual C++…) en un prefijo de PortProton, para todos sus juegos
- Utilidades
-  14) Ver lo que ocupa cada carpeta (también: comando «espacio», o botón derecho en Dolphin)
- Ajustes de la consola (cambian el sistema; cada uno explica y pregunta)
-  15) Ver qué ajustes están aplicados
-  16) Aplicar los ajustes pendientes, uno a uno
-  17) Revisar o cambiar ajustes concretos (VRAM, idioma, NAS…; también los que dijiste que no)
- Sistema
-  18) Imagen: instalar otra versión de GitHub (más nueva o anterior), o volver a como estaba antes de actualizar
-  19) Actualizar esta caja de herramientas (muestra las novedades y pregunta)
-  20) Instalarla como comando «ps5-bazzite-toolbox» y en el menú de aplicaciones, o desinstalarla
-  21) Copia de seguridad de tu carpeta personal: guardar (eligiendo qué) o recuperar, también de otro disco
-   0) Salir
-MENU
-                ;;
-            *) cat <<'MENU'
- Diagnostics (look only, change nothing)
-   1) Full check of this boot (and save the report)
-   2) Check the previous boot (after a hang or a forced shutdown)
-   3) Watch the kernel live (while you play or copy files; Ctrl+C returns here)
-   4) Watch live: CPU, GPU, VRAM, RAM, swap, temperature and what uses the most (Ctrl+C returns here)
- Screen and graphical session
-   5) See which mode the console boots into and which session is running now
-   6) Black screen: recover the picture (switches console and back; closes nothing)
-   7) Black screen that 6 doesn't fix: restart the session (closes Steam and what is open)
-   8) Switch to the KDE desktop now and always boot into it (closes what is open)
-   9) Switch to game mode now and always boot into it (closes what is open)
- PortProton and Steam
-  10) Install a Windows game: pick its isolation, test it and, if it works, add it to Steam and the collection
-  11) My games: isolation, frame generation, Windows libraries (Visual C++…), or uninstall them
-  12) Sync the Steam «PortProton» collection (closes Steam if it is open)
-  13) Windows libraries (Visual C++…) in a PortProton prefix, for all its games
- Utilities
-  14) See how much each folder takes (also: «espacio» command, or right-click in Dolphin)
- Console settings (they change the system; each one explains and asks)
-  15) See which settings are applied
-  16) Apply the pending settings, one by one
-  17) Review or change specific settings (VRAM, language, NAS…; also those you said no to)
- System
-  18) Image: install another version from GitHub (newer or older), or go back to how it was before updating
-  19) Update this toolbox (shows what's new and asks)
-  20) Install it as the «ps5-bazzite-toolbox» command and in the applications menu, or uninstall it
-  21) Backup of your home folder: save (choosing what) or restore, also from another disk
-   0) Quit
-MENU
-                ;;
-        esac
-        read -rp "$(L "Elige: " "Choose: ")" c
-        case $c in [1-9]|1[5-8]) need_sudo || continue ;; esac       # 10-14, 19 and 20 don't need it
-        case $c in
-            1) BOOT=0; run_checks ;;
-            2) BOOT=-1; run_checks ;;
-            3) trap ':' INT; watch_kernel; trap - INT ;;
-            4) mem_watch ;;
-            5) session_status ;;
-            6) screen_kick ;;
-            7|8|9) read -rp "$(L "Se cerrará Steam y todo lo abierto en pantalla. ¿Seguir? [s/N] " "Steam and everything open on screen will be closed. Continue? [y/N] ")" a
-                   [[ $a == [sSyY]* ]] || continue
-                   case $c in 7) session restart ;; 8) session desktop ;; 9) session gamemode ;; esac ;;
-            10) pp_add_game ;;
-            11) pp_my_games ;;
-            12) pp_collection ;;
-            13) pp_libs ;;
-            14) read -e -rp "$(L "Carpeta (Intro = $HOME): " "Folder (Enter = $HOME): ")" a; space_report "${a:-$HOME}" ;;
-            15) STATUS_ONLY=1 ALL=0 ONLY=''; setup_run; STATUS_ONLY=0 ;;
-            16) STATUS_ONLY=0 ALL=0 ONLY=''; setup_run ;;
-            17) echo "$(L "Ajustes: $BLOCKS" "Settings: $BLOCKS")"
-                read -rp "$(L "¿Cuáles? (separados por espacios o comas): " "Which ones? (separated by spaces or commas): ")" a
-                [ -n "$a" ] && { STATUS_ONLY=0 ALL=0 ONLY=${a//,/ }; setup_run; ONLY=''; } ;;
-            18) img_menu ;;
-            19) self_update && { echo "$(L "Saliendo para que abras la versión nueva." "Exiting so you can open the new version.")"; return 0; } ;;
-            21) bk_menu ;;
-            20) if [ "$TOOLBOX_SELF" = "$TOOLBOX_BIN" ]; then uninstall_self && return 0; else install_self; fi ;;
-            0|q|'') return 0 ;;
-            *) echo "$(L "Opción no válida" "Invalid option")" ;;
-        esac
+        if [ -z "$notice_done" ]; then
+            offer_install; toolbox_notice; notice_done=1
+            if [ -z "${MENU_V2:-}" ]; then        # once: the numbers changed in 1.14.0
+                echo "$(L "${Y}Menú nuevo (1.14.0):$N las opciones van por áreas, con números que ya no se moverán; también puedes escribir" "${Y}New menu (1.14.0):$N options go by area, with numbers that won't move any more; you can also type")"
+                echo "$(L "  su palabra (la que sale en gris: instalar, art, copias…)." "  its word (the one in grey: instalar, art, copias…).")"
+                remember MENU_V2 1
+            fi
+        fi
+        echo; menu_show
+        read -rp "$(L "Elige (número o palabra): " "Choose (number or word): ")" c
+        case ${c,,} in 0|q|salir|quit|'') return 0 ;; esac
+        p=$(menu_pick "$c") || { echo "$(L "Opción no válida" "Invalid option")"; continue; }
+        [ "${p#* }" = 1 ] && { need_sudo || continue; }
+        menu_run "${p% *}" || return 0
     done
 }
 

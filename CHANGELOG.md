@@ -5,6 +5,17 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+## [1.14.0] - 2026-11-14
+
+### Cambiado
+
+- **Menú nuevo, por áreas y con números que ya no se mueven**: lo más usado primero (juegos de Windows 11-15,
+  pantalla y sesión 21-25, ficheros 31-33, diagnóstico 41-44, ajustes 51-52, sistema y toolbox 61-63). Cada área tiene
+  su decena y las opciones nuevas van al final de la suya, así que ninguna otra cambia de número. Cada opción tiene
+  además una palabra que se puede escribir en vez del número (`instalar`, `art`, `copias`, `espacio`…; sale en gris).
+  Nuevas en el menú: carátulas de Steam (13) y copias con el NAS (32). «Ver ajustes» y «aplicar los pendientes» pasan a
+  ser una sola (51: enseña cómo están y pregunta si aplicar los que faltan). La primera vez avisa del cambio.
+
 ## [1.13.0] - 2026-11-13
 
 ### Añadido
@@ -408,7 +419,8 @@ Primera versión publicada.
 - Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
-[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.13.0...HEAD
+[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.14.0...HEAD
+[1.14.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.13.0...v1.14.0
 [1.13.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.12.1...v1.13.0
 [1.12.1]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.12.0...v1.12.1
 [1.12.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.11.2...v1.12.0
