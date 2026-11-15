@@ -38,12 +38,12 @@ case you prefer to do it by hand without installing anything.
 > `curl -LO https://github.com/fitamix/ps5-bazzite-toolbox/releases/latest/download/ps5-fw4-gpt-fix.py`
 > then `python3 ps5-fw4-gpt-fix.py IMAGE.img --apply`.
 > Images **v2.11 and later** come fixed. You only need it for earlier images, or drives already flashed with them.
-> Full details: [Utilities: bootc images on firmware 4.x](#utilities-bootc-images-on-firmware-4x).
+> Full details: [bootc images on firmware 4.x](#bootc-images-on-firmware-4x-ps5-fw4-gpt-fixpy).
 
 ## Contents
 
 - [Quick start](#quick-start)
-- [Utilities: bootc images on firmware 4.x](#utilities-bootc-images-on-firmware-4x)
+- [Utilities outside the toolbox](#utilities-outside-the-toolbox): bootc images on firmware 4.x, icon of the YouTube app that boots Linux
 - [Menu and command-line options](#menu-and-command-line-options)
 - [Diagnostics](#diagnostics)
 - [Screen and graphical session](#screen-and-graphical-session)
@@ -201,6 +201,7 @@ asks with a recommended answer (`[Y/n]` = yes by default, `[y/N]` = no). What de
 | [`media`](#media) | ES-DE images from the NAS | no | no |
 | [`copiar`](#copiar) | The `copiarNas` command: copies with the NAS in the background, without freezing the system | yes, with the `nas` block | no |
 | [`esde`](#esde) | Fixes the `es_systems.xml` that EmuDeck leaves behind | yes | no |
+| [`rpcs3`](#rpcs3) | The PS5 controller in RPCS3 (PS3) in Game Mode too | yes, if you use RPCS3 | no |
 | [`portproton`](#portproton) | Fast sync and ray tracing for all PortProton games | yes | no |
 | [`unifideck`](#unifideck) | Unifideck (Decky) can launch Windows games again with this image's Python 3.15 | yes, if you have Unifideck | no |
 | [`atajos`](#atajos) | Dolphin right-click and the `espacio` command | yes | no |
@@ -729,6 +730,20 @@ sed -i -e 's#%CORE_RETROARCH%\\\([A-Za-z0-9_]*\)_libretro\.dll#%CORE_RETROARCH%/
 Then, in ES-DE: Other settings → Alternative emulators → Nintendo 3DS → Citra (Standalone).
 **UNDO:** copy the most recent `es_systems.xml.bak-<date>` over it.
 
+### `rpcs3`
+
+**WHAT IT DOES:** in RPCS3's input config (`~/.config/rpcs3/input_configs/global/Default.yml`, or the Flatpak's), player
+1 moves from the **Evdev** handler on a DualSense to RPCS3's own **DualSense** handler, with the same button layout
+(device `"DualSense Pad #1"`, quoted: unquoted, the `#` is read as a comment and RPCS3 finds no controller). Deadzones,
+light bar and rumble are untouched. With RPCS3 closed; it keeps a copy (`Default.yml.bak-evdev-<date>`). Only when
+player 1 is a DualSense through Evdev.
+**WHY:** in Game Mode Steam takes the DualSense for its virtual pad and Evdev can't open it
+(`evdev add_device in bindPadToDevice failed`): neither games nor RPCS3's Big Picture mode respond. The DualSense
+handler talks to the controller directly (motion, rumble, light bar). Disabling Steam Input for RPCS3 in Steam
+(properties → Controller) also helps; the block doesn't do that.
+
+**UNDO:** copy `Default.yml.bak-evdev-*` over `Default.yml`.
+
 ### `portproton`
 
 **WHAT IT DOES:** global PortProton settings for all games, except those whose `.ppdb` changes them: fast
@@ -1088,10 +1103,13 @@ flatpak list --system --app --columns=application > /run/media/$USER/DISCO/flatp
 rsync -aHAX --info=progress2 /run/media/$USER/DISCO/ps5-copia/ ~/                                          # restore
 ```
 
-## Utilities: bootc images on firmware 4.x
+## Utilities outside the toolbox
 
-In `utils/` there are standalone tools, to use on the computer and not on the PS5. Each release includes them with
+In `utils/` there are standalone tools, related to Linux on the PS5 but separate from the toolbox, to use on the
+computer. Each release includes them with
 their `.sha256`.
+
+### bootc images on firmware 4.x (`ps5-fw4-gpt-fix.py`)
 
 **`ps5-fw4-gpt-fix.py`** makes a VivaLaVent bootc image, or a disk already flashed with it, mount on a PS5 with
 firmware 4.03 or 4.50
@@ -1116,6 +1134,25 @@ sudo python3 ps5-fw4-gpt-fix.py /dev/sdX --apply                    # or a disk 
 
 Tested with v2.10 on an original PS5 with firmware 4.50: it mounts and boots, also after the first boot.
 The details are in [utils/ps5-fw4-gpt-fix.md](utils/ps5-fw4-gpt-fix.md).
+
+### Custom icon for the YouTube app that boots Linux (`y2jb-icon.py`)
+
+**`y2jb-icon.py`** is for the PS5's own system, not for Linux: it makes the custom icon of a YouTube app that boots
+Linux (for example the same icon with a "LINUX" banner) **stop disappearing** on every launch. itsPLK's Y2JB autoloader
+compares `/user/appmeta/<TITLEID>/icon0.png` on each launch with the icon inside its `download0.dat` and, if they differ,
+puts its own back. The tool replaces the icon inside `download0.dat` with yours, of exactly the same size, so the
+autoloader "updates"… to yours. It builds the icon from your own copy's (a "LINUX" banner by default, or any image) and
+does it all over FTP (`ftpsrv`), keeping a backup to undo it. It needs only Python 3; to build the icon, also Pillow and
+etcpak. Tested on an original PS5 on firmware 4.50.
+
+```sh
+curl -LO https://github.com/fitamix/ps5-bazzite-toolbox/releases/latest/download/y2jb-icon.py
+python3 y2jb-icon.py install --host 192.168.1.x --tid PPSA01651 --dry-run   # shows what it would do
+uv run --no-project --with pillow==11.3.0 --with etcpak python y2jb-icon.py install --host 192.168.1.x --tid PPSA01651
+```
+
+With the YouTube app closed. To undo: `y2jb-icon.py undo --host … --backup <the copy it saved>`. Details in
+[utils/y2jb-icon.md](utils/y2jb-icon.md).
 
 ## Files: what it uses and where it saves things
 
@@ -1177,6 +1214,7 @@ stays there so you can retry.
 | `~/Emulation/roms`, `~/Emulation/bios`, ES-DE images folder | `nas`, `bios`, `media` | the local folder, as `....local` |
 | `/usr/local/bin/copiarNas`, `~/NAS`; logs in `~/.local/share/ps5-bazzite-toolbox/copias/` | `copiar` | — |
 | `~/ES-DE/custom_systems/es_systems.xml` | `esde` | `es_systems.xml.bak-<date>` |
+| `~/.config/rpcs3/input_configs/global/Default.yml` (player 1) | `rpcs3` | `Default.yml.bak-evdev-<date>` |
 | `~/.var/app/ru.linux_gaming.PortProton/data/user.conf` | `portproton` | `user.conf.bak-<date>` |
 | `~/homebrew/plugins/Unifideck/py_modules/unifideck/launcher/proton/infrastructure/selector.py` | `unifideck` | `selector.py.orig-<version>` |
 | `~/.local/share/kio/servicemenus/ps5-bazzite-toolbox-*.desktop`, `/usr/local/bin/espacio`, `portproton-collection.desktop` on the desktop | `atajos` | — |

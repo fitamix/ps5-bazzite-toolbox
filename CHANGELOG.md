@@ -5,6 +5,20 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+## [1.15.0] - 2026-11-15
+
+### Añadido
+
+- **El mando de la PS5 en RPCS3 en modo juego** (bloque de ajustes `rpcs3`, recomendado si usas RPCS3): el jugador 1
+  pasa del gestor Evdev al gestor DualSense propio de RPCS3, con la misma distribución. En modo juego Steam se queda el
+  DualSense para su mando virtual y Evdev no podía abrirlo: ni los juegos ni el modo Big Picture de RPCS3 respondían.
+  El nombre del mando va entre comillas (`"DualSense Pad #1"`): sin ellas el `#` se lee como comentario.
+- **Utilidad `utils/y2jb-icon.py`** (fuera de la toolbox, como `ps5-fw4-gpt-fix.py`; sale en cada release): el icono
+  propio de un YouTube que arranca Linux ya no desaparece en cada uso. El autoloader de Y2JB (itsPLK) volvía a poner el
+  suyo porque lo compara con el que lleva dentro de su `download0.dat`; la utilidad cambia ese, del mismo tamaño, y lo
+  hace todo por FTP con copia para deshacer. Probado en la consola (FW 4.50). Los README tienen ahora la sección
+  «Utilidades fuera de la toolbox».
+
 ## [1.14.0] - 2026-11-14
 
 ### Cambiado
@@ -419,7 +433,8 @@ Primera versión publicada.
 - Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
-[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.14.0...HEAD
+[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.15.0...HEAD
+[1.15.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.13.0...v1.14.0
 [1.13.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.12.1...v1.13.0
 [1.12.1]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.12.0...v1.12.1

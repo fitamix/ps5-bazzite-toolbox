@@ -41,10 +41,10 @@
 #   bash ps5-bazzite-toolbox.sh --version
 #   bash ps5-bazzite-toolbox.sh --lang es|en [...]      # interface language (before the other options); saved. Default: the system
 #                                               locale (LANG/LC_ALL/LC_MESSAGES starting with "es" = Spanish, else English)
-# Setup blocks: locale cmdline wifi updates vram gpu40 zram swapdisco fans cpufreq warmreboot hdmi arranque bt steambt disk papelera firewall brave edge nas bios media copiar esde portproton unifideck atajos monitorweb
+# Setup blocks: locale cmdline wifi updates vram gpu40 zram swapdisco fans cpufreq warmreboot hdmi arranque bt steambt disk papelera firewall brave edge nas bios media copiar esde rpcs3 portproton unifideck atajos monitorweb
 set -uo pipefail
 
-TOOLBOX_VERSION=1.14.0                   # bump on every release (see CHANGELOG.md and release.sh)
+TOOLBOX_VERSION=1.15.0                   # bump on every release (see CHANGELOG.md and release.sh)
 TOOLBOX_REPO=fitamix/ps5-bazzite-toolbox
 TOOLBOX_BIN=$HOME/.local/bin/ps5-bazzite-toolbox                      # where --install puts it
 TOOLBOX_DESKTOP=$HOME/.local/share/applications/ps5-bazzite-toolbox.desktop
@@ -155,7 +155,7 @@ MONWEB_UNIT=$HOME/.config/systemd/user/ps5-monitor-web.service
 MONWEB_CSV_DIR=${MONWEB_CSV_DIR:-$HOME/.local/share/ps5-bazzite-toolbox/monitor}   # a session's CSV, when you say so
 BRAVE_FLAGS=$HOME/.var/app/com.brave.Browser/config/brave-flags.conf
 EDGE_FLAGS=$HOME/.var/app/com.microsoft.Edge/config/edge-flags.conf
-BLOCKS="locale cmdline wifi updates vram gpu40 zram swapdisco fans cpufreq warmreboot hdmi arranque bt steambt disk papelera firewall brave edge nas bios media copiar esde portproton unifideck atajos monitorweb"
+BLOCKS="locale cmdline wifi updates vram gpu40 zram swapdisco fans cpufreq warmreboot hdmi arranque bt steambt disk papelera firewall brave edge nas bios media copiar esde rpcs3 portproton unifideck atajos monitorweb"
 
 # ======================================== settings (setup) ========================================
 # --- saved answers -------------------------------------------------------------------------------
@@ -1358,6 +1358,84 @@ apply_esde() {
     say "$(L "Líneas de Windows que quedan: $(esde_windows_lines). 3DS: $(awk '/<name>n3ds<\/name>/,/<\/system>/' "$ESDE_SYSTEMS" |
         sed -n 's/.*label="\([^"]*\)".*/\1/p' | paste -sd, -)." "Windows lines left: $(esde_windows_lines). 3DS: $(awk '/<name>n3ds<\/name>/,/<\/system>/' "$ESDE_SYSTEMS" | sed -n 's/.*label="\([^"]*\)".*/\1/p' | paste -sd, -).")"
     say "$(L "En ES-DE: Otros ajustes → Emuladores alternativos → Nintendo 3DS → Citra (Standalone), si no lo tenía ya." "In ES-DE: Other settings → Alternative emulators → Nintendo 3DS → Citra (Standalone), if it didn't have it already.")"
+}
+
+# --- rpcs3 ----------------------------------------------------------------------------------------
+# In Game Mode Steam takes the DualSense for its virtual X-Box pad, so RPCS3's Evdev handler can't open it ("evdev
+# add_device in bindPadToDevice failed for device DualSense Wireless Controller"): no controller in games nor in its Big
+# Picture mode. RPCS3's own DualSense handler talks to the pad over hidraw and works alongside Steam, with motion, rumble
+# and the light bar. This moves player 1 from Evdev on a DualSense to that handler, keeping the same layout. The
+# device name must be quoted: unquoted, YAML takes the "#" of "DualSense Pad #1" as a comment (seen 2026-11-15).
+RPCS3_CFG_DIRS="$HOME/.config/rpcs3 $HOME/.var/app/net.rpcs3.RPCS3/config/rpcs3"
+rpcs3_input() {                           # the active global input config file (Default.yml unless changed)
+    local d n
+    for d in $RPCS3_CFG_DIRS; do
+        [ -d "$d/input_configs/global" ] || continue
+        n=$(sed -n 's/^ *global: *//p' "$d/input_configs/active_input_configurations.yml" 2>/dev/null | head -1)
+        [ -f "$d/input_configs/global/${n:-Default}.yml" ] && { echo "$d/input_configs/global/${n:-Default}.yml"; return 0; }
+    done
+    return 1
+}
+rpcs3_p1() {                              # rpcs3_p1 FILE -> "handler<TAB>device" of player 1 (device as written)
+    awk '/^Player 1 Input:/ { on = 1; next } on && /^[^ ]/ { exit }
+         on && /^  Handler:/ { sub(/^  Handler: */, ""); h = $0 }
+         on && /^  Device:/  { sub(/^  Device: */, ""); d = $0 }
+         END { printf "%s\t%s\n", h, d }' "$1"
+}
+rpcs3_running() {                         # its binary, an AppImage started from an rpcs3 AppImage, or its Flatpak
+    pgrep -x rpcs3 >/dev/null 2>&1 && return 0
+    local q
+    for q in $(pgrep -x AppRun 2>/dev/null); do
+        tr '\0' ' ' <"/proc/$q/cmdline" 2>/dev/null | grep -qi rpcs3 && return 0
+    done
+    flatpak ps --columns=application 2>/dev/null | grep -qx net.rpcs3.RPCS3
+}
+desc_rpcs3() {
+    section
+    say "$(L "El mando de la PS5 en RPCS3 (PS3) también en modo juego: el jugador 1 pasa del gestor Evdev al gestor DualSense" "The PS5 controller in RPCS3 (PS3) in Game Mode too: player 1 moves from the Evdev handler to RPCS3's own DualSense")"
+    say "$(L "propio de RPCS3, con la misma distribución de botones (en $(rpcs3_input 2>/dev/null || echo 'su configuración de mandos'))." "handler, with the same button layout (in $(rpcs3_input 2>/dev/null || echo 'its input config')).")"
+    say "$(L "POR QUÉ: en modo juego Steam se queda el DualSense para su mando virtual y Evdev no puede abrirlo: ni los juegos ni" "WHY: in Game Mode Steam takes the DualSense for its virtual pad and Evdev can't open it: neither games nor")"
+    say "$(L "el modo Big Picture de RPCS3 responden al mando. El gestor DualSense habla con él directamente (giroscopio, vibración, luz)." "RPCS3's Big Picture mode respond. The DualSense handler talks to it directly (motion, rumble, light bar).")"
+    say "$(L "Además, en Steam: propiedades de RPCS3 → Controlador → Desactivar Steam Input (no lo hace este bloque)." "Also, in Steam: RPCS3's properties → Controller → Disable Steam Input (this block doesn't do it).")"
+    say "$(L "DESHACER: copia el Default.yml.bak-evdev-* (en la misma carpeta) encima de Default.yml." "UNDO: copy Default.yml.bak-evdev-* (same folder) over Default.yml.")"
+}
+check_rpcs3() {
+    local f h d; f=$(rpcs3_input) || return 2
+    IFS=$'\t' read -r h d < <(rpcs3_p1 "$f")
+    case $h in
+        DualSense) [[ $d == \"* ]] || [[ $d != *"#"* ]] ;;   # an unquoted "#1" is the YAML comment trap
+        Evdev) [[ $d == *DualSense* ]] && return 1 || return 2 ;;
+        *) return 2 ;;                    # another controller or handler: not ours to change
+    esac
+}
+apply_rpcs3() {
+    local f; f=$(rpcs3_input) || return 1
+    rpcs3_running && { say "$(L "RPCS3 está abierto: ciérralo y repite (al salir escribiría su configuración encima)." "RPCS3 is open: close it and repeat (on exit it would write its config over the change).")"; return 1; }
+    cp -p "$f" "$f.bak-evdev-$(date +%Y%m%d-%H%M%S)" || return 1
+    python3 - "$f" <<'PY' || return 1
+import sys
+p = sys.argv[1]; L = open(p).read().split("\n")
+m = {"Handler": "DualSense", "Device": '"DualSense Pad #1"',
+     "Left Stick Left": "LS X-", "Left Stick Down": "LS Y-", "Left Stick Right": "LS X+", "Left Stick Up": "LS Y+",
+     "Right Stick Left": "RS X-", "Right Stick Down": "RS Y-", "Right Stick Right": "RS X+", "Right Stick Up": "RS Y+",
+     "Start": "Options", "Select": "Share", "PS Button": '"PS Button,Options&Share"', "Square": "Square",
+     "Cross": "Cross", "Circle": "Circle", "Triangle": "Triangle", "Left": "Left", "Down": "Down", "Right": "Right",
+     "Up": "Up", "R1": "R1", "R2": "R2", "R3": "R3", "L1": "L1", "L2": "L2", "L3": "L3"}
+on = False; n = 0
+for i, l in enumerate(L):
+    if l.startswith("Player 1 Input:"):
+        on = True; continue
+    if on and l and not l.startswith(" "):
+        break
+    if on and ":" in l:
+        k = l.strip().split(":", 1)[0]; ind = len(l) - len(l.lstrip())
+        if k in m and ind in (2, 4):
+            L[i] = " " * ind + k + ": " + m[k]; n += 1
+if n < 20:
+    sys.exit("player 1 block not as expected (%d keys changed): nothing written" % n)
+open(p, "w").write("\n".join(L))
+PY
+    check_rpcs3 && say "$(L "Hecho: el jugador 1 usa el gestor DualSense. Recuerda desactivar Steam Input para RPCS3 en Steam." "Done: player 1 uses the DualSense handler. Remember to disable Steam Input for RPCS3 in Steam.")"
 }
 
 # --- portproton -----------------------------------------------------------------------------------
