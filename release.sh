@@ -54,7 +54,7 @@ git fetch -q origin main
 
 printf '\n==> Se publicará %s (commit %s)\n\n%s\n\n' "$TAG" "$(git rev-parse --short HEAD)" "$notes"
 echo "QUÉ HACE: crea la etiqueta $TAG, sube main y la etiqueta a GitHub y crea la release con ps5-bazzite-toolbox.sh, las"
-echo "          utilidades de utils/ y sus .sha256. Quien tenga la caja de herramientas verá el aviso de versión nueva al abrir el menú."
+echo "          utilidades de utils/ y sus .sha256. Quien tenga la toolbox verá el aviso de versión nueva al abrir el menú."
 echo "DESHACER: gh release delete $TAG --cleanup-tag"
 ask "¿Publicar $TAG?" || exit 1
 

@@ -44,7 +44,7 @@
 # Setup blocks: locale cmdline wifi updates vram gpu40 zram swapdisco fans cpufreq warmreboot hdmi arranque bt steambt disk papelera consola firewall brave edge nas bios media copiar esde rpcs3 portproton unifideck atajos monitorweb
 set -uo pipefail
 
-TOOLBOX_VERSION=1.16.0                   # bump on every release (see CHANGELOG.md and release.sh)
+TOOLBOX_VERSION=1.16.1                   # bump on every release (see CHANGELOG.md and release.sh)
 TOOLBOX_REPO=fitamix/ps5-bazzite-toolbox
 TOOLBOX_BIN=$HOME/.local/bin/ps5-bazzite-toolbox                      # where --install puts it
 TOOLBOX_DESKTOP=$HOME/.local/share/applications/ps5-bazzite-toolbox.desktop
@@ -132,7 +132,7 @@ SUDO_KEEP=''
 need_sudo() {
     [ -n "$SUDO_KEEP" ] && kill -0 "$SUDO_KEEP" 2>/dev/null && return 0
     if ! sudo -n true 2>/dev/null; then
-        echo "$(L 'Esto necesita permisos de administrador: te pido la contraseña de sudo una vez, hasta que cierres la caja de herramientas.' 'This needs administrator rights: I ask for your sudo password once, until you close the toolbox.')"
+        echo "$(L 'Esto necesita permisos de administrador: te pido la contraseña de sudo una vez, hasta que cierres la toolbox.' 'This needs administrator rights: I ask for your sudo password once, until you close the toolbox.')"
         sudo -v || { echo "$(L 'Sin sudo no puedo hacerlo.' "I can't do it without sudo.")" >&2; return 1; }
     fi
     ( trap '' INT; while kill -0 $$ 2>/dev/null && sudo -n -v 2>/dev/null; do sleep 60; done ) &   # Ctrl+C mustn't stop it
@@ -2653,7 +2653,7 @@ toolbox_notice() {                       # one line in the menu when a newer rel
     command -v python3 >/dev/null || return 0
     tmp=$(mktemp -d)
     if toolbox_release '' "$tmp" 4 && tag=$(<"$tmp/tag") && toolbox_newer "$tag"; then
-        printf "%s$(L '  Hay una versión nueva de esta caja de herramientas: %s (tienes v%s). Opción 61 para actualizarla.' '  A newer version of this toolbox is available: %s (you have v%s). Option 61 to update it.')%s\n" \
+        printf "%s$(L '  Hay una versión nueva de esta toolbox: %s (tienes v%s). Opción 61 para actualizarla.' '  A newer version of this toolbox is available: %s (you have v%s). Option 61 to update it.')%s\n" \
             "$Y" "$tag" "$TOOLBOX_VERSION" "$N"
     fi
     rm -rf "$tmp"
@@ -2700,7 +2700,7 @@ desktop_entry() {                        # the applications menu entry (KDE open
     cat >"$TOOLBOX_DESKTOP" <<EOF
 [Desktop Entry]
 Type=Application
-Name=$(L 'Caja de herramientas PS5' 'PS5 Toolbox')
+Name=$(L 'Toolbox PS5' 'PS5 Toolbox')
 GenericName=ps5-bazzite-toolbox
 Comment=$(L 'Diagnóstico, ajustes y utilidades para Bazzite en la PS5' 'Diagnostics, settings and utilities for Bazzite on the PS5')
 Icon=utilities-terminal
@@ -2717,7 +2717,7 @@ install_self() {
         return 1; }
     if [ "$TOOLBOX_SELF" = "$TOOLBOX_BIN" ]; then echo "$(L "Ya está instalada en $TOOLBOX_BIN." "Already installed at $TOOLBOX_BIN.")"; desktop_entry; return 0; fi
     section
-    say "$(L "Copia este fichero ($TOOLBOX_SELF, v$TOOLBOX_VERSION) a $TOOLBOX_BIN y añade «Caja de herramientas PS5»" "Copies this file ($TOOLBOX_SELF, v$TOOLBOX_VERSION) to $TOOLBOX_BIN and adds \"PS5 Toolbox\"")"
+    say "$(L "Copia este fichero ($TOOLBOX_SELF, v$TOOLBOX_VERSION) a $TOOLBOX_BIN y añade «Toolbox PS5»" "Copies this file ($TOOLBOX_SELF, v$TOOLBOX_VERSION) to $TOOLBOX_BIN and adds \"PS5 Toolbox\"")"
     say "$(L "al menú de aplicaciones de KDE ($TOOLBOX_DESKTOP)." "to the KDE applications menu ($TOOLBOX_DESKTOP).")"
     [ -f "$TOOLBOX_BIN" ] && say "$(L "Sustituye la que ya hay instalada ($("$TOOLBOX_BIN" --version 2>/dev/null))." "It replaces the one already installed ($("$TOOLBOX_BIN" --version 2>/dev/null)).")"
     say "$(L 'POR QUÉ: abrirla desde cualquier terminal con «ps5-bazzite-toolbox» o desde el menú, sin acordarte de la' 'WHY: open it from any terminal with "ps5-bazzite-toolbox" or from the menu, without having to remember the')"
@@ -2732,7 +2732,7 @@ install_self() {
     local src=$TOOLBOX_SELF               # the downloaded file (TOOLBOX_SELF changes below, for the shortcuts)
     TOOLBOX_SELF=$TOOLBOX_BIN
     if atajos_used && ! check_atajos; then
-        echo "$(L 'Tus atajos (Dolphin, «espacio») usan otra copia de la caja de herramientas.' 'Your shortcuts (Dolphin, "espacio") use another copy of the toolbox.')"
+        echo "$(L 'Tus atajos (Dolphin, «espacio») usan otra copia de la toolbox.' 'Your shortcuts (Dolphin, "espacio") use another copy of the toolbox.')"
         yesno "$(L "¿Los cambio para que usen la instalada ($TOOLBOX_BIN)?" "Change them to use the installed one ($TOOLBOX_BIN)?")" S && need_sudo && apply_atajos
     fi
     TOOLBOX_SELF=$src
@@ -3070,7 +3070,7 @@ img_snap_take() {                        # img_snap_take [BUNDLE_DIR [NOTE [PATH
                     "$(L '  1. Conecta esta memoria USB a un ordenador.' '  1. Connect this USB drive to a computer.')" \
                     "$(L '  2. Copia los ficheros de esta carpeta a la raiz de la particion (sustituyendo los que hay).' '  2. Copy the files of this folder to the root of the partition (replacing the existing ones).')" \
                     "$(L "  3. Vuelve a ponerla en la PS5 y arranca con el cargador: arrancara el kernel $k." "  3. Put it back in the PS5 and boot with the loader: kernel $k will boot.")" \
-                    "$(L '  4. Ya en Linux, ejecuta la caja de herramientas, opcion 62 -> volver, para dejarlo todo como estaba.' '  4. Once in Linux, run the toolbox, option 62 -> go back, to leave everything as it was.')" |
+                    "$(L '  4. Ya en Linux, ejecuta la toolbox, opcion 62 -> volver, para dejarlo todo como estaba.' '  4. Once in Linux, run the toolbox, option 62 -> go back, to leave everything as it was.')" |
                     sudo tee "/efi/$IMG_PREV_EFI/LEEME.txt" >/dev/null &&
                 echo "$(L "    Y el kernel actual, en la partición de arranque: /efi/$IMG_PREV_EFI (por si el nuevo no arranca; ver LEEME.txt)." "    And the current kernel, on the boot partition: /efi/$IMG_PREV_EFI (in case the new one does not boot; see LEEME.txt).")"
         else
@@ -3660,7 +3660,7 @@ section "3. Steam"
 if [ -f "$SH" ] && [ "$LEVEL" != "$CUR" ]; then
     write_sh; say "$(L "Ya estaba en Steam: $SH lo lanza ahora " "It was already in Steam: $SH now launches it ")$([ "$LEVEL" = normal ] && L normal normal || L aislado isolated)$(L ". Steam no cambia." ". Steam does not change.")"
 fi
-say "$(L "Crea $SH (lo que lanza Steam" "Creates $SH (what Steam runs")$([ "$LEVEL" = normal ] && L ", igual que el de PortProton" ", same as PortProton's" || L ": la caja de herramientas, aislado" ": the toolbox, isolated")$(L ") y lo añade a Steam como juego no-Steam" ") and adds it to Steam as a non-Steam game")"
+say "$(L "Crea $SH (lo que lanza Steam" "Creates $SH (what Steam runs")$([ "$LEVEL" = normal ] && L ", igual que el de PortProton" ", same as PortProton's" || L ": la toolbox, aislado" ": the toolbox, isolated")$(L ") y lo añade a Steam como juego no-Steam" ") and adds it to Steam as a non-Steam game")"
 say "$(L "«$NAME». Steam tiene que estar cerrado: al cerrarse reescribe su lista y borraría el juego nuevo." "«$NAME». Steam must be closed: when it quits it rewrites its list and would delete the new game.")"
 say "$(L "Deshacer: quitar el juego en Steam (o restaurar shortcuts.vdf.bak-<fecha>) y borrar el .sh." "Undo: remove the game in Steam (or restore shortcuts.vdf.bak-<date>) and delete the .sh.")"
 [ "$LEVEL" = normal ] || [ "$TOOLBOX_CMD" = "$HOME/.local/bin/ps5-bazzite-toolbox" ] ||

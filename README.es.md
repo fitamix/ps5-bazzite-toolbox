@@ -2,7 +2,7 @@
 
 [English](README.md) · **Español**
 
-Caja de herramientas para **Linux en la PS5** con la imagen
+Toolbox para **Linux en la PS5** con la imagen
 [VivaLaVent/ps5-bazzite-deck](https://github.com/VivaLaVent/ps5-bazzite-deck) (Bazzite Deck: Steam en modo juego
 y escritorio KDE). Es **un solo fichero** que se ejecuta en la consola y sirve para:
 
@@ -53,7 +53,7 @@ si prefieres hacerlo a mano sin instalar nada.
 - [Cambiar de versión de la imagen y volver atrás](#cambiar-de-versión-de-la-imagen-y-volver-atrás)
 - [Copia de seguridad de tu carpeta personal](#copia-de-seguridad-de-tu-carpeta-personal)
 - [Ficheros: qué usa y dónde guarda cada cosa](#ficheros-qué-usa-y-dónde-guarda-cada-cosa)
-- [Versiones de la caja de herramientas](#versiones-de-la-caja-de-herramientas)
+- [Versiones de la toolbox](#versiones-de-la-toolbox)
 - [Cosas que se hacen a mano](#cosas-que-se-hacen-a-mano)
 
 ## Uso rápido
@@ -68,7 +68,7 @@ bash ps5-bazzite-toolbox.sh
 Ese enlace descarga siempre la **última versión publicada**. La rama `main` puede llevar cambios aún sin publicar.
 
 La primera vez se ofrece a **instalarse** como el comando `ps5-bazzite-toolbox` (en `~/.local/bin`, sin `sudo`; las
-actualizaciones de la imagen no lo borran) y como «Caja de herramientas PS5» en el menú de aplicaciones de KDE.
+actualizaciones de la imagen no lo borran) y como «Toolbox PS5» en el menú de aplicaciones de KDE.
 A partir de ahí basta con `ps5-bazzite-toolbox`, y el fichero descargado ya se puede borrar. Si prefieres no
 instalarla, sigue funcionando con `bash ps5-bazzite-toolbox.sh`.
 
@@ -112,7 +112,7 @@ lo hay, un comando del sistema que hace lo mismo.
 | 52 | `ajuste` | Cambiar un ajuste concreto (aunque ya esté hecho o dijeras que no) | `--setup --only vram,nas` | cada bloque, en [Ajustes](#ajustes-de-la-consola) |
 | — | | Aplicar sin preguntar: la respuesta recomendada, o la tuya si ya habías dicho que sí a un bloque (sirve para dejar una instalación nueva como la anterior copiando `~/.config/ps5-bazzite-toolbox.conf`) | `--setup --all` | — |
 | **Sistema y toolbox** | | | | |
-| 61 | `actualizar` | Actualizar esta caja de herramientas (muestra las novedades y pregunta) | `--self-update [v1.1.0]` | — |
+| 61 | `actualizar` | Actualizar esta toolbox (muestra las novedades y pregunta) | `--self-update [v1.1.0]` | — |
 | 62 | `linux` | Imagen: instalar otra versión de GitHub, volver a como estaba antes de actualizar (en pruebas) o guardar una copia | `--update [v1.8.4]`, `--rollback` | ver [Cambiar de versión](#cambiar-de-versión-de-la-imagen-y-volver-atrás) |
 | 63 | `toolbox` | Instalarla como comando y en el menú de aplicaciones, o desinstalarla | `--install`, `--uninstall` | — |
 | — | | Versión y ayuda | `--version`, `--help` | — |
@@ -809,7 +809,7 @@ La colección «PortProton» de Steam se actualiza sola al instalar, cambiar o d
 opción 15). El acceso «Colección PortProton» del escritorio que creaban las versiones anteriores ya no hace falta: el
 bloque lo borra si lo encuentra.
 
-Todos llaman a la caja de herramientas en su sitio actual: si la mueves, repite el bloque (instalada con la opción 63
+Todos llaman a la toolbox en su sitio actual: si la mueves, repite el bloque (instalada con la opción 63
 no se mueve). Si Dolphin estaba abierto, ciérralo y ábrelo. No aplica si la caja se ejecuta desde una tubería
 (`curl … | bash`).
 **Deshacer:**
@@ -892,7 +892,7 @@ un juego más.
 partidas) se mueve entre tu PortProton y la copia aislada (preguntando), lo abre para que compruebes que va y, si
 dices que sí, rehace sus accesos y su script de Steam. La entrada de Steam no cambia: conserva el tiempo jugado, las
 carátulas y la colección. Si estaba en el prefijo compartido `DEFAULT`, empieza con uno nuevo y sus partidas se
-quedan en `DEFAULT`. Si mueves o borras la caja de herramientas, los juegos aislados no arrancan desde Steam: instálala
+quedan en `DEFAULT`. Si mueves o borras la toolbox, los juegos aislados no arrancan desde Steam: instálala
 (opción 63).
 
 Después, pregunta en cada paso:
@@ -1169,7 +1169,7 @@ Con el YouTube cerrado. Para deshacer: `y2jb-icon.py undo --host … --backup <l
 
 ## Ficheros: qué usa y dónde guarda cada cosa
 
-La caja de herramientas no deja nada fuera de estos sitios. «Desinstalar» (opción 63) solo quita el comando, su
+La toolbox no deja nada fuera de estos sitios. «Desinstalar» (opción 63) solo quita el comando, su
 acceso en el menú y su copia anterior; lo demás se queda, y aquí está cómo quitarlo.
 
 ### Sus propios ficheros
@@ -1178,7 +1178,7 @@ acceso en el menú y su copia anterior; lo demás se queda, y aquí está cómo 
 |---|---|---|---|
 | `~/.local/bin/ps5-bazzite-toolbox` | la caja instalada como comando | opción 63, `--install` (y la oferta del menú la primera vez) | opción 63 |
 | `~/.local/bin/ps5-bazzite-toolbox.v<versión>` | la versión anterior, tras actualizarla (solo la última) | opción 61, `--self-update` | opción 63 |
-| `~/.local/share/applications/ps5-bazzite-toolbox.desktop` | «Caja de herramientas PS5» en el menú de aplicaciones | opción 63 | opción 63 |
+| `~/.local/share/applications/ps5-bazzite-toolbox.desktop` | «Toolbox PS5» en el menú de aplicaciones | opción 63 | opción 63 |
 | `~/.config/ps5-bazzite-toolbox.conf` | tus respuestas a los ajustes (idioma, VRAM, NAS sin contraseña, temperatura del ventilador, bloques que no quieres…) y tus carpetas con versiones descargadas de la imagen (`IMG_LOCAL`) | opciones 51, 51 y 52, `--setup` | `rm` (vuelve a preguntar todo) |
 | `~/.config/ps5-bazzite-toolbox-juegos.conf` | tus juegos de PortProton instalados con la caja: aislamiento, `.exe`, nombre y carpeta que ve | opciones 11 y 12 | se actualiza al desinstalar cada juego |
 | `~/.local/share/ps5-bazzite-toolbox/aislado/` | la copia de PortProton para juegos aislados, con un prefijo por juego | opción 11 o 12 con un juego aislado | `rm -rf` (con los juegos aislados desinstalados: ahí están sus partidas) |
@@ -1249,7 +1249,7 @@ queda ahí para repetir.
 | `…/config/cloudstorage/cloud-storage-namespace*.json` | la colección «PortProton» de Steam (opción 15) | `….bak-<fecha>` |
 | `steam_emu.ini`, `steam_settings/…`, `SteamConfig.ini`, `cream_api.ini` en la carpeta del juego | el idioma del emulador de Steam del juego, si aceptas cambiarlo | `….bak-<fecha>` |
 
-## Versiones de la caja de herramientas
+## Versiones de la toolbox
 
 Cada versión publicada está en [Releases](https://github.com/fitamix/ps5-bazzite-toolbox/releases) con sus
 novedades, y el historial completo en [CHANGELOG.md](CHANGELOG.md). La numeración sigue `MAYOR.MENOR.ARREGLO`:

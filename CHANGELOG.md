@@ -1,9 +1,16 @@
 # Cambios
 
 Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeración: `MAYOR.MENOR.ARREGLO`
-(ver «Versiones de la caja de herramientas» en el [README](README.md)).
+(ver «Versiones de la toolbox» en el [README](README.md)).
 
 ## [Sin publicar]
+
+## [1.16.1] - 2026-11-16
+
+### Cambiado
+
+- **«toolbox» en vez de «caja de herramientas»** en los mensajes, el README y la entrada del menú de aplicaciones
+  («Toolbox PS5»). La entrada del menú de KDE ya instalada conserva su nombre antiguo hasta reinstalarla (opción 63).
 
 ## [1.16.0] - 2026-11-16
 
@@ -453,7 +460,8 @@ Primera versión publicada.
 - Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
-[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.16.0...HEAD
+[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.16.1...HEAD
+[1.16.1]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.16.0...v1.16.1
 [1.16.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.13.0...v1.14.0
