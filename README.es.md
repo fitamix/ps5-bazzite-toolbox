@@ -24,7 +24,7 @@ La interfaz está en español o en inglés: sigue el idioma del sistema (`LANG`;
 | Jailbreak | [ps5-y2jb-autoloader](https://github.com/itsPLK/ps5-y2jb-autoloader) |
 | Cargador de Linux | `ps5-linux-loader-v3.5.elf` ([ps5-linux-loader](https://github.com/ps5-linux/ps5-linux-loader)) |
 | Envío del cargador | [PS5 Payload Manager](https://github.com/itsPLK/ps5-payload-manager) |
-| Disco | SSD externo Lexar ES3 de 1 TB por USB 3.2 (10 Gb/s, USB `21c4:0003`; va estable con `usb-storage.quirks=21c4:0003:um`, que pone el bloque `cmdline`) |
+| Disco | SSD externo Lexar ES3 de 1 TB por USB 3.2 (10 Gb/s, USB `21c4:0003`; va estable con `usb-storage.quirks=21c4:0003:u`, que pone el bloque `cmdline`) |
 
 Con otros modelos (Slim, Pro), firmwares, cargadores o discos puede funcionar, pero no está probado.
 
@@ -194,6 +194,7 @@ pregunta con una respuesta recomendada (`[S/n]` = sí por defecto, `[s/N]` = no)
 | [`steambt`](#steambt) | Mantiene activado el Bluetooth de Steam (si no, apaga el adaptador y el mando no conecta) | sí | no |
 | [`disk`](#disk) | Quita la consulta SMART de KDE que bloquea discos USB | sí | no |
 | [`papelera`](#papelera) | Papelera sin límite de tamaño (Dolphin ya no dice «la papelera está llena») | sí | no |
+| [`consola`](#consola) | Menos mensajes del kernel en la pantalla de texto (la avalancha de «Salina poller») | sí | no |
 | [`firewall`](#firewall) | Arregla el cortafuegos, que arranca «fallido» por un módulo que falta en el kernel | sí | no |
 | [`brave`](#brave) | Brave sin pedir la contraseña de la Cartera de KDE | no | no |
 | [`edge`](#edge) | Microsoft Edge sin pedir la contraseña de la Cartera de KDE | no | no |
@@ -243,7 +244,7 @@ encima el `~/.config/plasma-localerc.bak-*` que deja la caja. Steam tiene su pro
 - `locale.LANG=…` y `vconsole.keymap=…`: el idioma y el teclado desde el arranque (las sesiones por SSH no leen
   los de `locale`).
 - `usb-storage.quirks=VID:PID:letras` para el disco USB de arranque: `u` = sin UAS, `m` = transferencias de 32 KB.
-  Propone `um` para el Lexar ES3 (`21c4:0003`), `u` si este arranque ya tuvo errores UAS, y nada si no los hay.
+  Propone `u` para el Lexar ES3 (`21c4:0003`), `u` si este arranque ya tuvo errores UAS, y nada si no los hay.
 - En la imagen v1.5.0 o posterior, quita `module_blacklist=moal` (el Wi-Fi ya no se cuelga).
 
 **Por qué:** algunos discos USB con UAS dan resets y errores de E/S.
@@ -251,7 +252,7 @@ encima el `~/.config/plasma-localerc.bak-*` que deja la caja. Steam tiene su pro
 ```sh
 sudo cp /efi/cmdline.txt /efi/cmdline.txt.bak-$(date +%Y%m%d-%H%M%S)
 lsusb                                          # el VID:PID de tu disco, p. ej. 21c4:0003
-sudo nano /efi/cmdline.txt                     # añade al final: locale.LANG=es_ES.UTF-8 vconsole.keymap=es usb-storage.quirks=21c4:0003:um
+sudo nano /efi/cmdline.txt                     # añade al final: locale.LANG=es_ES.UTF-8 vconsole.keymap=es usb-storage.quirks=21c4:0003:u
 sudo sed -i 's| module_blacklist=moal||' /efi/cmdline.txt     # solo con la imagen v1.5.0 o posterior
 ```
 
@@ -582,6 +583,17 @@ una carpeta grande (un juego). Sin límite crece hasta que la vacías.
 
 **Deshacer:** `kwriteconfig6 --file ktrashrc --group "$(realpath ~/.local/share/Trash)" --key UseSizeLimit true`.
 
+### `consola`
+
+**Qué cambia:** pone `kernel.printk = 4 4 1 7` en `/etc/sysctl.d/20-consola-silenciosa.conf` (con sudo) y lo aplica ya
+con `sudo sysctl -w kernel.printk="4 4 1 7"`.
+**Por qué:** el kernel de la PS5 escribe `Salina poller: lock busy, rescheduling` (nivel info) unas 390 veces por minuto
+con un DualSense conectado por Bluetooth. Con el nivel de consola en 7 llenan la consola de texto que ves cuando
+gamescope pierde la pantalla. Los mensajes siguen en el diario (`journalctl -k`); solo sale menos por pantalla.
+Hecho cuando el fichero tiene ese valor y `/proc/sys/kernel/printk` empieza por 4.
+
+**Deshacer:** `sudo rm /etc/sysctl.d/20-consola-silenciosa.conf` y reinicia.
+
 ### `firewall`
 
 **Qué cambia:** quita de la zona del cortafuegos los servicios cuyo módulo no trae el kernel de la PS5 y reinicia
@@ -751,6 +763,9 @@ RPCS3 en Steam (propiedades → Controlador); eso no lo hace el bloque.
 rápida (FSYNC/ESYNC) y trazado de rayos. Va en un bloque marcado de
 `~/.var/app/ru.linux_gaming.PortProton/data/user.conf` (con copia `user.conf.bak-<fecha>`). Ver
 [Ajustes para todos los juegos](#portproton-y-steam).
+**Además:** un icono **Cerrar PortProton** en el escritorio (`cerrar-portproton.desktop`, en `xdg-user-dir DESKTOP`): ejecuta
+`flatpak kill ru.linux_gaming.PortProton` y cierra a la fuerza todo lo que PortProton tenga en marcha (juego colgado, Wine,
+icono de la bandeja). **Cierra TODOS los juegos de PortProton a la vez.**
 **Por qué:** PortProton los trae apagados; el Proton de Steam lleva la sincronización rápida, y hay juegos que exigen
 trazado de rayos. No aplica hasta que abras PortProton una vez (crea `user.conf`).
 **A mano:** añade al final de `user.conf`:
@@ -1077,7 +1092,7 @@ Linux enchufados** que no son el del sistema, montados o no. Si eliges un disco,
 desmonta al terminar) y encuentra dentro tu carpeta, también en una instalación bootc. Si es un disco USB que su
 sistema usaba sin UAS (`usb-storage.quirks=…:u…`, como el Lexar ES3), te lo dice y lo pone igual ahora, hasta que
 reinicies, para que la copia larga no dé errores: lo desenchufas, lo enchufas y sigue. A mano:
-`echo 21c4:0003:um | sudo tee /sys/module/usb_storage/parameters/quirks` antes de enchufarlo.
+`echo 21c4:0003:u | sudo tee /sys/module/usb_storage/parameters/quirks` antes de enchufarlo.
 
 **Recuperar** (21 → 2, `--restore [carpeta]`): le das la carpeta de la copia, o **la de otra instalación**: el disco
 de tu instalación anterior enchufado, su carpeta personal o la raíz del disco (`/run/media/<usuario>/<disco>`; la
@@ -1205,6 +1220,7 @@ queda ahí para repetir.
 | `~/.local/share/ps5-bazzite-toolbox/steam-bt-on.sh`, `~/.config/systemd/user/ps5-steam-bt.service`; cambia `"Enabled"` de `"Bluetooth"` en `~/.local/share/Steam/config/config.vdf` | `steambt` | — |
 | `/etc/polkit-1/rules.d/50-ps5-no-kde-smart.rules`, `~/.config/kded6rc` | `disk` | — |
 | `~/.config/ktrashrc` (`UseSizeLimit` de tu papelera) | `papelera` | `ktrashrc.bak-<fecha>` |
+| `/etc/sysctl.d/20-consola-silenciosa.conf` | `consola` | `sudo rm` |
 | `/etc/firewalld/zones/<zona>.xml` (la zona sin los servicios cuyo módulo falta) | `firewall` | — |
 | `~/.var/app/com.brave.Browser/config/brave-flags.conf` | `brave` | — |
 | `~/.var/app/com.microsoft.Edge/config/edge-flags.conf` | `edge` | — |
@@ -1213,7 +1229,7 @@ queda ahí para repetir.
 | `/usr/local/bin/copiarNas`, `~/NAS`; registros en `~/.local/share/ps5-bazzite-toolbox/copias/` | `copiar` | — |
 | `~/ES-DE/custom_systems/es_systems.xml` | `esde` | `es_systems.xml.bak-<fecha>` |
 | `~/.config/rpcs3/input_configs/global/Default.yml` (jugador 1) | `rpcs3` | `Default.yml.bak-evdev-<fecha>` |
-| `~/.var/app/ru.linux_gaming.PortProton/data/user.conf` | `portproton` | `user.conf.bak-<fecha>` |
+| `~/.var/app/ru.linux_gaming.PortProton/data/user.conf`, `cerrar-portproton.desktop` en el escritorio | `portproton` | `user.conf.bak-<fecha>`; borra el icono |
 | `~/homebrew/plugins/Unifideck/py_modules/unifideck/launcher/proton/infrastructure/selector.py` | `unifideck` | `selector.py.orig-<versión>` |
 | `~/.local/share/kio/servicemenus/ps5-bazzite-toolbox-*.desktop`, `/usr/local/bin/espacio`, `portproton-collection.desktop` en el escritorio | `atajos` | — |
 | `~/.local/share/ps5-bazzite-toolbox/monitor-web.py`, `~/.config/systemd/user/ps5-monitor-web.service`, una regla del cortafuegos (puerto 8765, solo tu red) | `monitorweb` | — |

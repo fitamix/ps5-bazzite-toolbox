@@ -9,7 +9,7 @@
 #    sync the collection; global PortProton defaults (setup block "portproton"). Tools: space taken by each folder,
 #    a backup of the home folder (picking what goes) that restores here or on another install.
 #  - Settings (setup): blocks that adapt the image (language, boot options, Wi-Fi, updates, VRAM, fans, warm
-#    reboot, HDMI fix, disk, firewall, Brave, Edge, NAS, the monitor in a phone's browser, zram swap size and compressor, swap on disk, the GPU's 40 compute units). Each explains what it changes, why and how to undo it, and asks.
+#    reboot, HDMI fix, disk, quiet kernel console, firewall, Brave, Edge, NAS, the monitor in a phone's browser, zram swap size and compressor, swap on disk, the GPU's 40 compute units). Each explains what it changes, why and how to undo it, and asks.
 #    Answers are kept in ~/.config/ps5-bazzite-toolbox.conf; running it again only offers what is pending.
 #
 #   bash ps5-bazzite-toolbox.sh                         # menu (the first time it offers to install itself as the
@@ -41,10 +41,10 @@
 #   bash ps5-bazzite-toolbox.sh --version
 #   bash ps5-bazzite-toolbox.sh --lang es|en [...]      # interface language (before the other options); saved. Default: the system
 #                                               locale (LANG/LC_ALL/LC_MESSAGES starting with "es" = Spanish, else English)
-# Setup blocks: locale cmdline wifi updates vram gpu40 zram swapdisco fans cpufreq warmreboot hdmi arranque bt steambt disk papelera firewall brave edge nas bios media copiar esde rpcs3 portproton unifideck atajos monitorweb
+# Setup blocks: locale cmdline wifi updates vram gpu40 zram swapdisco fans cpufreq warmreboot hdmi arranque bt steambt disk papelera consola firewall brave edge nas bios media copiar esde rpcs3 portproton unifideck atajos monitorweb
 set -uo pipefail
 
-TOOLBOX_VERSION=1.15.0                   # bump on every release (see CHANGELOG.md and release.sh)
+TOOLBOX_VERSION=1.16.0                   # bump on every release (see CHANGELOG.md and release.sh)
 TOOLBOX_REPO=fitamix/ps5-bazzite-toolbox
 TOOLBOX_BIN=$HOME/.local/bin/ps5-bazzite-toolbox                      # where --install puts it
 TOOLBOX_DESKTOP=$HOME/.local/share/applications/ps5-bazzite-toolbox.desktop
@@ -155,7 +155,7 @@ MONWEB_UNIT=$HOME/.config/systemd/user/ps5-monitor-web.service
 MONWEB_CSV_DIR=${MONWEB_CSV_DIR:-$HOME/.local/share/ps5-bazzite-toolbox/monitor}   # a session's CSV, when you say so
 BRAVE_FLAGS=$HOME/.var/app/com.brave.Browser/config/brave-flags.conf
 EDGE_FLAGS=$HOME/.var/app/com.microsoft.Edge/config/edge-flags.conf
-BLOCKS="locale cmdline wifi updates vram gpu40 zram swapdisco fans cpufreq warmreboot hdmi arranque bt steambt disk papelera firewall brave edge nas bios media copiar esde rpcs3 portproton unifideck atajos monitorweb"
+BLOCKS="locale cmdline wifi updates vram gpu40 zram swapdisco fans cpufreq warmreboot hdmi arranque bt steambt disk papelera consola firewall brave edge nas bios media copiar esde rpcs3 portproton unifideck atajos monitorweb"
 
 # ======================================== settings (setup) ========================================
 # --- saved answers -------------------------------------------------------------------------------
@@ -271,7 +271,7 @@ apply_locale() {
 
 # --- cmdline -------------------------------------------------------------------------------------
 quirk_for() {                            # quirk_for VID:PID -> the letters a drive known here needs (1 if none)
-    case $1 in 21c4:0003) echo um ;;     # Lexar ES3: UAS errors and resets
+    case $1 in 21c4:0003) echo u ;;      # Lexar ES3: UAS errors and resets (no UAS alone has been stable; "m" is not needed)
                *) return 1 ;; esac
 }
 want_quirk() {                           # quirk letters for the boot drive: saved answer, else a guess
@@ -288,7 +288,7 @@ desc_cmdline() {
     if [ -n "$u" ]; then
         say "$(L "- Disco de arranque por USB: ${u%% *} (driver ${u#* }), $(usb_errors) errores USB en este arranque." "- Boot drive over USB: ${u%% *} (driver ${u#* }), $(usb_errors) USB errors this boot.")"
         say "$(L "  usb-storage.quirks=${u%% *}:LETRAS cambia cómo se le habla: u = sin UAS (algunos adaptadores" "  usb-storage.quirks=${u%% *}:LETTERS changes how it is talked to: u = no UAS (some adapters")"
-        say "$(L "  USB-NVMe dan errores y resets con UAS), m = transferencias de 32 KB. Recomendado: ${q:-ninguno}." "  USB-NVMe give errors and resets with UAS), m = 32 KB transfers. Recommended: ${q:-none}.")"
+        say "$(L "  USB-NVMe dan errores y resets con UAS), m = transferencias de 32 KB (solo si u no basta). Recomendado: ${q:-ninguno}." "  USB-NVMe give errors and resets with UAS), m = 32 KB transfers (only if u is not enough). Recommended: ${q:-none}.")"
     fi
     ver_ge 1.5.0 && say "$(L "- Quita module_blacklist=moal si está: desde la v1.5.0 el Wi-Fi IW620 ya no se cuelga." "- Removes module_blacklist=moal if present: since v1.5.0 the IW620 Wi-Fi no longer hangs.")"
     say "$(L "POR QUÉ: consola en tu idioma y un disco USB estable." "WHY: console in your language and a stable USB drive.")"
@@ -1001,6 +1001,33 @@ apply_papelera() {
     say "$(L "Hecho. Si Dolphin estaba abierto, ciérralo y ábrelo. Papelera ahora: $(du -sh "$(trash_dir)" 2>/dev/null | cut -f1)." "Done. If Dolphin was open, close and reopen it. Trash now: $(du -sh "$(trash_dir)" 2>/dev/null | cut -f1).")"
 }
 
+# --- consola -------------------------------------------------------------------------------------
+# This PS5 kernel logs "Salina poller: lock busy, rescheduling" (info level) ~390 times a minute while a DualSense is
+# connected over Bluetooth. With kernel.printk's console level at 7 they all land on the text console, which is what
+# you see when gamescope loses the display. Console level 4 keeps warnings and errors there; the rest still goes to the
+# journal (journalctl -k).
+CONSOLA_CONF=/etc/sysctl.d/20-consola-silenciosa.conf
+CONSOLA_VAL="4 4 1 7"
+desc_consola() {
+    section
+    say "$(L "Baja el nivel de mensajes del kernel que salen en la pantalla de texto: kernel.printk = $CONSOLA_VAL," "Lowers the level of kernel messages shown on the text screen: kernel.printk = $CONSOLA_VAL,")"
+    say "$(L "en $CONSOLA_CONF (con sudo), y lo aplica ya mismo con sysctl -w." "in $CONSOLA_CONF (with sudo), and applies it right now with sysctl -w.")"
+    say "$(L "POR QUÉ: el kernel de la PS5 escribe «Salina poller: lock busy, rescheduling» unas 390 veces por minuto con un" "WHY: the PS5 kernel writes «Salina poller: lock busy, rescheduling» about 390 times a minute with a")"
+    say "$(L "DualSense conectado por Bluetooth, y con el nivel 7 llenan la consola de texto que aparece cuando gamescope" "DualSense connected over Bluetooth, and at level 7 they flood the text console that appears when gamescope")"
+    say "$(L "pierde la pantalla. Los mensajes siguen en el diario (journalctl -k); solo sale menos por pantalla." "loses the display. The messages stay in the journal (journalctl -k); only the screen output is reduced.")"
+    say "$(L "DESHACER: sudo rm $CONSOLA_CONF y reinicia." "UNDO: sudo rm $CONSOLA_CONF and reboot.")"
+}
+check_consola() {
+    [ -r /proc/sys/kernel/printk ] || return 2
+    grep -qs -x "kernel.printk = $CONSOLA_VAL" "$CONSOLA_CONF" || return 1
+    [ "$(cut -f1 /proc/sys/kernel/printk)" = 4 ]
+}
+apply_consola() {
+    echo "kernel.printk = $CONSOLA_VAL" | sudo tee "$CONSOLA_CONF" >/dev/null || return 1
+    sudo sysctl -w kernel.printk="$CONSOLA_VAL" >/dev/null || return 1
+    say "$(L "Hecho: nivel de consola 4 ahora y en cada arranque. Los mensajes completos: journalctl -k." "Done: console level 4 now and at every boot. The full messages: journalctl -k.")"
+}
+
 # --- firewall ------------------------------------------------------------------------------------
 # Bazzite's zone FedoraWorkstation has samba-client, whose NetBIOS conntrack helper (nf_conntrack_netbios_ns) the PS5
 # kernel lacks: firewalld can't build its rules ("Could not process rule: No such file or directory"), falls back to
@@ -1444,6 +1471,7 @@ PY
 # each default applies only when the game's .ppdb doesn't set that variable.
 PP_USERCONF=$HOME/.var/app/ru.linux_gaming.PortProton/data/user.conf
 PP_DEFAULTS='PW_USE_FSYNC=1 PW_USE_ESYNC=1 PW_USE_RAY_TRACING=1'
+PP_CLOSE_ICON() { echo "$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")/cerrar-portproton.desktop"; }
 desc_portproton() {
     section
     say "$(L "Ajustes por defecto para TODOS los juegos de PortProton (en $PP_USERCONF), salvo los que el .ppdb" "Default settings for ALL PortProton games (in $PP_USERCONF), except those the game's own .ppdb")"
@@ -1454,13 +1482,30 @@ desc_portproton() {
     say "$(L "  de la PS5 lo tiene, y los juegos que lo exigen dicen que la gráfica no vale." "  driver supports it, and games that require it say the graphics card isn't good enough.")"
     say "$(L "  Ojo: algún juego, al verlo, lo enciende en su calidad por defecto y va más lento: bájalo en sus opciones" "  Note: some games, on seeing it, turn it on in their default quality and run slower: lower it in their graphics")"
     say "$(L "  gráficas, o apágalo solo para él con export PW_USE_RAY_TRACING=\"0\" en su .ppdb." "  options, or turn it off just for that game with export PW_USE_RAY_TRACING=\"0\" in its .ppdb.")"
-    say "$(L "POR QUÉ: la máxima compatibilidad sin tocar nada juego a juego." "WHY: maximum compatibility without touching games one by one.")"
-    say "$(L "DESHACER: borra en ese fichero el bloque entre «# >>> ps5-bazzite-toolbox» y «# <<< ps5-bazzite-toolbox»." "UNDO: delete in that file the block between «# >>> ps5-bazzite-toolbox» and «# <<< ps5-bazzite-toolbox».")"
+    say "$(L "- Icono «Cerrar PortProton» en el escritorio ($(PP_CLOSE_ICON)): cierra a la fuerza TODO lo que PortProton" "- «Close PortProton» icon on the desktop ($(PP_CLOSE_ICON)): force-closes EVERYTHING PortProton")"
+    say "$(L "  tenga en marcha (un juego colgado, Wine, el icono de la bandeja). OJO: cierra TODOS sus juegos a la vez." "  is running (a hung game, Wine, the tray icon). Note: it closes ALL its games at once.")"
+    say "$(L "POR QUÉ: la máxima compatibilidad sin tocar nada juego a juego, y una salida cuando un juego se cuelga." "WHY: maximum compatibility without touching games one by one, and a way out when a game hangs.")"
+    say "$(L "DESHACER: borra en ese fichero el bloque entre «# >>> ps5-bazzite-toolbox» y «# <<< ps5-bazzite-toolbox»; borra el icono." "UNDO: delete in that file the block between «# >>> ps5-bazzite-toolbox» and «# <<< ps5-bazzite-toolbox»; delete the icon.")"
 }
 check_portproton() {
     flatpak info ru.linux_gaming.PortProton >/dev/null 2>&1 || return 2
     [ -f "$PP_USERCONF" ] || return 2            # PortProton not opened yet: it creates the file the first time
     grep -qs -F "PP_DEFAULTS: $PP_DEFAULTS" "$PP_USERCONF" || return 1
+    [ -x "$(PP_CLOSE_ICON)" ] || return 1
+}
+pp_close_icon() {                        # the "Close PortProton" icon on the desktop (flatpak kill: everything it runs)
+    local f; f=$(PP_CLOSE_ICON); mkdir -p "$(dirname "$f")" || return 1
+    cat >"$f" <<EOF || return 1
+[Desktop Entry]
+Type=Application
+Name=$(L 'Cerrar PortProton' 'Close PortProton')
+Comment=$(L 'Cierra a la fuerza todo lo que PortProton tenga en marcha (un juego colgado, Wine, el icono de la bandeja). Borra este icono para deshacerlo.' 'Force-closes everything PortProton is running (a hung game, Wine, the tray icon). Delete this icon to undo it.')
+Exec=sh -c "flatpak kill ru.linux_gaming.PortProton 2>/dev/null; notify-send -i process-stop PortProton '$(L 'Se cerró todo lo que PortProton tenía en marcha' 'Everything PortProton was running was closed')'"
+Icon=process-stop
+Terminal=false
+Categories=Utility;
+EOF
+    chmod +x "$f" && { gio set "$f" metadata::trusted true 2>/dev/null || true; }
 }
 apply_portproton() {
     local bak; bak="$PP_USERCONF.bak-$(date +%Y%m%d-%H%M%S)"
@@ -1476,7 +1521,9 @@ unset _pp_kv
 # <<< ps5-bazzite-toolbox
 EOF
     bash -n "$PP_USERCONF" || { say "$(L "El fichero no ha quedado bien: restaura la copia .bak." "The file did not end up right: restore the .bak copy.")"; return 1; }
+    pp_close_icon || return 1
     say "$(L "Ajustes globales de PortProton: $PP_DEFAULTS (los juegos abiertos los cogen al volver a abrirlos)." "PortProton global settings: $PP_DEFAULTS (open games pick them up when reopened).")"
+    say "$(L "Icono «Cerrar PortProton» en el escritorio: $(PP_CLOSE_ICON)." "«Close PortProton» icon on the desktop: $(PP_CLOSE_ICON).")"
 }
 
 # --- monitorweb ----------------------------------------------------------------------------------

@@ -5,6 +5,26 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+## [1.16.0] - 2026-11-16
+
+### Añadido
+
+- **Bloque de ajustes `consola`** (recomendado): baja el nivel de mensajes del kernel en la pantalla de texto
+  (`kernel.printk = 4 4 1 7` en `/etc/sysctl.d/20-consola-silenciosa.conf`, y `sysctl -w` para que cuente ya). El kernel
+  de la PS5 escribe «Salina poller: lock busy, rescheduling» unas 390 veces por minuto con un DualSense por Bluetooth, y
+  con el nivel 7 llenaban la consola de texto que sale cuando gamescope pierde la pantalla. Los mensajes siguen en
+  `journalctl -k`. Deshacer: `sudo rm` del fichero y reiniciar.
+- **Icono «Cerrar PortProton» en el escritorio** (bloque `portproton`): `cerrar-portproton.desktop` ejecuta
+  `flatpak kill ru.linux_gaming.PortProton` y cierra a la fuerza todo lo que PortProton tenga en marcha (un juego
+  colgado, Wine, el icono de la bandeja). Ojo: cierra todos sus juegos a la vez. Borrar el icono lo deshace; el bloque
+  queda pendiente hasta que exista.
+
+### Cambiado
+
+- **Lexar ES3 (`21c4:0003`): `u` en vez de `um`** en `usb-storage.quirks`. Sin UAS basta: en la práctica va estable
+  desde hace días sin limitar las transferencias a 32 KB. El bloque `cmdline` propone ahora `u`; la letra `m` sigue
+  disponible para otros discos que la necesiten.
+
 ## [1.15.0] - 2026-11-15
 
 ### Añadido
@@ -433,7 +453,8 @@ Primera versión publicada.
 - Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
-[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.15.0...HEAD
+[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.16.0...HEAD
+[1.16.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.13.0...v1.14.0
 [1.13.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.12.1...v1.13.0

@@ -24,7 +24,7 @@ The interface is in English or Spanish: it follows the system locale (`LANG`; Sp
 | Jailbreak | [ps5-y2jb-autoloader](https://github.com/itsPLK/ps5-y2jb-autoloader) |
 | Linux loader | `ps5-linux-loader-v3.5.elf` ([ps5-linux-loader](https://github.com/ps5-linux/ps5-linux-loader)) |
 | Sending the loader | [PS5 Payload Manager](https://github.com/itsPLK/ps5-payload-manager) |
-| Disk | 1 TB Lexar ES3 external SSD over USB 3.2 (10 Gb/s, USB `21c4:0003`; stable with `usb-storage.quirks=21c4:0003:um`, which the `cmdline` block sets) |
+| Disk | 1 TB Lexar ES3 external SSD over USB 3.2 (10 Gb/s, USB `21c4:0003`; stable with `usb-storage.quirks=21c4:0003:u`, which the `cmdline` block sets) |
 
 It may work with other models (Slim, Pro), firmwares, loaders or disks, but this is untested.
 
@@ -193,6 +193,7 @@ asks with a recommended answer (`[Y/n]` = yes by default, `[y/N]` = no). What de
 | [`steambt`](#steambt) | Keeps Steam's Bluetooth enabled (otherwise it turns the adapter off and the controller does not connect) | yes | no |
 | [`disk`](#disk) | Removes the KDE SMART query that blocks USB disks | yes | no |
 | [`papelera`](#papelera) | Trash without a size limit (Dolphin no longer says "the trash is full") | yes | no |
+| [`consola`](#consola) | Fewer kernel messages on the text screen (the "Salina poller" flood) | yes | no |
 | [`firewall`](#firewall) | Fixes the firewall, which starts "failed" because of a module missing from the kernel | yes | no |
 | [`brave`](#brave) | Brave without asking for the KDE Wallet password | no | no |
 | [`edge`](#edge) | Microsoft Edge without asking for the KDE Wallet password | no | no |
@@ -242,7 +243,7 @@ kwriteconfig6 --file plasma-localerc --group Translations --key LANGUAGE es_ES:e
 - `locale.LANG=…` and `vconsole.keymap=…`: the language and keyboard from boot (SSH sessions do not read
   the ones from `locale`).
 - `usb-storage.quirks=VID:PID:letters` for the USB boot disk: `u` = no UAS, `m` = 32 KB transfers.
-  It proposes `um` for the Lexar ES3 (`21c4:0003`), `u` if this boot already had UAS errors, and nothing if there are none.
+  It proposes `u` for the Lexar ES3 (`21c4:0003`), `u` if this boot already had UAS errors, and nothing if there are none.
 - On image v1.5.0 or later, it removes `module_blacklist=moal` (Wi-Fi no longer hangs).
 
 **WHY:** some USB disks with UAS give resets and I/O errors.
@@ -250,7 +251,7 @@ kwriteconfig6 --file plasma-localerc --group Translations --key LANGUAGE es_ES:e
 ```sh
 sudo cp /efi/cmdline.txt /efi/cmdline.txt.bak-$(date +%Y%m%d-%H%M%S)
 lsusb                                          # the VID:PID of your disk, e.g. 21c4:0003
-sudo nano /efi/cmdline.txt                     # add at the end: locale.LANG=es_ES.UTF-8 vconsole.keymap=es usb-storage.quirks=21c4:0003:um
+sudo nano /efi/cmdline.txt                     # add at the end: locale.LANG=es_ES.UTF-8 vconsole.keymap=es usb-storage.quirks=21c4:0003:u
 sudo sed -i 's| module_blacklist=moal||' /efi/cmdline.txt     # only with image v1.5.0 or later
 ```
 
@@ -581,6 +582,17 @@ delete a big folder (a game). Without a limit it grows until you empty it.
 
 **UNDO:** `kwriteconfig6 --file ktrashrc --group "$(realpath ~/.local/share/Trash)" --key UseSizeLimit true`.
 
+### `consola`
+
+**WHAT IT DOES:** sets `kernel.printk = 4 4 1 7` in `/etc/sysctl.d/20-consola-silenciosa.conf` (with sudo) and applies it
+right away with `sudo sysctl -w kernel.printk="4 4 1 7"`.
+**WHY:** this PS5 kernel logs `Salina poller: lock busy, rescheduling` (info level) about 390 times a minute while a
+DualSense is connected over Bluetooth. With the console level at 7 they flood the text console you see when gamescope
+loses the display. The messages still go to the journal (`journalctl -k`); only the screen output is reduced.
+Done when the file has that value and `/proc/sys/kernel/printk` starts with 4.
+
+**UNDO:** `sudo rm /etc/sysctl.d/20-consola-silenciosa.conf` and reboot.
+
 ### `firewall`
 
 **WHAT IT DOES:** removes from the firewall zone the services whose module the PS5 kernel does not ship, and restarts
@@ -750,6 +762,9 @@ handler talks to the controller directly (motion, rumble, light bar). Disabling 
 sync (FSYNC/ESYNC) and ray tracing. It goes in a marked block of
 `~/.var/app/ru.linux_gaming.PortProton/data/user.conf` (with a `user.conf.bak-<date>` backup). See
 [Settings for all games](#portproton-and-steam).
+**ALSO:** a **Close PortProton** icon on the desktop (`cerrar-portproton.desktop`, in `xdg-user-dir DESKTOP`): it runs
+`flatpak kill ru.linux_gaming.PortProton`, force-closing everything PortProton is running (hung game, Wine, tray icon).
+**It closes ALL PortProton games at once.**
 **WHY:** PortProton ships them off; Steam's Proton includes fast sync, and some games require
 ray tracing. Not applicable until you open PortProton once (it creates `user.conf`).
 **By hand:** add at the end of `user.conf`:
@@ -763,7 +778,7 @@ unset _pp_kv
 # <<< ps5-bazzite-toolbox
 ```
 
-**UNDO:** delete that block. For a single game: `export PW_USE_RAY_TRACING="0"` in its `.ppdb`.
+**UNDO:** delete that block and the icon. For a single game: `export PW_USE_RAY_TRACING="0"` in its `.ppdb`.
 
 ### `unifideck`
 
@@ -1079,7 +1094,7 @@ pick a disk, it mounts it **read-only** (and unmounts it when done) and finds yo
 install. If it is a USB disk that its system used without UAS (`usb-storage.quirks=...:u...`, like the Lexar ES3), it
 tells you and sets the same now, until you reboot, so the long copy does not give errors: unplug it, plug it in again
 and it carries on. By hand:
-`echo 21c4:0003:um | sudo tee /sys/module/usb_storage/parameters/quirks` before plugging it in.
+`echo 21c4:0003:u | sudo tee /sys/module/usb_storage/parameters/quirks` before plugging it in.
 
 **Restore** (21 -> 2, `--restore [folder]`): you give it the copy's folder, or **the one from another install**: the
 disk of your previous install plugged in, its home folder or the disk root (`/run/media/<user>/<disk>`; it also finds
@@ -1207,6 +1222,7 @@ stays there so you can retry.
 | `~/.local/share/ps5-bazzite-toolbox/steam-bt-on.sh`, `~/.config/systemd/user/ps5-steam-bt.service`; changes `"Enabled"` of `"Bluetooth"` in `~/.local/share/Steam/config/config.vdf` | `steambt` | — |
 | `/etc/polkit-1/rules.d/50-ps5-no-kde-smart.rules`, `~/.config/kded6rc` | `disk` | — |
 | `~/.config/ktrashrc` (`UseSizeLimit` of your trash) | `papelera` | `ktrashrc.bak-<date>` |
+| `/etc/sysctl.d/20-consola-silenciosa.conf` | `consola` | `sudo rm` it |
 | `/etc/firewalld/zones/<zone>.xml` (the zone without the services whose module is missing) | `firewall` | — |
 | `~/.var/app/com.brave.Browser/config/brave-flags.conf` | `brave` | — |
 | `~/.var/app/com.microsoft.Edge/config/edge-flags.conf` | `edge` | — |
@@ -1215,7 +1231,7 @@ stays there so you can retry.
 | `/usr/local/bin/copiarNas`, `~/NAS`; logs in `~/.local/share/ps5-bazzite-toolbox/copias/` | `copiar` | — |
 | `~/ES-DE/custom_systems/es_systems.xml` | `esde` | `es_systems.xml.bak-<date>` |
 | `~/.config/rpcs3/input_configs/global/Default.yml` (player 1) | `rpcs3` | `Default.yml.bak-evdev-<date>` |
-| `~/.var/app/ru.linux_gaming.PortProton/data/user.conf` | `portproton` | `user.conf.bak-<date>` |
+| `~/.var/app/ru.linux_gaming.PortProton/data/user.conf`, `cerrar-portproton.desktop` on the desktop | `portproton` | `user.conf.bak-<date>`; delete the icon |
 | `~/homebrew/plugins/Unifideck/py_modules/unifideck/launcher/proton/infrastructure/selector.py` | `unifideck` | `selector.py.orig-<version>` |
 | `~/.local/share/kio/servicemenus/ps5-bazzite-toolbox-*.desktop`, `/usr/local/bin/espacio`, `portproton-collection.desktop` on the desktop | `atajos` | — |
 | `~/.local/share/ps5-bazzite-toolbox/monitor-web.py`, `~/.config/systemd/user/ps5-monitor-web.service`, a firewall rule (port 8765, your network only) | `monitorweb` | — |
