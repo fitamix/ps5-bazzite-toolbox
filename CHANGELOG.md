@@ -5,6 +5,23 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+## [1.17.0] - 2026-11-22
+
+### Añadido
+
+- **Bloque de ajustes `memoria`** (en pruebas, no se aplica por defecto): ajustes de memoria de Linux para emuladores
+  que llenan la RAM, de la guía de [lichii-bc250](https://github.com/lethevimlet/lichii-bc250) (medidos en una AMD
+  BC-250, el mismo chip que la PS5). Pregunta cada uno: `vm.swappiness = 10`, `vm.compaction_proactiveness = 100`,
+  `vm.watermark_scale_factor = 300` (en `/etc/sysctl.d/99-ps5-memoria-*.conf`) y una red de seguridad de systemd-oomd
+  para la sesión (cierra lo que llena la memoria tras 20 s al 80 % en vez de dejar la consola colgada). Probado en una
+  PS5 original con lichii-bc250: la carga de zona más grande tuvo la presión de memoria al 3,5 % como mucho.
+  Deshacer: borrar esos ficheros, `sudo systemctl daemon-reload` y reiniciar.
+
+### Cambiado
+
+- Las explicaciones de los bloques `zram` y `swapdisco`, el README y el CHANGELOG ya no nombran juegos concretos:
+  las medidas se describen de forma genérica.
+
 ## [1.16.1] - 2026-11-16
 
 ### Cambiado
@@ -236,8 +253,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 - **Bloque `zram`: elegir el compresor** además del tamaño. Explica cada uno (`lz4`: muy rápido, guarda ~1,7–2 a 1,
   recomendado para jugar; `zstd`: el de Bazzite, guarda ~2,5–3 a 1 pero con la RAM llena se nota en tirones;
-  `lzo-rle`: el del kernel) y comprueba que el kernel tenga el elegido. Propone `lz4`: con Lichii (Switch 2) y Zelda
-  OoT quitó las caídas a 2–5 FPS cada ~25 s y la RAM libre media pasó de 54 a 458 MB. Muestra el compresor que se usa
+  `lzo-rle`: el del kernel) y comprueba que el kernel tenga el elegido. Propone `lz4`: con Lichii (Switch 2)
+  quitó las caídas a 2–5 FPS cada ~25 s y la RAM libre media pasó de 54 a 458 MB. Muestra el compresor que se usa
   ahora. Quien ya tenía el bloque aplicado lo verá pendiente hasta elegir compresor. Si existe `91-lz4.conf` (la
   prueba a mano), lo borra porque lo cubre el bloque.
 
@@ -256,8 +273,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 - **Bloque `swapdisco`: swap en el disco** detrás de la zram, para que los programas que se quedan sin memoria vayan
   más lentos en vez de cerrarse («escasez de memoria evitada»). Tamaño a elegir (8, 16, 24 o 32 GB; 0 = quitarla),
   prioridad 10 (solo se usa con la zram llena) y activa en cada arranque. No se aplica por defecto: en un disco USB,
-  mucha escritura en la swap puede congelar el sistema unos segundos, y lo explica. Probado con Lichii (Switch 2) y
-  Zelda OoT: sin ella el kernel lo cerraba a los 9 minutos; con ella siguió.
+  mucha escritura en la swap puede congelar el sistema unos segundos, y lo explica. Probado con Lichii (Switch 2):
+  sin ella el kernel lo cerraba a los 9 minutos; con ella siguió.
 - **Monitor (opción 4 y web): la swap en disco aparte.** Cuánto hay en el disco, el pico al parar, un aviso si se
   usó (el juego siguió, pero más lento) y la columna `swap_disco_mb` en el CSV de las dos vistas. El aviso de «la swap
   se llenó» propone también este bloque.
@@ -460,7 +477,8 @@ Primera versión publicada.
 - Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
-[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.16.1...HEAD
+[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.17.0...HEAD
+[1.17.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.16.1...v1.17.0
 [1.16.1]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.16.0...v1.16.1
 [1.16.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.14.0...v1.15.0

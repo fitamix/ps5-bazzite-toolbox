@@ -9,7 +9,7 @@
 #    sync the collection; global PortProton defaults (setup block "portproton"). Tools: space taken by each folder,
 #    a backup of the home folder (picking what goes) that restores here or on another install.
 #  - Settings (setup): blocks that adapt the image (language, boot options, Wi-Fi, updates, VRAM, fans, warm
-#    reboot, HDMI fix, disk, quiet kernel console, firewall, Brave, Edge, NAS, the monitor in a phone's browser, zram swap size and compressor, swap on disk, the GPU's 40 compute units). Each explains what it changes, why and how to undo it, and asks.
+#    reboot, HDMI fix, disk, quiet kernel console, firewall, Brave, Edge, NAS, the monitor in a phone's browser, zram swap size and compressor, swap on disk, memory settings for heavy emulators, the GPU's 40 compute units). Each explains what it changes, why and how to undo it, and asks.
 #    Answers are kept in ~/.config/ps5-bazzite-toolbox.conf; running it again only offers what is pending.
 #
 #   bash ps5-bazzite-toolbox.sh                         # menu (the first time it offers to install itself as the
@@ -41,10 +41,10 @@
 #   bash ps5-bazzite-toolbox.sh --version
 #   bash ps5-bazzite-toolbox.sh --lang es|en [...]      # interface language (before the other options); saved. Default: the system
 #                                               locale (LANG/LC_ALL/LC_MESSAGES starting with "es" = Spanish, else English)
-# Setup blocks: locale cmdline wifi updates vram gpu40 zram swapdisco fans cpufreq warmreboot hdmi arranque bt steambt disk papelera consola firewall brave edge nas bios media copiar esde rpcs3 portproton unifideck atajos monitorweb
+# Setup blocks: locale cmdline wifi updates vram gpu40 zram swapdisco memoria fans cpufreq warmreboot hdmi arranque bt steambt disk papelera consola firewall brave edge nas bios media copiar esde rpcs3 portproton unifideck atajos monitorweb
 set -uo pipefail
 
-TOOLBOX_VERSION=1.16.1                   # bump on every release (see CHANGELOG.md and release.sh)
+TOOLBOX_VERSION=1.17.0                   # bump on every release (see CHANGELOG.md and release.sh)
 TOOLBOX_REPO=fitamix/ps5-bazzite-toolbox
 TOOLBOX_BIN=$HOME/.local/bin/ps5-bazzite-toolbox                      # where --install puts it
 TOOLBOX_DESKTOP=$HOME/.local/share/applications/ps5-bazzite-toolbox.desktop
@@ -155,7 +155,7 @@ MONWEB_UNIT=$HOME/.config/systemd/user/ps5-monitor-web.service
 MONWEB_CSV_DIR=${MONWEB_CSV_DIR:-$HOME/.local/share/ps5-bazzite-toolbox/monitor}   # a session's CSV, when you say so
 BRAVE_FLAGS=$HOME/.var/app/com.brave.Browser/config/brave-flags.conf
 EDGE_FLAGS=$HOME/.var/app/com.microsoft.Edge/config/edge-flags.conf
-BLOCKS="locale cmdline wifi updates vram gpu40 zram swapdisco fans cpufreq warmreboot hdmi arranque bt steambt disk papelera consola firewall brave edge nas bios media copiar esde rpcs3 portproton unifideck atajos monitorweb"
+BLOCKS="locale cmdline wifi updates vram gpu40 zram swapdisco memoria fans cpufreq warmreboot hdmi arranque bt steambt disk papelera consola firewall brave edge nas bios media copiar esde rpcs3 portproton unifideck atajos monitorweb"
 
 # ======================================== settings (setup) ========================================
 # --- saved answers -------------------------------------------------------------------------------
@@ -487,7 +487,7 @@ apply_gpu40() {
 # --- zram ----------------------------------------------------------------------------------------
 # Bazzite's swap is zram (compressed RAM) of half the RAM, compressed with zstd; a game that fills it has nowhere
 # left to go. A drop-in overrides only the size and the compressor and leaves Bazzite's own file alone.
-# Compressor, measured 2026-11-08 with Lichii (Switch 2) and Zelda OoT, RAM full: zstd stores ~2.5-3:1 but every
+# Compressor, measured 2026-11-08 with Lichii (Switch 2), RAM full: zstd stores ~2.5-3:1 but every
 # page it compresses takes long enough that the game stopped at 2-5 FPS every ~25 s; lz4 stores ~1.7:1 and those
 # stops went away (RAM free on average 458 MB instead of 54). zram has to compress exactly when RAM runs out.
 ZRAM_DROPIN=/etc/systemd/zram-generator.conf.d/90-ps5-bazzite-toolbox.conf
@@ -513,7 +513,7 @@ desc_zram() {
     say "$(L "POR QUÉ el compresor: la zram comprime justo cuando se acaba la RAM, normalmente jugando, y mientras" "WHY the compressor: zram compresses exactly when RAM runs out, usually while gaming, and while")"
     say "$(L "comprime el juego espera. Los que hay:" "it compresses the game waits. The options:")"
     say "$(L "  lz4     muy rápido (varias veces más que zstd) y guarda menos (~1,7-2 a 1). Los tirones por memoria se" "  lz4     very fast (several times faster than zstd) and stores less (~1.7-2 to 1). Memory stutters")"
-    say "$(L "          quedan en casi nada. RECOMENDADO para jugar: con Zelda OoT en Lichii quitó las caídas a 2-5 FPS." "          almost vanish. RECOMMENDED for gaming: with Zelda OoT on Lichii it removed the drops to 2-5 FPS.")"
+    say "$(L "          quedan en casi nada. RECOMENDADO para jugar: con Lichii quitó las caídas a 2-5 FPS." "          almost vanish. RECOMMENDED for gaming: on Lichii it removed the drops to 2-5 FPS.")"
     say "$(L "  zstd    el de Bazzite: guarda más (~2,5-3 a 1), pero cada compresión tarda más; con la RAM llena se nota" "  zstd    Bazzite's: stores more (~2.5-3 to 1), but each compression takes longer; with RAM full it shows")"
     say "$(L "          como tirones. Mejor si usas el escritorio con muchas cosas abiertas y la CPU va sobrada." "          as stutters. Better if you use the desktop with lots open and the CPU has headroom.")"
     say "$(L "  lzo-rle el del kernel: rápido (algo menos que lz4) y guarda parecido a lz4. Alternativa a lz4." "  lzo-rle the kernel's: fast (slightly less than lz4) and stores similar to lz4. Alternative to lz4.")"
@@ -546,7 +546,7 @@ apply_zram() {
 # --- swap on disk ----------------------------------------------------------------------------------
 # A swap file behind the zram (lower priority): used only once the zram is full, so a game that runs out of
 # memory slows down instead of being killed by the kernel (OOM). Off by default: on a USB boot drive heavy
-# swapping can stall the whole system. Measured 2026-11-08 (Lichii, Zelda OoT): without it OOM-killed after
+# swapping can stall the whole system. Measured 2026-11-08 (Lichii): without it OOM-killed after
 # 9 min; with it the 16 GB file took only the peak (31 MB) and nothing stalled.
 SWAPFILE=/var/swapfile
 SWAP_MARK='# ps5-bazzite-toolbox (bloque swapdisco)'
@@ -563,7 +563,7 @@ desc_swapdisco() {
     say "$(L "Ahora: $([ -n "$now" ] && echo "$now GB activos" || echo 'sin swap en disco'); disco del sistema: ${fs:-?}$([ -n "$usb" ] && echo ', por USB')." "Now: $([ -n "$now" ] && echo "$now GB active" || echo 'no disk swap'); system disk: ${fs:-?}$([ -n "$usb" ] && echo ', over USB').")"
     say "$(L "POR QUÉ: con la zram llena, si un programa pide más memoria el sistema lo cierra («escasez de memoria" "WHY: with the zram full, if a program asks for more memory the system kills it (\"out of memory")"
     say "$(L "evitada»). Con swap en disco el juego va más lento en esos picos, pero no se cierra. Útil para emuladores" "avoided\"). With disk swap the game runs slower at those peaks, but is not killed. Useful for emulators")"
-    say "$(L "que se pasan de memoria (Switch 2: Lichii con Zelda OoT pide más de 14 GB)." "that overrun memory (Switch 2: Lichii with Zelda OoT asks for more than 14 GB).")"
+    say "$(L "que se pasan de memoria (Switch 2: Lichii llega a pedir más de 14 GB)." "that overrun memory (Switch 2: Lichii can ask for more than 14 GB).")"
     say "$(L "RIESGO: si el disco va por USB y se escribe mucho en la swap, los atascos del USB pueden congelar todo el" "RISK: if the disk is on USB and a lot is written to swap, USB stalls can freeze the whole")"
     say "$(L "sistema unos segundos. Si notas eso (ratón parado), quítala. Ocupa en el disco el tamaño que elijas." "system for a few seconds. If you notice that (mouse stuck), remove it. It takes the size you choose on the disk.")"
     say "$(L "DESHACER: este bloque con tamaño 0 (menú 52 → swapdisco), o a mano: sudo swapoff $SWAPFILE;" "UNDO: this block with size 0 (menu 52 → swapdisco), or by hand: sudo swapoff $SWAPFILE;")"
@@ -597,6 +597,83 @@ apply_swapdisco() {
     sudo swapon -p 10 "$SWAPFILE" || return 1
     printf '%s\n%s none swap defaults,pri=10,nofail 0 0\n' "$SWAP_MARK" "$SWAPFILE" | sudo tee -a /etc/fstab >/dev/null || return 1
     say "$(L "Swap en disco: $SWAP_GB GB activos, detrás de la zram (se mantiene al reiniciar)." "Disk swap: $SWAP_GB GB active, behind the zram (kept across reboots).")"
+}
+
+# --- memoria ---------------------------------------------------------------------------------------
+# Memory settings for heavy emulators, from lichii-bc250's README "Step 1" (github.com/lethevimlet/lichii-bc250), measured
+# on an AMD BC-250 (the PS5's own APU, also on Bazzite). Only what applies to the PS5: no UMA carve-out, no overclock,
+# zram and disk swap are the blocks above. Tried 2026-11-22 on an original PS5 (VRAM 6 GB, ~8.7 GB RAM, lichii-bc250 v21):
+# the biggest area load had memory pressure at most 3.5 % and 8 GB in swap. Not yet compared with Bazzite's
+# defaults in the same session: EXPERIMENTAL, off by default. Same file names as the standalone memoria-bc250.sh.
+MEM_SWAP_CONF=/etc/sysctl.d/99-ps5-memoria-swappiness.conf
+MEM_COMP_CONF=/etc/sysctl.d/99-ps5-memoria-compaction.conf
+MEM_WMARK_CONF=/etc/sysctl.d/99-ps5-memoria-watermark.conf
+MEM_OOMD_CONF=/etc/systemd/system/user@.service.d/99-ps5-memoria-oomd.conf
+MEMORIA_ITEMS=${MEMORIA_ITEMS:-swappiness compaction watermark oomd}
+mem_conf() {                             # mem_conf item -> its file, sysctl key and value
+    case $1 in
+        swappiness) echo "$MEM_SWAP_CONF vm.swappiness 10" ;;
+        compaction) echo "$MEM_COMP_CONF vm.compaction_proactiveness 100" ;;
+        watermark) echo "$MEM_WMARK_CONF vm.watermark_scale_factor 300" ;;
+    esac
+}
+desc_memoria() {
+    section
+    say "$(L "Ajustes de memoria de Linux para emuladores que llenan la RAM (Lichii, CheezyEmu, Eglantine)." "Linux memory settings for emulators that fill the RAM (Lichii, CheezyEmu, Eglantine).")"
+    say "$(L "Vienen de la guía de lichii-bc250, medidos en una AMD BC-250 (el mismo chip que la PS5, con Bazzite)." "They come from lichii-bc250's guide, measured on an AMD BC-250 (the PS5's own chip, on Bazzite).")"
+    say "$(L "EN PRUEBAS: en una PS5 original la carga de zona más grande tuvo la presión de memoria al 3,5 % como mucho, pero" "EXPERIMENTAL: on an original PS5 the biggest area load had memory pressure at 3.5 % at most, but")"
+    say "$(L "aún no se ha comparado con los valores de Bazzite en la misma partida. Pregunta cada uno por separado:" "it has not been compared with Bazzite's values in the same session yet. It asks for each one separately:")"
+    say "$(L "  swappiness 10 (Bazzite: 180): no mandar el juego al intercambio mientras quede RAM libre; al recuperarlo" "  swappiness 10 (Bazzite: 180): don't push the game to swap while RAM is still free; getting it back")"
+    say "$(L "      se congela segundos." "      freezes it for seconds.")"
+    say "$(L "  compactación 100 (núcleo: 20): juntar huecos de memoria en segundo plano; la GPU pide bloques de 2 MB y" "  compaction 100 (kernel: 20): defragment memory in the background; the GPU asks for 2 MB blocks and")"
+    say "$(L "      con la memoria troceada el núcleo libera sitio mandando el juego al intercambio. Gasta algo de CPU." "      with fragmented memory the kernel frees room by pushing the game to swap. Costs some CPU.")"
+    say "$(L "  reserva 300 (Bazzite: 125): tener RAM libre por adelantado para las cargas de zona grandes (una zona" "  watermark 300 (Bazzite: 125): keep RAM free ahead of big area loads (a big area can ask for ~3 GB")"
+    say "$(L "      grande puede pedir ~3 GB en 30 s): en la BC-250, congelones de 6-14 s bajaron a 3-4 s. Deja algo más de RAM sin usar." "      in 30 s): on the BC-250, 6-14 s freezes went down to 3-4 s. Leaves a bit more RAM unused.")"
+    say "$(L "  red de seguridad: si la presión de memoria pasa del 80 % durante 20 s, systemd-oomd cierra lo que la" "  safety net: if memory pressure stays above 80 % for 20 s, systemd-oomd closes what causes it in your")"
+    say "$(L "      provoca en tu sesión, en vez de dejar la consola colgada. Puede cerrar más que el juego (Steam)." "      session, instead of leaving the console hung. It can close more than the game (Steam).")"
+    say "$(L "DESHACER: sudo rm /etc/sysctl.d/99-ps5-memoria-*.conf $MEM_OOMD_CONF; sudo systemctl daemon-reload; reinicia." "UNDO: sudo rm /etc/sysctl.d/99-ps5-memoria-*.conf $MEM_OOMD_CONF; sudo systemctl daemon-reload; reboot.")"
+}
+check_memoria() {
+    local i f k v
+    [ -r /proc/sys/vm/swappiness ] || return 2
+    [ -n "$MEMORIA_ITEMS" ] || return 0     # you chose none of them
+    for i in $MEMORIA_ITEMS; do
+        if [ "$i" = oomd ]; then grep -qs '^ManagedOOMMemoryPressure=kill' "$MEM_OOMD_CONF" || return 1; continue; fi
+        read -r f k v <<<"$(mem_conf "$i")"
+        [ -n "$f" ] || continue
+        grep -qs -x "$k = $v" "$f" && [ "$(cat "/proc/sys/${k//.//}")" = "$v" ] || return 1
+    done
+}
+apply_memoria() {
+    local i f k v n items=""
+    for i in swappiness compaction watermark oomd; do
+        case $i in
+            swappiness) n="swappiness 10" ;;
+            compaction) n="$(L "compactación 100" "compaction 100")" ;;
+            watermark) n="$(L "reserva 300" "watermark 300")" ;;
+            oomd) n="$(L "red de seguridad (systemd-oomd)" "safety net (systemd-oomd)")" ;;
+        esac
+        if ask "$(L "  ¿Aplicar «$n»?" "  Apply '$n'?")" S; then
+            items="$items $i"
+            if [ "$i" = oomd ]; then
+                sudo mkdir -p "$(dirname "$MEM_OOMD_CONF")" &&
+                    printf '# ps5-bazzite-toolbox (bloque memoria): systemd-oomd closes what fills the memory instead of a hung console\n[Service]\nManagedOOMMemoryPressure=kill\nManagedOOMMemoryPressureLimit=80%%\nManagedOOMMemoryPressureDurationSec=20s\n' |
+                    sudo tee "$MEM_OOMD_CONF" >/dev/null && sudo systemctl daemon-reload || return 1
+                say "$(L "  red de seguridad: vigila tu sesión desde el próximo inicio de sesión o reinicio." "  safety net: watches your session from the next login or reboot.")"
+            else
+                read -r f k v <<<"$(mem_conf "$i")"
+                printf '# ps5-bazzite-toolbox (bloque memoria)\n%s = %s\n' "$k" "$v" | sudo tee "$f" >/dev/null &&
+                    sudo sysctl -q -w "$k=$v" >/dev/null || return 1
+                say "  $k = $v"
+            fi
+        else
+            case $i in oomd) f=$MEM_OOMD_CONF ;; *) read -r f k v <<<"$(mem_conf "$i")" ;; esac
+            sudo rm -f "$f"
+        fi
+    done
+    remember MEMORIA_ITEMS "${items# }"
+    sudo systemctl daemon-reload
+    say "$(L "Hecho: cuenta ya y en cada arranque. Ver los valores: sysctl vm.swappiness vm.compaction_proactiveness vm.watermark_scale_factor" "Done: in effect now and at every boot. See the values: sysctl vm.swappiness vm.compaction_proactiveness vm.watermark_scale_factor")"
 }
 
 # --- fans ----------------------------------------------------------------------------------------
@@ -2127,6 +2204,7 @@ default_for() {
         copiar) [ -n "$(nas_mnt)" ] && echo S || echo N ;;            # a choice, not a fix: only if you want them shared from the NAS
         gpu40) echo N ;;                 # silicon lottery: only if you want to try it
         swapdisco) echo N ;;             # disk space and, on USB, stall risk: only if games get killed for memory
+        memoria) echo N ;;               # experimental, for heavy emulators: not yet A/B-compared with Bazzite's values
         *) echo S ;;
     esac
 }

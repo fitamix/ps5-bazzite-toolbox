@@ -184,6 +184,7 @@ asks with a recommended answer (`[Y/n]` = yes by default, `[y/N]` = no). What de
 | [`gpu40`](#gpu40) | All 40 GPU compute units instead of 36 | **no** (try it yourself) | power off |
 | [`zram`](#zram) | Compressed swap the size of all the RAM, with the `lz4` compressor (fewer stutters) | yes | reboot |
 | [`swapdisco`](#swapdisco) | Swap on disk behind the zram, so games are not closed for lack of memory | **no** (if they get closed) | no |
+| [`memoria`](#memoria) | Memory settings for heavy emulators (swappiness, compaction, free-RAM reserve, systemd-oomd safety net) | **no** (experimental) | no |
 | [`fans`](#fans) | Fan control and target temperature | yes | no |
 | [`cpufreq`](#cpufreq) | Calms the CPU frequency governor: less heat and fan noise at idle | yes | no |
 | [`warmreboot`](#warmreboot) | Warm reboot (without going through the loader) | **no** (experimental) | no |
@@ -348,7 +349,7 @@ compresses, the program that asked for memory waits. With a game that is tight o
 | `zstd` (Bazzite's) | slower | more: ~2.5–3 to 1 | Desktop with many things open and CPU to spare: more fits in the same RAM |
 | `lzo-rle` (the kernel's) | fast, a bit less than `lz4` | similar to `lz4` | Alternative to `lz4` |
 
-Measured on a PS5 with 4 GB of VRAM, Lichii (Switch 2) and Zelda: Ocarina of Time at 0.5x, with the RAM full:
+Measured on a PS5 with 4 GB of VRAM and Lichii (Switch 2) at 0.5x, with the RAM full:
 
 | | `zstd` | `lz4` |
 |---|---|---|
@@ -380,7 +381,7 @@ half the RAM with `zstd`). To change only the compressor: option 52 → `zram`.
 (priority 100), and keeps it active on every boot with a line in `/etc/fstab`. The zram is still used first: the
 disk only comes in once the zram has filled up.
 **WHY:** with the zram full, if a program asks for more memory the kernel closes it ("memory shortage avoided").
-With swap on disk, the game is slower at those peaks, but keeps going. Tested with Lichii (Switch 2) and Zelda OoT, which
+With swap on disk, the game is slower at those peaks, but keeps going. Tested with Lichii (Switch 2) and a game that
 asks for more than 14 GB: without it, it was closed after 9 minutes; with it, it kept going, and the disk only took the peak.
 **Risk:** if the system runs from a USB disk and a lot is written to the swap, USB stalls can freeze the whole
 system for a few seconds. That is why it is not applied by default: use it if games get closed for memory, and remove it if you
@@ -395,6 +396,38 @@ printf '# ps5-bazzite-toolbox (bloque swapdisco)\n/var/swapfile none swap defaul
 
 **UNDO:** option 52 → `swapdisco` with size 0, or `sudo swapoff /var/swapfile`, delete its two lines from
 `/etc/fstab` and `sudo rm /var/swapfile`.
+
+### `memoria`
+
+**EXPERIMENTAL.** Linux memory settings for emulators that fill the RAM (Lichii, CheezyEmu, Eglantine).
+They come from the guide of [lichii-bc250](https://github.com/lethevimlet/lichii-bc250) ("Step 1"), measured on an
+AMD BC-250, which has the PS5's own chip and also runs Bazzite. Only what applies to the PS5: the zram and the disk swap
+are the two blocks above, and nothing of the board's overclocking or memory carve-out.
+**WHAT IT DOES:** asks for each one separately and writes it to its own file (they survive bootc updates):
+
+| Setting | Bazzite | Here | Why |
+|---|---|---|---|
+| `vm.swappiness` | 180 | 10 | Don't push the game to swap while RAM is still free: getting it back freezes it for seconds |
+| `vm.compaction_proactiveness` | 20 | 100 | The GPU asks for 2 MB blocks; with fragmented memory the kernel frees room by pushing the game to swap. Costs some CPU |
+| `vm.watermark_scale_factor` | 125 | 300 | Keep RAM free ahead of big area loads (a big area can ask for ~3 GB in 30 s). On the BC-250, 6–14 s freezes went down to 3–4 s |
+| systemd-oomd on your session | — | 80 % for 20 s | If memory pressure stays that high, close what causes it instead of leaving the console hung. It can close more than the game (Steam) |
+
+**WHY EXPERIMENTAL:** on an original PS5 (VRAM 6 GB, ~8.7 GB of RAM for Linux, lichii-bc250 v21) the biggest area load
+had memory pressure at 3.5 % at most and 8 GB in swap, but it has not been compared with Bazzite's values in
+the same session yet. That is why it is not applied by default.
+
+```sh
+printf 'vm.swappiness = 10\n' | sudo tee /etc/sysctl.d/99-ps5-memoria-swappiness.conf
+printf 'vm.compaction_proactiveness = 100\n' | sudo tee /etc/sysctl.d/99-ps5-memoria-compaction.conf
+printf 'vm.watermark_scale_factor = 300\n' | sudo tee /etc/sysctl.d/99-ps5-memoria-watermark.conf
+sudo sysctl --system
+sudo mkdir -p /etc/systemd/system/user@.service.d
+printf '[Service]\nManagedOOMMemoryPressure=kill\nManagedOOMMemoryPressureLimit=80%%\nManagedOOMMemoryPressureDurationSec=20s\n' | sudo tee /etc/systemd/system/user@.service.d/99-ps5-memoria-oomd.conf
+sudo systemctl daemon-reload    # the safety net watches your session from the next login
+```
+
+**UNDO:** `sudo rm /etc/sysctl.d/99-ps5-memoria-*.conf /etc/systemd/system/user@.service.d/99-ps5-memoria-oomd.conf`,
+`sudo systemctl daemon-reload` and reboot.
 
 ### `fans`
 
@@ -1215,6 +1248,7 @@ stays there so you can retry.
 | `/etc/dnf/libdnf5.conf.d/90-ps5-hold.conf` | `updates` | — |
 | `/etc/systemd/zram-generator.conf.d/90-ps5-bazzite-toolbox.conf` | `zram` | — |
 | `/var/swapfile` and two lines in `/etc/fstab` | `swapdisco` | — |
+| `/etc/sysctl.d/99-ps5-memoria-*.conf`, `/etc/systemd/system/user@.service.d/99-ps5-memoria-oomd.conf` | `memoria` | — |
 | `/etc/ps5-bazzite-deck/perf.conf` (keys `FAN_TARGET`, `CPU_BOOST`) and `~/ps5-linux-tools/` | `fans` | — |
 | `/usr/local/sbin/ps5-hdmi-kick`, `/etc/systemd/system/ps5-hdmi-kick.service` | `hdmi` | — |
 | `/usr/local/sbin/ps5-cpufreq-calm`, `/etc/systemd/system/ps5-cpufreq-calm.service` | `cpufreq` | — |
