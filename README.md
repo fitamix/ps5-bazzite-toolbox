@@ -24,7 +24,7 @@ The interface is in English or Spanish: it follows the system locale (`LANG`; Sp
 | Jailbreak | [ps5-y2jb-autoloader](https://github.com/itsPLK/ps5-y2jb-autoloader) |
 | Linux loader | `ps5-linux-loader-v3.5.elf` ([ps5-linux-loader](https://github.com/ps5-linux/ps5-linux-loader)) |
 | Sending the loader | [PS5 Payload Manager](https://github.com/itsPLK/ps5-payload-manager) |
-| Disk | 1 TB Lexar ES3 external SSD over USB 3.2 (10 Gb/s, USB `21c4:0003`; stable with `usb-storage.quirks=21c4:0003:u`, which the `cmdline` block sets) |
+| Disk | 1 TB Lexar ES3 external SSD over USB 3.2 (10 Gb/s, USB `21c4:0003`; stable with `usb-storage.quirks=21c4:0003:u`, which the `usbquirk` part of the `usbdisk` block sets) |
 
 It may work with other models (Slim, Pro), firmwares, loaders or disks, but this is untested.
 
@@ -47,7 +47,7 @@ case you prefer to do it by hand without installing anything.
 - [Menu and command-line options](#menu-and-command-line-options)
 - [Diagnostics](#diagnostics)
 - [Screen and graphical session](#screen-and-graphical-session)
-- [Console settings](#console-settings) (each block in detail, with its commands)
+- [Console settings](#console-settings) (groups, blocks and parts in detail, with their commands)
 - [PortProton and Steam](#portproton-and-steam)
 - [Switching image version and going back](#switching-the-image-version-and-rolling-back)
 - [Backup of your home folder](#backing-up-your-home-folder)
@@ -108,7 +108,7 @@ there is one, a system command that does the same.
 | 44 | `kernel` | Watch the kernel live (Ctrl+C returns) | `--watch` | `sudo journalctl -k -f -n 0` |
 | **Console settings** | | | | |
 | 51 | `ajustes` | See how the settings are and apply the missing ones, one by one | `--setup --status`, `--setup` | — |
-| 52 | `ajuste` | Change a specific setting (even if done or you said no) | `--setup --only vram,nas` | each block, in [Settings](#console-settings) |
+| 52 | `ajuste` | Change a setting or a group (even if done or you said no) | `--setup --only vram,nas` | each block, in [Settings](#console-settings) |
 | — | | Apply without asking: the recommended answer, or yours if you had already said yes to a block (useful to set up a new install like the previous one by copying `~/.config/ps5-bazzite-toolbox.conf`) | `--setup --all` | — |
 | **System and toolbox** | | | | |
 | 61 | `actualizar` | Update this toolbox (shows what is new and asks) | `--self-update [v1.1.0]` | — |
@@ -158,17 +158,33 @@ monitor's.
 
 ## Console settings
 
-Settings come in **blocks**. Each one, when offered, explains **what it changes, why, and how to undo it**, and
-asks with a recommended answer (`[Y/n]` = yes by default, `[y/N]` = no). What depends on each console
-(disk, language, NAS…) it detects or asks.
+Settings come in **blocks**, and blocks in **groups** (`basic`, `performance`, `nas`, `games`, `desktop`; they run in
+that order). Each setting, when offered, explains **what it changes, why, and how to undo it**, and asks with a
+recommended answer (`[Y/n]` = yes by default, `[y/N]` = no). What depends on each console (disk, language, NAS…) it
+detects or asks.
 
-- **Option 51** (`ajustes`) shows the state of every block (✔ applied, ✘ pending, – not applicable on this console
-  or you said no) and then asks whether to apply the pending ones, one by one. Without the menu: `--setup --status`
-  only shows it, `--setup` goes through the pending ones.
+- **Option 51** (`ajustes`) shows the state of every block (✔ applied, ✘ pending, – not applicable on this console or
+  "not applied (your choice)") and then asks whether to apply the pending ones, one by one. Without the menu:
+  `--setup --status` only shows it, `--setup` goes through the pending ones.
 - **Option 52** (`--setup --only vram,nas`) goes back to a specific block, even if it is already applied or you said no to it:
-  it is the way to change a value or undo it.
-- **Your answers** (language, VRAM, NAS details, blocks you do not want…) are saved in
-  `~/.config/ps5-bazzite-toolbox.conf`, and next time it only offers what is pending.
+  it is the way to change a value or undo it. It lists the groups with their blocks, and a whole group works too
+  (`--setup --only performance`).
+- **Blocks with several parts:** it first lists their parts (✔ done, · pending, – not applicable here) and then asks
+  for each pending part, with its own explanation; a single-part block asks once. When you ask for it by name
+  (`--only X` or option 52), the parts that are already done are offered again (default: no) so you can change their
+  values.
+- **Your answers** (language, VRAM, NAS details, what you do not want…) are saved in
+  `~/.config/ps5-bazzite-toolbox.conf`, and next time it only offers what is pending. Each part keeps its own answer
+  (`SKIP_<part>`) under the name it had in the blocks before 1.18.0, so what you said before and what is already
+  applied still count. Saying no to a whole block is saying no to each of its pending parts, and the status shows
+  "not applied (your choice)" when you declined all of them.
+- **Names:** `--only` and option 52 accept block names, group names and the **old names** (1.18.0 regrouped the
+  blocks): the name of a part runs just that part (`--only zram`, `--only bt`, `--only locale`, `--only hdmi`…);
+  `cmdline` runs `bootlang` and `usbquirk`; `atajos` runs `exeactions` and `spacetool`; `brave` and `edge`
+  run `navegadores`. `updates`, `wifi` and `cpufreq` no longer exist and say so.
+- **Coming from an earlier version:** your "no" answers are kept: a "no" to `cmdline` becomes a "no" to `bootlang` and
+  `usbquirk`; to `atajos`, to `exeactions` and `spacetool`; to both `brave` and `edge`, to `navegadores`; to `hdmi`,
+  `HDMI_KICK=off`. After updating, `vram` shows as pending until you answer the GTT question.
 - Some ask for a **reboot**, and those that touch memory or the GPU, for a **power off and boot with the loader**
   (a reboot, including the warm reboot, does not apply them). It says so at the end.
 
@@ -176,42 +192,53 @@ asks with a recommended answer (`[Y/n]` = yes by default, `[y/N]` = no). What de
 
 | Block | What it does | Recommended | Reboot |
 |---|---|---|---|
-| [`locale`](#locale) | Language, keyboard, time zone and network time | yes | no |
-| [`cmdline`](#cmdline) | Language at boot and a fix for the USB disk, in `/efi/cmdline.txt` | yes | reboot |
-| [`wifi`](#wifi) | Turns Wi-Fi off or on depending on the image version | yes | no |
-| [`updates`](#updates) | Blocks the updates that break the image | yes | no |
-| [`vram`](#vram) | Memory reserved for the GPU | yes | power off |
+| **Basic** (`basic`) | | | |
+| [`language`](#language) | Language, keyboard and time zone (system, desktop and Game Mode), also from boot | yes | reboot |
+| [`usbdisk`](#usbdisk) | USB boot drive without UAS (`usb-storage.quirks`) and without KDE SMART queries | yes | reboot |
+| [`controller`](#controller) | Reloads Bluetooth if it boots without an adapter (original PS5) and keeps Steam's Bluetooth enabled | yes | no |
+| [`splash`](#splash) | Boot without the loading screen (the logo), which once left it hung | yes | reboot |
+| [`kernelmsg`](#kernelmsg) | Fewer kernel messages on the text screen (the "Salina poller" flood) | yes | no |
+| [`warmreboot`](#warmreboot) | Warm reboot (without going through the loader), and `ps5-hdmi-kick` to recover the picture if it comes up black | **no** (experimental) | no |
+| **Performance** (`performance`) | | | |
+| [`vram`](#vram) | Memory reserved for the GPU and a 12 GB GTT (the GPU may borrow RAM) | yes | power off |
 | [`gpu40`](#gpu40) | All 40 GPU compute units instead of 36 | **no** (try it yourself) | power off |
-| [`zram`](#zram) | Compressed swap the size of all the RAM, with the `lz4` compressor (fewer stutters) | yes | reboot |
-| [`swapdisco`](#swapdisco) | Swap on disk behind the zram, so games are not closed for lack of memory | **no** (if they get closed) | no |
-| [`memoria`](#memoria) | Memory settings for heavy emulators (swappiness, compaction, free-RAM reserve, systemd-oomd safety net) | **no** (experimental) | no |
+| [`memory`](#memory) | Compressed swap (zram) the size of all the RAM with `lz4`; swap on disk behind it; memory settings for heavy emulators | zram yes; the rest **no** | reboot (zram) |
 | [`fans`](#fans) | Fan control and target temperature | yes | no |
-| [`cpufreq`](#cpufreq) | Calms the CPU frequency governor: less heat and fan noise at idle | yes | no |
-| [`warmreboot`](#warmreboot) | Warm reboot (without going through the loader) | **no** (experimental) | no |
-| [`hdmi`](#hdmi) | Recovers the picture after a warm reboot | yes, if you use the warm reboot | no |
-| [`arranque`](#arranque) | Boot without the loading screen (the logo), which once left it hung | yes | reboot |
-| [`bt`](#bt) | Reloads Bluetooth if it boots without an adapter (original PS5) | yes | no |
-| [`steambt`](#steambt) | Keeps Steam's Bluetooth enabled (otherwise it turns the adapter off and the controller does not connect) | yes | no |
-| [`disk`](#disk) | Removes the KDE SMART query that blocks USB disks | yes | no |
-| [`papelera`](#papelera) | Trash without a size limit (Dolphin no longer says "the trash is full") | yes | no |
-| [`consola`](#consola) | Fewer kernel messages on the text screen (the "Salina poller" flood) | yes | no |
-| [`firewall`](#firewall) | Fixes the firewall, which starts "failed" because of a module missing from the kernel | yes | no |
-| [`brave`](#brave) | Brave without asking for the KDE Wallet password | no | no |
-| [`edge`](#edge) | Microsoft Edge without asking for the KDE Wallet password | no | no |
-| [`nas`](#nas) | Mounts a NAS over SMB and links the EmuDeck ROMs | yes, if you already gave its details | no |
-| [`bios`](#bios) | EmuDeck BIOS from the NAS | no | no |
-| [`media`](#media) | ES-DE images from the NAS | no | no |
-| [`copiar`](#copiar) | The `copiarNas` command: copies with the NAS in the background, without freezing the system | yes, with the `nas` block | no |
-| [`esde`](#esde) | Fixes the `es_systems.xml` that EmuDeck leaves behind | yes | no |
-| [`rpcs3`](#rpcs3) | The PS5 controller in RPCS3 (PS3) in Game Mode too | yes, if you use RPCS3 | no |
-| [`portproton`](#portproton) | Fast sync and ray tracing for all PortProton games | yes | no |
+| **NAS** (`nas`) | | | |
+| [`nas`](#nas) | With a NAS: mounts the share over SMB and links the EmuDeck/ES-DE ROMs; the `copiarNas` command; emulator BIOS and ES-DE images from the NAS | yes, if you already gave its details (BIOS and images, no) | no |
+| **Games and emulators** (`games`) | | | |
+| [`emulators`](#emulators) | Fixes the `es_systems.xml` that EmuDeck leaves behind (and adds Citra); the PS5 controller in RPCS3 in Game Mode too | yes | no |
+| [`portproton`](#portproton) | Fast sync and ray tracing for all PortProton games; Dolphin right-click on an `.exe` | yes | no |
 | [`unifideck`](#unifideck) | Unifideck (Decky) can launch Windows games again with this image's Python 3.15 | yes, if you have Unifideck | no |
-| [`atajos`](#atajos) | Dolphin right-click and the `espacio` command | yes | no |
-| [`monitorweb`](#monitorweb) | The live monitor in your phone's browser, always available | no | no |
+| **Desktop and extras** (`desktop`) | | | |
+| [`trash`](#trash) | Trash without a size limit (Dolphin no longer says "the trash is full") | yes | no |
+| [`firewall`](#firewall) | Fixes the firewall, which starts "failed" because of a module missing from the kernel | yes | no |
+| [`browsers`](#browsers) | Brave and Edge (Flatpak) without asking for the KDE Wallet password, whichever you have installed | **no** | no |
+| [`space`](#space) | Dolphin right-click "see what each folder takes up" and the `espacio` command | yes | no |
+| [`monitorweb`](#monitorweb) | The live monitor in your phone's browser, always available | **no** | no |
 
-The commands for each block are what the toolbox does, with the default values; change them to your own.
+**Removed in 1.18.0:** the `updates` block (it only served non-bootc images), `wifi` (only images older than
+v1.5.0; it also no longer removes `module_blacklist=moal` from `cmdline.txt`) and `cpufreq` (images v2.11 or later
+already set `schedutil`'s `rate_limit_us` to 10 ms themselves; VivaLaVent issue #53). An old install is harmless; to
+remove the `cpufreq` one:
+`sudo systemctl disable ps5-cpufreq-calm; sudo rm /usr/local/sbin/ps5-cpufreq-calm /etc/systemd/system/ps5-cpufreq-calm.service`.
 
-### `locale`
+The commands for each setting are what the toolbox does, with the default values; change them to your own.
+
+### Basic (`basic`)
+
+`--setup --only basic` goes through the whole group.
+
+#### `language`
+
+Language, keyboard and time of the system, and the same from boot on. It has two parts:
+
+- `locale` — Language, keyboard and time zone
+- `bootlang` — Language and keyboard from boot
+
+##### Language, keyboard and time zone (`locale`)
+
+<a id="locale"></a>
 
 **WHAT IT DOES:** system language, keyboard (console, desktop and Game Mode), time zone and automatic network time.
 **WHY:** the image ships in English, with a US keyboard and UTC time. Also, Game Mode (gamescope) doesn't read the
@@ -237,79 +264,218 @@ kwriteconfig6 --file plasma-localerc --group Translations --key LANGUAGE es_ES:e
 `~/.config/plasma-localerc.bak-*` the toolbox leaves over it. Steam has its own language and time zone (see
 [Things done by hand](#things-done-by-hand)).
 
-### `cmdline`
+##### Language and keyboard from boot (`bootlang`)
 
-**WHAT IT DOES:** `/efi/cmdline.txt`, the options the kernel boots with (a single line):
+<a id="cmdline"></a>
 
-- `locale.LANG=…` and `vconsole.keymap=…`: the language and keyboard from boot (SSH sessions do not read
-  the ones from `locale`).
-- `usb-storage.quirks=VID:PID:letters` for the USB boot disk: `u` = no UAS, `m` = 32 KB transfers.
-  It proposes `u` for the Lexar ES3 (`21c4:0003`), `u` if this boot already had UAS errors, and nothing if there are none.
-- On image v1.5.0 or later, it removes `module_blacklist=moal` (Wi-Fi no longer hangs).
-
-**WHY:** some USB disks with UAS give resets and I/O errors.
+**WHAT IT DOES:** adds `locale.LANG=…` and `vconsole.keymap=…` to `/efi/cmdline.txt` (the options the kernel boots
+with, a single line), with a backup first. It uses the language and keyboard of the `locale` part (`es_ES.UTF-8` and
+`es` by default).
+**WHY:** so that messages and the text console come out in your language and keyboard from boot, not just the
+desktop (SSH sessions do not read the ones from `locale`).
 
 ```sh
 sudo cp /efi/cmdline.txt /efi/cmdline.txt.bak-$(date +%Y%m%d-%H%M%S)
-lsusb                                          # the VID:PID of your disk, e.g. 21c4:0003
-sudo nano /efi/cmdline.txt                     # add at the end: locale.LANG=es_ES.UTF-8 vconsole.keymap=es usb-storage.quirks=21c4:0003:u
-sudo sed -i 's| module_blacklist=moal||' /efi/cmdline.txt     # only with image v1.5.0 or later
+sudo sed -i 's/$/ locale.LANG=es_ES.UTF-8 vconsole.keymap=es/' /efi/cmdline.txt     # a single line; check first that they are not there already
 ```
 
 **UNDO:** `sudo cp /efi/cmdline.txt.bak-<date> /efi/cmdline.txt`. Takes effect after a reboot.
 
-### `wifi`
+#### `usbdisk`
 
-**WHAT IT DOES:**
+Care for the USB drive the console boots from. It has two parts:
 
-- Image **v1.5.0 or later**: turns Wi-Fi back on if it was off. If you only use a cable, you can
-  answer no.
-  ```sh
-  sudo rm -f /etc/NetworkManager/conf.d/99-ps5-no-wifi.conf
-  sudo systemctl unmask wpa_supplicant.service
-  sudo systemctl restart NetworkManager
-  ```
-- Image **older than v1.5.0**: turns Wi-Fi off without blocking its driver (`moal`), which also handles Bluetooth.
-  ```sh
-  printf '[keyfile]\nunmanaged-devices=type:wifi\n' | sudo tee /etc/NetworkManager/conf.d/99-ps5-no-wifi.conf
-  sudo systemctl mask --now wpa_supplicant.service
-  sudo systemctl reload NetworkManager
-  ```
+- `usbquirk` — USB drive without UAS
+- `disk` — No KDE SMART queries
 
-**WHY:** before v1.5.0, the IW620 chip driver hung the console with Wi-Fi active.
-**UNDO:** the other pair of commands. Not applicable if the console has no Wi-Fi.
+##### USB drive without UAS (`usbquirk`)
 
-### `updates`
-
-**WHAT IT DOES:** turns off Bazzite's automatic updates and forbids `dnf` from updating the kernel, Mesa, the
-firmware and gamescope.
-**WHY:** those packages carry PS5 patches; updating them breaks the image. The image is updated with its
-own updater ([option 62](#switching-the-image-version-and-rolling-back)), not with `ujust update` or
-`rpm-ostree` (it is not an ostree image). **On bootc it does not apply**: there, updates are the author's and can be undone.
+**WHAT IT DOES:** `usb-storage.quirks=VID:PID:letters` in `/efi/cmdline.txt`, with a backup first, for the USB boot
+disk: `u` = no UAS, `m` = 32 KB transfers (only if `u` is not enough). It proposes `u` for the Lexar ES3
+(`21c4:0003`), `u` if this boot already had UAS errors, and nothing if there are none. Not applicable if you do not
+boot from USB.
+**WHY:** some USB-NVMe adapters with UAS give resets and I/O errors.
+**It asks:** the letters (`u`, `um`, or `-` for none).
 
 ```sh
-sudo systemctl mask --now uupd.timer rpm-ostreed-automatic.timer
-sudo mkdir -p /etc/dnf/libdnf5.conf.d
-printf '[main]\nexcludepkgs=kernel*,mesa-*,linux-firmware*,gamescope*\n' | sudo tee /etc/dnf/libdnf5.conf.d/90-ps5-hold.conf
+sudo cp /efi/cmdline.txt /efi/cmdline.txt.bak-$(date +%Y%m%d-%H%M%S)
+lsusb                                          # the VID:PID of your disk, e.g. 21c4:0003
+sudo sed -i 's/$/ usb-storage.quirks=21c4:0003:u/' /efi/cmdline.txt     # a single line; change the VID:PID to yours
 ```
 
-**UNDO:** `sudo systemctl unmask uupd.timer rpm-ostreed-automatic.timer; sudo rm /etc/dnf/libdnf5.conf.d/90-ps5-hold.conf`.
+**UNDO:** `sudo cp /efi/cmdline.txt.bak-<date> /efi/cmdline.txt`. Takes effect after a reboot.
 
-### `vram`
+##### No KDE SMART queries (`disk`)
 
-**WHAT IT DOES:** the memory reserved for the GPU, in `/efi/vram.txt` (bytes in hexadecimal). From 512 MB to 8 GB,
-in 256 MB steps; recommends 4 GB. What is reserved for the GPU stops being available as RAM.
-**WHY:** with 512 MB, DX12/UE5 games crash with *Not enough memory*.
-**It asks:** how much (`4`, `4G`, `1536M`…).
+<a id="disk"></a>
+
+**WHAT IT DOES:** stops KDE's disk monitor from querying the disk's SMART, and turns off `smartd`.
+**WHY:** some USB-NVMe adapters stop responding for about 60 s on that query (the console looks
+hung). KDE's SMART warnings are lost. Not applicable if you do not boot from USB.
+
+```sh
+printf '%s\n' 'polkit.addRule(function (action, subject) {' \
+  '    if (action.id == "org.kde.kded.smart.smartctl") return polkit.Result.NO;' '});' |
+  sudo tee /etc/polkit-1/rules.d/50-ps5-no-kde-smart.rules
+sudo systemctl restart polkit
+sudo systemctl disable --now smartd.service
+kwriteconfig6 --file kded6rc --group Module-smart --key autoload false
+```
+
+**UNDO:** `sudo rm /etc/polkit-1/rules.d/50-ps5-no-kde-smart.rules; sudo systemctl restart polkit; sudo systemctl enable --now smartd`.
+
+#### `controller`
+
+Making Bluetooth and the controller always work. It has two parts:
+
+- `bt` — Bluetooth that recovers by itself
+- `steambt` — Steam's Bluetooth always on
+
+##### Bluetooth that recovers by itself (`bt`)
+
+<a id="bt"></a>
+
+**WHAT IT DOES:** installs `ps5-bt-guard`, a service that at boot and on wake checks that Bluetooth has an
+adapter and, if not, reloads the `btusb` driver (up to 2 times). Only on consoles with the IW620 chip (original PS5).
+**WHY:** the IW620 sometimes does not respond after its first restart and Bluetooth boots without an adapter
+("No default controller available"); the image's `ps5-bt-revive` does not recognize that error.
+**By hand:** `/usr/local/sbin/ps5-bt-guard` and `/etc/systemd/system/ps5-bt-guard.service` (the script's `apply_bt`
+function); what it does is equivalent to:
+
+```sh
+bluetoothctl list | grep -q '^Controller' || { sudo modprobe -r btusb; sleep 2; sudo modprobe btusb; }
+```
+
+**UNDO:** `sudo systemctl disable ps5-bt-guard`. If it still does not come back: power off and boot with the loader.
+
+##### Steam's Bluetooth always on (`steambt`)
+
+<a id="steambt"></a>
+
+**WHAT IT DOES:** installs a service for your user, `ps5-steam-bt`, that runs before each game mode start,
+with Steam still closed. If in Steam's configuration (`~/.local/share/Steam/config/config.vdf`, `"System"` →
+`"Bluetooth"` → `"Enabled"`) Bluetooth is `"0"`, it sets it to `"1"`. If it is already enabled, it touches nothing.
+**WHY:** with Bluetooth disabled in Steam (Settings → Bluetooth), Steam turns the adapter off every time it enters
+game mode and the controller does not connect. It happens without you touching anything when Bazzite restarts Steam: if game mode drops 5
+times in a row, `gamescope-session-plus` puts Steam's base files back, asks to log in again and leaves
+Bluetooth disabled. It is fixed before Steam opens, because with Steam open the change is lost when it closes.
+It works on any PS5.
+**By hand:** `~/.local/share/ps5-bazzite-toolbox/steam-bt-on.sh` and `~/.config/systemd/user/ps5-steam-bt.service`
+(the script's `apply_steambt` function); then:
+
+```sh
+systemctl --user daemon-reload && systemctl --user enable ps5-steam-bt.service
+journalctl --user -b -u ps5-steam-bt          # "switched on" if it had to enable it
+```
+
+**UNDO:** `systemctl --user disable ps5-steam-bt`, and delete those two files. If you want Bluetooth off
+in Steam, say no to this part: otherwise it is turned on again at the next boot.
+
+#### `splash`
+
+<a id="arranque"></a>
+
+**WHAT IT DOES:** removes the loading screen (*plymouth*): adds `plymouth.enable=0 rd.plymouth=0` to
+`/efi/cmdline.txt`, with a backup first. It only shows the Bazzite logo; without it you see the boot text.
+**WHY:** once it left a Lexar boot stopped for 3 minutes (`plymouth-read-write.service`) until pressing
+`Ctrl+Alt+F3`, and it adds nothing.
+
+**What it does not touch, even though it delays boot:**
+
+- `cardwired`, Bazzite's GPU manager for laptops with two graphics chips: game mode waits for it ~10 s, but
+  it starts Steam with `cardwire launch`. Without it, the session drops, Bazzite restarts Steam and it stays on the desktop.
+  If a test version masked it, this block turns it back on.
+- `ps5-hdmi-kick` runs after reaching game mode.
+- The wait for the network is needed by the NAS mount.
+- The seconds spent on disks are the kernel detecting the USB.
+
+**By hand:**
+
+```sh
+sudo cp /efi/cmdline.txt /efi/cmdline.txt.bak && sudo sed -i 's/$/ plymouth.enable=0 rd.plymouth=0/' /efi/cmdline.txt
+systemd-analyze; systemd-analyze blame | head     # after rebooting: how long it takes and what
+```
+
+**UNDO:** remove `plymouth.enable=0 rd.plymouth=0` from `/efi/cmdline.txt` (or copy a `.bak-*` over it).
+
+#### `kernelmsg`
+
+<a id="consola"></a>
+
+**WHAT IT DOES:** sets `kernel.printk = 4 4 1 7` in `/etc/sysctl.d/20-consola-silenciosa.conf` (with sudo) and applies it
+right away with `sudo sysctl -w kernel.printk="4 4 1 7"`.
+**WHY:** this PS5 kernel logs `Salina poller: lock busy, rescheduling` (info level) about 390 times a minute while a
+DualSense is connected over Bluetooth. With the console level at 7 they flood the text console you see when gamescope
+loses the display. The messages still go to the journal (`journalctl -k`); only the screen output is reduced.
+Done when the file has that value and `/proc/sys/kernel/printk` starts with 4.
+
+**UNDO:** `sudo rm /etc/sysctl.d/20-consola-silenciosa.conf` and reboot.
+
+#### `warmreboot`
+
+<a id="hdmi"></a>
+
+**WHAT IT DOES:** enables the image's warm reboot: when rebooting (from Steam, the desktop or
+`sudo reboot`) it goes straight back to Linux without going through the PS5 or the loader. With the warm reboot on,
+it also offers (yes by default) to install `ps5-hdmi-kick`; the answer is saved as `HDMI_KICK`. (It used to be the
+`hdmi` block: `--only hdmi` still works by name.)
+**WHY it is not recommended:** it is experimental. On some consoles the picture comes back black or corrupted after the
+reboot (that is what `ps5-hdmi-kick`, below, is for), and on the original PS5 Bluetooth sometimes does not come back. A
+new kernel always needs a power off and a boot with the loader. Since image v3.0, the Linux-only Bluetooth address
+exists only on the PS5 Pro; on the original and the Slim the PS5 pairing is always shared.
+
+```sh
+ps5-warm-reboot on          # status: ps5-warm-reboot status
+```
+
+**`ps5-hdmi-kick`:** a service that once per boot, when game mode or the desktop appears, switches to console 2
+and back (the same as option 23). After a warm reboot, HDMI sometimes comes up black even though everything works.
+**By hand:** two files, `/usr/local/sbin/ps5-hdmi-kick` (the script: waits for `gamescope-wl` or `kwin_wayland`,
+5 s more, `chvt 2`, 3 s, `chvt` back to the previous console) and `/etc/systemd/system/ps5-hdmi-kick.service` (a `oneshot`
+after `graphical.target`). They are in the script's `apply_hdmi` function; then:
+
+```sh
+sudo systemctl daemon-reload && sudo systemctl enable ps5-hdmi-kick.service
+journalctl -b -u ps5-hdmi-kick                 # what it did on this boot
+```
+
+**UNDO:** `ps5-warm-reboot off` and `sudo systemctl disable ps5-hdmi-kick`.
+
+### Performance (`performance`)
+
+`--setup --only performance` goes through the whole group.
+
+#### `vram`
+
+**WHAT IT DOES:** two things that go together:
+
+- **The VRAM**, the memory reserved for the GPU, in `/efi/vram.txt` (bytes in hexadecimal). It offers 2, 4, 5, 6 and 8 GB
+  (0.5 GB can still be typed), in 256 MB steps; it recommends 4 GB. With less than 4 GB it asks for confirmation, because
+  the image advises against it. What is reserved for the GPU stops being available as RAM.
+- **The GTT**, how much normal RAM Linux may lend the GPU when VRAM is full. After you choose the VRAM it asks (yes by
+  default) whether to add `ttm.pages_limit=3145728 ttm.page_pool_size=3145728` to `/efi/cmdline.txt`, with a backup first
+  (`cmdline.txt.bak-<date>`). That is 12 GB: the GPU may borrow RAM up to that limit; without it the kernel limit is half
+  the RAM. **It reserves nothing**: it only uses the RAM the game needs. The answer is saved as `VRAM_GTT=on|off`; the
+  block counts as applied only with the `ttm` parameters, unless you said no.
+
+**WHY:** with 512 MB, DX12/UE5 games crash with *Not enough memory*. Since image v3.0.2, Game Mode keeps a 512 MiB VRAM
+floor for its own picture (`/etc/ps5-bazzite-deck/vram-floor`), so a game that fills VRAM no longer knocks it out
+(*Failed to pin framebuffer*). That is why **4 GB VRAM + 12 GB GTT** is enough for heavy PC games and leaves much more RAM
+to emulators than 6 GB. Measured: a heavy Unreal Engine PC game for 40 minutes with VRAM full and up to 1.4 GB spilled to
+GTT, no closes; a Switch 2 emulator ran more than 2 h before memory stutters, versus ~35 min at 6 GB.
+**It asks:** how much VRAM (`4`, `4G`, `1536M`…) and whether to set the GTT to 12 GB.
 
 ```sh
 [ -f /efi/vram.txt.orig ] || sudo cp /efi/vram.txt /efi/vram.txt.orig
 echo 0x100000000 | sudo tee /efi/vram.txt      # 4 GB (2 GB = 0x80000000, 6 GB = 0x180000000, 8 GB = 0x200000000)
+sudo cp /efi/cmdline.txt /efi/cmdline.txt.bak-$(date +%Y%m%d-%H%M%S)
+grep -q ttm.pages_limit /efi/cmdline.txt || sudo sed -i -E 's/[[:space:]]*$/ ttm.pages_limit=3145728 ttm.page_pool_size=3145728/' /efi/cmdline.txt
 ```
 
-**UNDO:** `sudo cp /efi/vram.txt.orig /efi/vram.txt`. Takes effect only after **powering off** and booting with the loader.
+**UNDO:** `sudo cp /efi/vram.txt.orig /efi/vram.txt` and remove `ttm.pages_limit=…` and `ttm.page_pool_size=…` from
+`/efi/cmdline.txt` (or copy a `cmdline.txt.bak-*` over it). Takes effect only after **powering off** and booting with the loader.
 
-### `gpu40`
+#### `gpu40`
 
 **WHAT IT DOES:** `amdgpu.ps5_cu_unlock=3` in `/efi/cmdline.txt`: the GPU uses all its 40 compute units instead of the
 36 that Sony enables (about 11% more). Original PS5 and Slim only (on the Pro they are all already active).
@@ -328,7 +494,17 @@ sudo dmesg | grep active_cu_number                                              
 
 **UNDO:** option 52 → `gpu40` and choose 36. Takes effect only after **powering off** and booting with the loader.
 
-### `zram`
+#### `memory`
+
+How the RAM is shared out and held when a game or an emulator fills it. It has three parts:
+
+- `zram` — zram size and compressor
+- `swapdisco` — Swap on disk
+- `memoria` — Memory settings for heavy emulators
+
+##### zram size and compressor (`zram`)
+
+<a id="zram"></a>
 
 **WHAT IT DOES:** the zram swap (memory that is compressed inside the RAM itself when it runs short), in two things:
 - **Size:** all the RAM, where Bazzite uses half.
@@ -363,7 +539,7 @@ If with `lz4` some program gets closed for lack of memory, raise the zram size o
 
 **It asks:** size (`ram` = all, `ram / 2` = Bazzite's, or in MB) and compressor (`lz4`, `zstd` or `lzo-rle`;
 check that the kernel has it). If it finds `91-lz4.conf` (the manual test from before this option), it deletes it:
-this block already covers it.
+this part already covers it.
 
 ```sh
 sudo mkdir -p /etc/systemd/zram-generator.conf.d
@@ -375,7 +551,9 @@ cat /sys/block/zram0/comp_algorithm     # after rebooting: the one in [brackets]
 **UNDO:** `sudo rm /etc/systemd/zram-generator.conf.d/90-ps5-bazzite-toolbox.conf` and reboot (goes back to
 half the RAM with `zstd`). To change only the compressor: option 52 → `zram`.
 
-### `swapdisco`
+##### Swap on disk (`swapdisco`)
+
+<a id="swapdisco"></a>
 
 **WHAT IT DOES:** creates a swap file on the disk (`/var/swapfile`) with **priority 10**, behind the zram
 (priority 100), and keeps it active on every boot with a line in `/etc/fstab`. The zram is still used first: the
@@ -397,12 +575,14 @@ printf '# ps5-bazzite-toolbox (bloque swapdisco)\n/var/swapfile none swap defaul
 **UNDO:** option 52 → `swapdisco` with size 0, or `sudo swapoff /var/swapfile`, delete its two lines from
 `/etc/fstab` and `sudo rm /var/swapfile`.
 
-### `memoria`
+##### Memory settings for heavy emulators (`memoria`)
+
+<a id="memoria"></a>
 
 **EXPERIMENTAL.** Linux memory settings for emulators that fill the RAM (Lichii, CheezyEmu, Eglantine).
 They come from the guide of [lichii-bc250](https://github.com/lethevimlet/lichii-bc250) ("Step 1"), measured on an
 AMD BC-250, which has the PS5's own chip and also runs Bazzite. Only what applies to the PS5: the zram and the disk swap
-are the two blocks above, and nothing of the board's overclocking or memory carve-out.
+are the two parts above, and nothing of the board's overclocking or memory carve-out.
 **WHAT IT DOES:** asks for each one separately and writes it to its own file (they survive bootc updates):
 
 | Setting | Bazzite | Here | Why |
@@ -412,9 +592,10 @@ are the two blocks above, and nothing of the board's overclocking or memory carv
 | `vm.watermark_scale_factor` | 125 | 300 | Keep RAM free ahead of big area loads (a big area can ask for ~3 GB in 30 s). On the BC-250, 6–14 s freezes went down to 3–4 s |
 | systemd-oomd on your session | — | 80 % for 20 s | If memory pressure stays that high, close what causes it instead of leaving the console hung. It can close more than the game (Steam) |
 
-**WHY EXPERIMENTAL:** on an original PS5 (VRAM 6 GB, ~8.7 GB of RAM for Linux, lichii-bc250 v21) the biggest area load
-had memory pressure at 3.5 % at most and 8 GB in swap, but it has not been compared with Bazzite's values in
-the same session yet. That is why it is not applied by default.
+**WHY EXPERIMENTAL:** on an original PS5 with 4 GB VRAM and all four settings on, a Switch 2 emulator ran more than
+2 h without memory stutters and pressure stayed under 7 %. Before (VRAM 6 GB, ~8.7 GB of RAM for Linux,
+lichii-bc250 v21) the biggest area load had memory pressure at 3.5 % at most and 8 GB in swap. It has not been compared
+with Bazzite's values in the same session yet. That is why it is not applied by default.
 
 ```sh
 printf 'vm.swappiness = 10\n' | sudo tee /etc/sysctl.d/99-ps5-memoria-swappiness.conf
@@ -429,7 +610,7 @@ sudo systemctl daemon-reload    # the safety net watches your session from the n
 **UNDO:** `sudo rm /etc/sysctl.d/99-ps5-memoria-*.conf /etc/systemd/system/user@.service.d/99-ps5-memoria-oomd.conf`,
 `sudo systemctl daemon-reload` and reboot.
 
-### `fans`
+#### `fans`
 
 **WHAT IT DOES:** who controls the fan, and what temperature it aims for (60–85 °C; the factory one, 80 °C, is
 quiet but hot). Two ways, and the toolbox uses only one:
@@ -472,210 +653,20 @@ v2.8.1+).
 **UNDO:** perf → `ps5-perf off`; tools → `sudo systemctl disable --now ps5fan ps5boost`; target → empty in the
 block (goes back to the factory 80 °C; on v2.8.1+ it removes `ps5_fan.target=` from `cmdline.txt`).
 
-### `cpufreq`
+### NAS (`nas`)
 
-**WHAT IT DOES:** installs `ps5-cpufreq-calm`, a service that at boot sets the CPU frequency governor
-(`schedutil`) to re-evaluate the frequency at most every 10 ms. It only applies if the governor is `schedutil`, which is the
-image's.
+`--setup --only nas` goes through the whole group.
 
-**WHY:** the image's driver (`ps5-cpufreq`) lets it re-evaluate every 0.075 ms. Measured on v2.10 at idle:
+#### `nas`
 
-| | Without the block (75 µs) | With the block (10 ms) |
-|---|---|---|
-| Frequency changes per second | ~275 | ~90 |
-| CPU used by the governor (`sugov:0`) | ~20% of one core | ~8% |
-| Average core frequency | 2.3–2.6 GHz | ~1.25 GHz |
+If you have a NAS, this asks for everything you can do with it (you only give its details once). It has four parts:
 
-That is heat the fan has to remove with nothing running. While gaming, the CPU still climbs to its maximum.
+- `nas` — Mount the NAS and use its ROMs
+- `copiar` — The copiarNas command and the ~/NAS link
+- `bios` — Emulator BIOS from the NAS
+- `media` — ES-DE images and videos from the NAS
 
-**By hand:** `/usr/local/sbin/ps5-cpufreq-calm` and `/etc/systemd/system/ps5-cpufreq-calm.service` (the script's
-`apply_cpufreq` function). It is equivalent to the following, which is lost at power off:
-
-```sh
-echo 10000 | sudo tee /sys/devices/system/cpu/cpufreq/schedutil/rate_limit_us
-```
-
-**UNDO:** `sudo systemctl disable ps5-cpufreq-calm`. Takes effect from the next boot.
-
-### `warmreboot`
-
-**WHAT IT DOES:** enables the image's warm reboot: when rebooting (from Steam, the desktop or
-`sudo reboot`) it goes straight back to Linux without going through the PS5 or the loader.
-**WHY it is not recommended:** it is experimental. On some consoles the picture comes back black or corrupted after the
-reboot (that is what the `hdmi` block is for), and on the original PS5 Bluetooth sometimes does not come back. A new kernel
-always needs a power off and a boot with the loader. On image v2.x, the "controller shared with the PS5" disables the
-warm reboot on consoles with IW620 (`ps5-bt-address off` brings it back).
-
-```sh
-ps5-warm-reboot on          # status: ps5-warm-reboot status
-```
-
-**UNDO:** `ps5-warm-reboot off`.
-
-### `hdmi`
-
-**WHAT IT DOES:** installs `ps5-hdmi-kick`, a service that once per boot, when game mode or the desktop appears,
-switches to console 2 and back (the same as option 23).
-**WHY:** after a warm reboot, HDMI sometimes comes up black even though everything works.
-**By hand:** two files, `/usr/local/sbin/ps5-hdmi-kick` (the script: waits for `gamescope-wl` or `kwin_wayland`,
-5 s more, `chvt 2`, 3 s, `chvt` back to the previous console) and `/etc/systemd/system/ps5-hdmi-kick.service` (a `oneshot`
-after `graphical.target`). They are in the script's `apply_hdmi` function; then:
-
-```sh
-sudo systemctl daemon-reload && sudo systemctl enable ps5-hdmi-kick.service
-journalctl -b -u ps5-hdmi-kick                 # what it did on this boot
-```
-
-**UNDO:** `sudo systemctl disable ps5-hdmi-kick`.
-
-### `arranque`
-
-**WHAT IT DOES:** removes the loading screen (*plymouth*): adds `plymouth.enable=0 rd.plymouth=0` to
-`/efi/cmdline.txt`, with a backup first. It only shows the Bazzite logo; without it you see the boot text.
-**WHY:** once it left a Lexar boot stopped for 3 minutes (`plymouth-read-write.service`) until pressing
-`Ctrl+Alt+F3`, and it adds nothing.
-
-**What it does not touch, even though it delays boot:**
-
-- `cardwired`, Bazzite's GPU manager for laptops with two graphics chips: game mode waits for it ~10 s, but
-  it starts Steam with `cardwire launch`. Without it, the session drops, Bazzite restarts Steam and it stays on the desktop.
-  If a test version masked it, this block turns it back on.
-- `ps5-hdmi-kick` runs after reaching game mode.
-- The wait for the network is needed by the NAS mount.
-- The seconds spent on disks are the kernel detecting the USB.
-
-**By hand:**
-
-```sh
-sudo cp /efi/cmdline.txt /efi/cmdline.txt.bak && sudo sed -i 's/$/ plymouth.enable=0 rd.plymouth=0/' /efi/cmdline.txt
-systemd-analyze; systemd-analyze blame | head     # after rebooting: how long it takes and what
-```
-
-**UNDO:** remove `plymouth.enable=0 rd.plymouth=0` from `/efi/cmdline.txt` (or copy a `.bak-*` over it).
-
-### `bt`
-
-**WHAT IT DOES:** installs `ps5-bt-guard`, a service that at boot and on wake checks that Bluetooth has an
-adapter and, if not, reloads the `btusb` driver (up to 2 times). Only on consoles with the IW620 chip (original PS5).
-**WHY:** the IW620 sometimes does not respond after its first restart and Bluetooth boots without an adapter
-("No default controller available"); the image's `ps5-bt-revive` does not recognize that error.
-**By hand:** `/usr/local/sbin/ps5-bt-guard` and `/etc/systemd/system/ps5-bt-guard.service` (the script's `apply_bt`
-function); what it does is equivalent to:
-
-```sh
-bluetoothctl list | grep -q '^Controller' || { sudo modprobe -r btusb; sleep 2; sudo modprobe btusb; }
-```
-
-**UNDO:** `sudo systemctl disable ps5-bt-guard`. If it still does not come back: power off and boot with the loader.
-
-### `steambt`
-
-**WHAT IT DOES:** installs a service for your user, `ps5-steam-bt`, that runs before each game mode start,
-with Steam still closed. If in Steam's configuration (`~/.local/share/Steam/config/config.vdf`, `"System"` →
-`"Bluetooth"` → `"Enabled"`) Bluetooth is `"0"`, it sets it to `"1"`. If it is already enabled, it touches nothing.
-**WHY:** with Bluetooth disabled in Steam (Settings → Bluetooth), Steam turns the adapter off every time it enters
-game mode and the controller does not connect. It happens without you touching anything when Bazzite restarts Steam: if game mode drops 5
-times in a row, `gamescope-session-plus` puts Steam's base files back, asks to log in again and leaves
-Bluetooth disabled. It is fixed before Steam opens, because with Steam open the change is lost when it closes.
-It works on any PS5.
-**By hand:** `~/.local/share/ps5-bazzite-toolbox/steam-bt-on.sh` and `~/.config/systemd/user/ps5-steam-bt.service`
-(the script's `apply_steambt` function); then:
-
-```sh
-systemctl --user daemon-reload && systemctl --user enable ps5-steam-bt.service
-journalctl --user -b -u ps5-steam-bt          # "switched on" if it had to enable it
-```
-
-**UNDO:** `systemctl --user disable ps5-steam-bt`, and delete those two files. If you want Bluetooth off
-in Steam, disable this block: otherwise it is turned on again at the next boot.
-
-### `disk`
-
-**WHAT IT DOES:** stops KDE's disk monitor from querying the disk's SMART, and turns off `smartd`.
-**WHY:** some USB-NVMe adapters stop responding for about 60 s on that query (the console looks
-hung). KDE's SMART warnings are lost. Not applicable if you do not boot from USB.
-
-```sh
-printf '%s\n' 'polkit.addRule(function (action, subject) {' \
-  '    if (action.id == "org.kde.kded.smart.smartctl") return polkit.Result.NO;' '});' |
-  sudo tee /etc/polkit-1/rules.d/50-ps5-no-kde-smart.rules
-sudo systemctl restart polkit
-sudo systemctl disable --now smartd.service
-kwriteconfig6 --file kded6rc --group Module-smart --key autoload false
-```
-
-**UNDO:** `sudo rm /etc/polkit-1/rules.d/50-ps5-no-kde-smart.rules; sudo systemctl restart polkit; sudo systemctl enable --now smartd`.
-
-### `papelera`
-
-**WHAT IT DOES:** removes the size limit of KDE's trash (`~/.config/ktrashrc`, the group of your trash folder,
-`UseSizeLimit=false`).
-**WHY:** by default it is 10 % of the disk; once it is full, Dolphin says the trash is full and won't let you
-delete a big folder (a game). Without a limit it grows until you empty it.
-
-**UNDO:** `kwriteconfig6 --file ktrashrc --group "$(realpath ~/.local/share/Trash)" --key UseSizeLimit true`.
-
-### `consola`
-
-**WHAT IT DOES:** sets `kernel.printk = 4 4 1 7` in `/etc/sysctl.d/20-consola-silenciosa.conf` (with sudo) and applies it
-right away with `sudo sysctl -w kernel.printk="4 4 1 7"`.
-**WHY:** this PS5 kernel logs `Salina poller: lock busy, rescheduling` (info level) about 390 times a minute while a
-DualSense is connected over Bluetooth. With the console level at 7 they flood the text console you see when gamescope
-loses the display. The messages still go to the journal (`journalctl -k`); only the screen output is reduced.
-Done when the file has that value and `/proc/sys/kernel/printk` starts with 4.
-
-**UNDO:** `sudo rm /etc/sysctl.d/20-consola-silenciosa.conf` and reboot.
-
-### `firewall`
-
-**WHAT IT DOES:** removes from the firewall zone the services whose module the PS5 kernel does not ship, and restarts
-firewalld. On the image it is `samba-client` (finding Windows machines by name), which uses `nf_conntrack_netbios_ns`.
-**WHY:** without that module, firewalld cannot load its rules ("Could not process rule: No such file or
-directory"), stays **failed** with a minimal zone (`public`: SSH only) and rejects any permanent change
-(`RUNNING_BUT_FAILED`). You can see it with `sudo firewall-cmd --state` (`failed`). The toolbox finds those services by looking at
-each one's module in `/usr/lib/firewalld`, so it also works if another version ships a different one. With the
-`FedoraWorkstation` zone working, ports 1025-65535 are left open to your network, as on desktop Bazzite (KDE
-Connect, Steam streaming, the [web monitor](#monitorweb)). A NAS mounted by its IP does not need `samba-client`.
-
-```sh
-sudo firewall-cmd --state                                                     # failed = this is happening to you
-sudo firewall-offline-cmd --zone=FedoraWorkstation --remove-service-from-zone=samba-client
-sudo systemctl restart firewalld && sudo firewall-cmd --state                 # running
-# more locked down, instead of the above: sudo firewall-offline-cmd --set-default-zone=public
-```
-
-`firewall-offline-cmd` changes the files without going through firewalld, which is why it works with it failed; its
-`--remove-service` is something else (compatibility with `lokkit`).
-**UNDO:** `sudo rm /etc/firewalld/zones/FedoraWorkstation.xml; sudo systemctl restart firewalld`.
-
-### `brave`
-
-**WHAT IT DOES:** Brave (Flatpak) stores its passwords without the KDE Wallet.
-**WHY:** with autostart, Brave asks for the Wallet password every time. **Careful:** the sessions and
-passwords it had already saved can no longer be read; that is why it is not recommended. Not applicable if you do not have Brave.
-
-```sh
-mkdir -p ~/.var/app/com.brave.Browser/config
-echo '--password-store=basic' >> ~/.var/app/com.brave.Browser/config/brave-flags.conf
-flatpak kill com.brave.Browser
-```
-
-**UNDO:** delete that line from `brave-flags.conf`.
-
-### `edge`
-
-The same as [`brave`](#brave) for Microsoft Edge (Flatpak), which also asks for the KDE Wallet password.
-Not applicable if you do not have Edge.
-
-```sh
-mkdir -p ~/.var/app/com.microsoft.Edge/config
-echo '--password-store=basic' >> ~/.var/app/com.microsoft.Edge/config/edge-flags.conf
-flatpak kill com.microsoft.Edge
-```
-
-**UNDO:** delete that line from `edge-flags.conf`.
-
-### `nas`
+##### Mount the NAS and use its ROMs (`nas`)
 
 **WHAT IT DOES:** mounts a shared folder from a NAS over SMB at `/var/mnt/nas` (on first access, and without blocking
 boot if the NAS is off) and makes EmuDeck's `~/Emulation/roms` point to the NAS ROMs. The local
@@ -700,36 +691,9 @@ flatpak override --user --filesystem=/var/mnt/nas          # so the emulators (F
 
 **UNDO:** `rm ~/Emulation/roms && mv ~/Emulation/roms.local ~/Emulation/roms`, and remove the line from `/etc/fstab`.
 
-### `bios`
+##### The copiarNas command and the ~/NAS link (`copiar`)
 
-**WHAT IT DOES:** `~/Emulation/bios` now points to the NAS BIOS folder (`Emulation/bios`; it creates it if it does not
-exist). If you have local BIOS files that are not on the NAS, it offers to copy them first (without overwriting anything there). The local
-folder stays as `~/Emulation/bios.local`. Needs the `nas` block.
-**WHY:** a single copy of the BIOS files for all machines.
-
-```sh
-cp -rn ~/Emulation/bios/. /var/mnt/nas/Emulation/bios/        # the ones missing on the NAS
-mv ~/Emulation/bios ~/Emulation/bios.local
-ln -s /var/mnt/nas/Emulation/bios ~/Emulation/bios
-```
-
-**UNDO:** `rm ~/Emulation/bios && mv ~/Emulation/bios.local ~/Emulation/bios`.
-
-### `media`
-
-**WHAT IT DOES:** the ES-DE images folder (the `MediaDirectory` one in `~/ES-DE/settings/es_settings.xml`, or
-`~/ES-DE/downloaded_media`) now points to the one on the NAS (`Emulation/downloaded_media`). It copies nothing and does not touch
-ES-DE's configuration; with ES-DE closed. The local one stays as `<folder>.local`. Needs the `nas` block.
-**WHY:** screenshots, covers and videos downloaded once for all machines.
-
-```sh
-mv ~/ES-DE/downloaded_media ~/ES-DE/downloaded_media.local
-ln -s /var/mnt/nas/Emulation/downloaded_media ~/ES-DE/downloaded_media
-```
-
-**UNDO:** `rm ~/ES-DE/downloaded_media && mv ~/ES-DE/downloaded_media.local ~/ES-DE/downloaded_media`.
-
-### `copiar`
+<a id="copiar"></a>
 
 **WHAT IT DOES:** installs the `copiarNas` command (`/usr/local/bin/copiarNas`) and the link `~/NAS` to the NAS
 shared folder. The direction comes from where each path is; NAS paths are written with `~/NAS/...` (Tab completes
@@ -749,13 +713,59 @@ normal priority): it only uses the disk when nothing else needs it. The copy goe
 switch to Game Mode; Ctrl+C only stops watching the progress. Running it again resumes it (`--partial`; what is
 already the same is skipped). Towards the NAS, links are skipped (SMB does not keep them). Each copy leaves a log
 in `~/.local/share/ps5-bazzite-toolbox/copias/` (the last 30). Like `cp -r`: `folder` copies the folder into the
-destination, `folder/` only what is inside it. Needs the `nas` block.
+destination, `folder/` only what is inside it. Needs the `nas` part (of this same block).
 **WHY:** on a USB disk a big copy (FileZilla, Dolphin) saturates it and the system freezes now and then; and the
 desktop windows are closed when switching to Game Mode, cutting the copy.
 
 **UNDO:** `sudo rm /usr/local/bin/copiarNas; rm ~/NAS`.
 
-### `esde`
+##### Emulator BIOS from the NAS (`bios`)
+
+<a id="bios"></a>
+
+**WHAT IT DOES:** `~/Emulation/bios` now points to the NAS BIOS folder (`Emulation/bios`; it creates it if it does not
+exist). If you have local BIOS files that are not on the NAS, it offers to copy them first (without overwriting anything there). The local
+folder stays as `~/Emulation/bios.local`. Needs the `nas` part (of this same block).
+**WHY:** a single copy of the BIOS files for all machines.
+
+```sh
+cp -rn ~/Emulation/bios/. /var/mnt/nas/Emulation/bios/        # the ones missing on the NAS
+mv ~/Emulation/bios ~/Emulation/bios.local
+ln -s /var/mnt/nas/Emulation/bios ~/Emulation/bios
+```
+
+**UNDO:** `rm ~/Emulation/bios && mv ~/Emulation/bios.local ~/Emulation/bios`.
+
+##### ES-DE images and videos from the NAS (`media`)
+
+<a id="media"></a>
+
+**WHAT IT DOES:** the ES-DE images folder (the `MediaDirectory` one in `~/ES-DE/settings/es_settings.xml`, or
+`~/ES-DE/downloaded_media`) now points to the one on the NAS (`Emulation/downloaded_media`). It copies nothing and does not touch
+ES-DE's configuration; with ES-DE closed. The local one stays as `<folder>.local`. Needs the `nas` part (of this same block).
+**WHY:** screenshots, covers and videos downloaded once for all machines.
+
+```sh
+mv ~/ES-DE/downloaded_media ~/ES-DE/downloaded_media.local
+ln -s /var/mnt/nas/Emulation/downloaded_media ~/ES-DE/downloaded_media
+```
+
+**UNDO:** `rm ~/ES-DE/downloaded_media && mv ~/ES-DE/downloaded_media.local ~/ES-DE/downloaded_media`.
+
+### Games and emulators (`games`)
+
+`--setup --only games` goes through the whole group.
+
+#### `emulators`
+
+Fixes for the emulators. It has two parts:
+
+- `esde` — ES-DE's system list (and Citra)
+- `rpcs3` — PS5 controller in RPCS3
+
+##### ES-DE's system list (and Citra) (`esde`)
+
+<a id="esde"></a>
 
 **WHAT IT DOES:** fixes `~/ES-DE/custom_systems/es_systems.xml`, which EmuDeck leaves with Windows paths
 (`\…_libretro.dll` instead of `/…_libretro.so`) and a broken tag (`< command>`). If you have Citra (AppImage in
@@ -775,7 +785,9 @@ sed -i -e 's#%CORE_RETROARCH%\\\([A-Za-z0-9_]*\)_libretro\.dll#%CORE_RETROARCH%/
 Then, in ES-DE: Other settings → Alternative emulators → Nintendo 3DS → Citra (Standalone).
 **UNDO:** copy the most recent `es_systems.xml.bak-<date>` over it.
 
-### `rpcs3`
+##### PS5 controller in RPCS3 (`rpcs3`)
+
+<a id="rpcs3"></a>
 
 **WHAT IT DOES:** in RPCS3's input config (`~/.config/rpcs3/input_configs/global/Default.yml`, or the Flatpak's), player
 1 moves from the **Evdev** handler on a DualSense to RPCS3's own **DualSense** handler, with the same button layout
@@ -789,7 +801,14 @@ handler talks to the controller directly (motion, rumble, light bar). Disabling 
 
 **UNDO:** copy `Default.yml.bak-evdev-*` over `Default.yml`.
 
-### `portproton`
+#### `portproton`
+
+What makes playing Windows games with PortProton easier. It has two parts:
+
+- `portproton` — PortProton defaults
+- `exeactions` — Dolphin actions on an .exe
+
+##### PortProton defaults (`portproton`)
 
 **WHAT IT DOES:** global PortProton settings for all games, except those whose `.ppdb` changes them: fast
 sync (FSYNC/ESYNC) and ray tracing. It goes in a marked block of
@@ -813,7 +832,22 @@ unset _pp_kv
 
 **UNDO:** delete that block and the icon. For a single game: `export PW_USE_RAY_TRACING="0"` in its `.ppdb`.
 
-### `unifideck`
+##### Dolphin actions on an .exe (`exeactions`)
+
+<a id="atajos"></a>
+
+**WHAT IT DOES:** the Dolphin right-click on an `.exe` offers "Install in PortProton and Steam", "Change isolation" and
+"Uninstall" (`~/.local/share/kio/servicemenus/ps5-bazzite-toolbox-add-game.desktop`), which call the toolbox. If it
+finds the desktop "PortProton Collection" shortcut that earlier versions created, it deletes it: Steam's collection
+updates itself when you install, change or uninstall a game (and by hand with option 15).
+**WHY:** install and remove Windows games from the file manager, without opening the toolbox.
+They call the toolbox at its current location: if you move it, repeat this part (installed with option 63 it does not
+move). If Dolphin was open, close it and open it again. Not applicable if the toolbox is run from a pipe
+(`curl … | bash`).
+
+**UNDO:** `rm ~/.local/share/kio/servicemenus/ps5-bazzite-toolbox-add-game.desktop`.
+
+#### `unifideck`
 
 **WHAT IT DOES:** [Unifideck](https://github.com/mubaraknumann/unifideck) (Decky plugin for Epic/GOG/… in Steam)
 launches Windows games with the system's Python, but only accepts the versions in its `ACCEPTED_VERSIONS` list (up
@@ -826,27 +860,78 @@ shows it as pending). Once upstream accepts your Python, the block shows as done
 
 **UNDO:** copy `selector.py.orig-*` over `selector.py`.
 
-### `atajos`
+### Desktop and extras (`desktop`)
 
-**WHAT IT DOES:** sets up by hand what the toolbox does:
+`--setup --only desktop` goes through the whole group.
 
-- **Dolphin right-click on an `.exe`:** "Install in PortProton and Steam", "Change isolation" and
-  "Uninstall" (`~/.local/share/kio/servicemenus/ps5-bazzite-toolbox-add-game.desktop`).
-- **Right-click on a folder:** "See how much space each folder takes"
-  (`~/.local/share/kio/servicemenus/ps5-bazzite-toolbox-space.desktop`).
-- **The `espacio [folder]` command** (`/usr/local/bin/espacio`).
+#### `trash`
 
-Steam's "PortProton" collection updates itself when you install, change or uninstall a game (and by hand with
-option 15). The desktop "PortProton Collection" shortcut that earlier versions created is no longer needed: the
-block deletes it if it finds it.
+<a id="papelera"></a>
 
-They all call the toolbox at its current location: if you move it, repeat the block (installed with option 63
-it does not move). If Dolphin was open, close it and open it again. Not applicable if the toolbox is run from a pipe
-(`curl … | bash`).
-**UNDO:**
-`rm ~/.local/share/kio/servicemenus/ps5-bazzite-toolbox-*.desktop; sudo rm /usr/local/bin/espacio`.
+**WHAT IT DOES:** removes the size limit of KDE's trash (`~/.config/ktrashrc`, the group of your trash folder,
+`UseSizeLimit=false`).
+**WHY:** by default it is 10 % of the disk; once it is full, Dolphin says the trash is full and won't let you
+delete a big folder (a game). Without a limit it grows until you empty it.
 
-### `monitorweb`
+**UNDO:** `kwriteconfig6 --file ktrashrc --group "$(realpath ~/.local/share/Trash)" --key UseSizeLimit true`.
+
+#### `firewall`
+
+**WHAT IT DOES:** removes from the firewall zone the services whose module the PS5 kernel does not ship, and restarts
+firewalld. On the image it is `samba-client` (finding Windows machines by name), which uses `nf_conntrack_netbios_ns`.
+**WHY:** without that module, firewalld cannot load its rules ("Could not process rule: No such file or
+directory"), stays **failed** with a minimal zone (`public`: SSH only) and rejects any permanent change
+(`RUNNING_BUT_FAILED`). You can see it with `sudo firewall-cmd --state` (`failed`). The toolbox finds those services by looking at
+each one's module in `/usr/lib/firewalld`, so it also works if another version ships a different one. With the
+`FedoraWorkstation` zone working, ports 1025-65535 are left open to your network, as on desktop Bazzite (KDE
+Connect, Steam streaming, the [web monitor](#monitorweb)). A NAS mounted by its IP does not need `samba-client`.
+
+```sh
+sudo firewall-cmd --state                                                     # failed = this is happening to you
+sudo firewall-offline-cmd --zone=FedoraWorkstation --remove-service-from-zone=samba-client
+sudo systemctl restart firewalld && sudo firewall-cmd --state                 # running
+# more locked down, instead of the above: sudo firewall-offline-cmd --set-default-zone=public
+```
+
+`firewall-offline-cmd` changes the files without going through firewalld, which is why it works with it failed; its
+`--remove-service` is something else (compatibility with `lokkit`).
+**UNDO:** `sudo rm /etc/firewalld/zones/FedoraWorkstation.xml; sudo systemctl restart firewalld`.
+
+#### `browsers`
+
+<a id="navegadores"></a>
+
+**WHAT IT DOES:** the Flatpak browsers you have installed (Brave, Microsoft Edge) store their passwords without the
+KDE Wallet (`--password-store=basic` in their flags file). It asks for each one; if none is installed, it is not
+applicable. Not recommended (default: no). The old names `brave` and `edge` are still accepted by `--only`, and a
+previous "no" to the two old blocks is carried over.
+**WHY:** with autostart, the browser asks for the Wallet password every time. **Careful:** the sessions and passwords
+it had already saved can no longer be read; that is why it is not recommended.
+
+```sh
+mkdir -p ~/.var/app/com.brave.Browser/config
+echo '--password-store=basic' >> ~/.var/app/com.brave.Browser/config/brave-flags.conf
+flatpak kill com.brave.Browser
+# Edge: the same with com.microsoft.Edge and config/edge-flags.conf
+mkdir -p ~/.var/app/com.microsoft.Edge/config
+echo '--password-store=basic' >> ~/.var/app/com.microsoft.Edge/config/edge-flags.conf
+flatpak kill com.microsoft.Edge
+```
+
+**UNDO:** delete that line from `brave-flags.conf` or `edge-flags.conf`.
+
+#### `space`
+
+**WHAT IT DOES:** the Dolphin right-click on a folder offers "See what each folder takes up"
+(`~/.local/share/kio/servicemenus/ps5-bazzite-toolbox-space.desktop`), and the `espacio [folder]` command
+(`/usr/local/bin/espacio`) does the same in any terminal (also option 33 and `--space`).
+**WHY:** to see what eats the disk without installing anything else.
+It calls the toolbox at its current location: if you move it, repeat this part. Not applicable if the toolbox is run
+from a pipe (`curl … | bash`).
+
+**UNDO:** `rm ~/.local/share/kio/servicemenus/ps5-bazzite-toolbox-space.desktop; sudo rm /usr/local/bin/espacio`.
+
+#### `monitorweb`
 
 <p align="center"><img src="docs/monitor-web.png" alt="The web monitor in a phone's browser" width="320"></p>
 
@@ -884,7 +969,7 @@ sudo firewall-cmd --reload                     # change 192.168.1.0/24 to your n
 
 ## PortProton and Steam
 
-In Dolphin (after the `atajos` block), right-click on an `.exe`: **"Install in PortProton and Steam"**,
+In Dolphin (after the `exeactions` part of the `portproton` block), right-click on an `.exe`: **"Install in PortProton and Steam"**,
 **"Change isolation"** and **"Uninstall"**. In the menu, the same through options 11 and 12 ("My games").
 
 **Installing a Windows game** (option 11, `--add-game`). First it asks **how it runs**:
@@ -987,7 +1072,7 @@ double fps (x2) or triple (x3). Enabling it writes to the game's `.ppdb`:
 | `LSFG_PERF_MODE` | `0` | Quality model (1 = fast) |
 
 From there you change the multiplier, the quality (0.5, 0.75, 1.0) and the model, or remove it (delete those lines).
-Tested on Gears of War E-Day: from about 25 real fps to ~100 on screen, stable. The price is that **the controller
+Tested on a heavy PC game: from about 25 real fps to ~100 on screen, stable. The price is that **the controller
 responds a bit later**, and it is more noticeable the fewer real fps the game gives: not for reflex games, 2D games or
 games with a lot of text. To see it properly: screen at 120 Hz and no fps limit (quick menu -> Performance). An
 isolated game without network cannot download lsfg-vk the first time.
@@ -1240,34 +1325,32 @@ stays there so you can retry.
 
 ### What each setting changes on the system
 
-| File or folder | Block | Backup |
+| File or folder | Block (part) | Backup |
 |---|---|---|
-| `/efi/cmdline.txt` | `cmdline`, `gpu40`, `arranque`, `fans` (v2.8.1+) | `/efi/cmdline.txt.bak-<date>` before each change |
+| `/efi/cmdline.txt` | `usbdisk` (`usbquirk`), `language` (`bootlang`), `vram`, `gpu40`, `splash`, `fans` (v2.8.1+) | `/efi/cmdline.txt.bak-<date>` before each change |
 | `/efi/vram.txt` | `vram` | `/efi/vram.txt.orig` (the first time) |
-| `/etc/NetworkManager/conf.d/99-ps5-no-wifi.conf` | `wifi` | — |
-| `/etc/dnf/libdnf5.conf.d/90-ps5-hold.conf` | `updates` | — |
-| `/etc/systemd/zram-generator.conf.d/90-ps5-bazzite-toolbox.conf` | `zram` | — |
-| `/var/swapfile` and two lines in `/etc/fstab` | `swapdisco` | — |
-| `/etc/sysctl.d/99-ps5-memoria-*.conf`, `/etc/systemd/system/user@.service.d/99-ps5-memoria-oomd.conf` | `memoria` | — |
+| `~/.config/environment.d/90-ps5-bazzite-toolbox-keyboard.conf`, `~/.config/plasma-localerc` | `language` (`locale`) | `plasma-localerc.bak-<date>` |
+| `/etc/systemd/zram-generator.conf.d/90-ps5-bazzite-toolbox.conf` | `memory` (`zram`) | — |
+| `/var/swapfile` and two lines in `/etc/fstab` | `memory` (`swapdisco`) | — |
+| `/etc/sysctl.d/99-ps5-memoria-*.conf`, `/etc/systemd/system/user@.service.d/99-ps5-memoria-oomd.conf` | `memory` (`memoria`) | — |
 | `/etc/ps5-bazzite-deck/perf.conf` (keys `FAN_TARGET`, `CPU_BOOST`) and `~/ps5-linux-tools/` | `fans` | — |
-| `/usr/local/sbin/ps5-hdmi-kick`, `/etc/systemd/system/ps5-hdmi-kick.service` | `hdmi` | — |
-| `/usr/local/sbin/ps5-cpufreq-calm`, `/etc/systemd/system/ps5-cpufreq-calm.service` | `cpufreq` | — |
-| `/usr/local/sbin/ps5-bt-guard`, `/etc/systemd/system/ps5-bt-guard.service` | `bt` | — |
-| `~/.local/share/ps5-bazzite-toolbox/steam-bt-on.sh`, `~/.config/systemd/user/ps5-steam-bt.service`; changes `"Enabled"` of `"Bluetooth"` in `~/.local/share/Steam/config/config.vdf` | `steambt` | — |
-| `/etc/polkit-1/rules.d/50-ps5-no-kde-smart.rules`, `~/.config/kded6rc` | `disk` | — |
-| `~/.config/ktrashrc` (`UseSizeLimit` of your trash) | `papelera` | `ktrashrc.bak-<date>` |
-| `/etc/sysctl.d/20-consola-silenciosa.conf` | `consola` | `sudo rm` it |
+| `/usr/local/sbin/ps5-hdmi-kick`, `/etc/systemd/system/ps5-hdmi-kick.service` | `warmreboot` | — |
+| `/usr/local/sbin/ps5-bt-guard`, `/etc/systemd/system/ps5-bt-guard.service` | `controller` (`bt`) | — |
+| `~/.local/share/ps5-bazzite-toolbox/steam-bt-on.sh`, `~/.config/systemd/user/ps5-steam-bt.service`; changes `"Enabled"` of `"Bluetooth"` in `~/.local/share/Steam/config/config.vdf` | `controller` (`steambt`) | — |
+| `/etc/polkit-1/rules.d/50-ps5-no-kde-smart.rules`, `~/.config/kded6rc` | `usbdisk` (`disk`) | — |
+| `~/.config/ktrashrc` (`UseSizeLimit` of your trash) | `trash` | `ktrashrc.bak-<date>` |
+| `/etc/sysctl.d/20-consola-silenciosa.conf` | `kernelmsg` | `sudo rm` it |
 | `/etc/firewalld/zones/<zone>.xml` (the zone without the services whose module is missing) | `firewall` | — |
-| `~/.var/app/com.brave.Browser/config/brave-flags.conf` | `brave` | — |
-| `~/.var/app/com.microsoft.Edge/config/edge-flags.conf` | `edge` | — |
-| `/etc/fstab` (one line), `/etc/samba/nas-<user>.cred` (NAS password, root only), `/var/mnt/nas`, `~/.local/share/flatpak/overrides/global` | `nas` | — |
-| `~/Emulation/roms`, `~/Emulation/bios`, ES-DE images folder | `nas`, `bios`, `media` | the local folder, as `....local` |
-| `/usr/local/bin/copiarNas`, `~/NAS`; logs in `~/.local/share/ps5-bazzite-toolbox/copias/` | `copiar` | — |
-| `~/ES-DE/custom_systems/es_systems.xml` | `esde` | `es_systems.xml.bak-<date>` |
-| `~/.config/rpcs3/input_configs/global/Default.yml` (player 1) | `rpcs3` | `Default.yml.bak-evdev-<date>` |
-| `~/.var/app/ru.linux_gaming.PortProton/data/user.conf`, `cerrar-portproton.desktop` on the desktop | `portproton` | `user.conf.bak-<date>`; delete the icon |
+| `~/.var/app/com.brave.Browser/config/brave-flags.conf`, `~/.var/app/com.microsoft.Edge/config/edge-flags.conf` | `browsers` | — |
+| `/etc/fstab` (one line), `/etc/samba/nas-<user>.cred` (NAS password, root only), `/var/mnt/nas`, `~/.local/share/flatpak/overrides/global` | `nas` (`nas`) | — |
+| `~/Emulation/roms`, `~/Emulation/bios`, ES-DE images folder | `nas` (`nas`, `bios`, `media`) | the local folder, as `....local` |
+| `/usr/local/bin/copiarNas`, `~/NAS`; logs in `~/.local/share/ps5-bazzite-toolbox/copias/` | `nas` (`copiar`) | — |
+| `~/ES-DE/custom_systems/es_systems.xml` | `emulators` (`esde`) | `es_systems.xml.bak-<date>` |
+| `~/.config/rpcs3/input_configs/global/Default.yml` (player 1) | `emulators` (`rpcs3`) | `Default.yml.bak-evdev-<date>` |
+| `~/.var/app/ru.linux_gaming.PortProton/data/user.conf`, `cerrar-portproton.desktop` on the desktop | `portproton` (`portproton`) | `user.conf.bak-<date>`; delete the icon |
 | `~/homebrew/plugins/Unifideck/py_modules/unifideck/launcher/proton/infrastructure/selector.py` | `unifideck` | `selector.py.orig-<version>` |
-| `~/.local/share/kio/servicemenus/ps5-bazzite-toolbox-*.desktop`, `/usr/local/bin/espacio`, `portproton-collection.desktop` on the desktop | `atajos` | — |
+| `~/.local/share/kio/servicemenus/ps5-bazzite-toolbox-add-game.desktop`, `portproton-collection.desktop` on the desktop | `portproton` (`exeactions`) | — |
+| `~/.local/share/kio/servicemenus/ps5-bazzite-toolbox-space.desktop`, `/usr/local/bin/espacio` | `space` | — |
 | `~/.local/share/ps5-bazzite-toolbox/monitor-web.py`, `~/.config/systemd/user/ps5-monitor-web.service`, a firewall rule (port 8765, your network only) | `monitorweb` | — |
 | `~/.local/share/ps5-bazzite-toolbox/monitor/ps5-mem-<date>.csv` (or in `MONWEB_CSV_DIR`): the measurements of a web monitor session, if you say yes when stopping | `monitorweb` | `rm` |
 | `/etc/sddm.conf.d/zzz-ps5-session.conf` | options 22 and 21 | — |
@@ -1306,7 +1389,7 @@ not install it, the file you run). Your saved answers are not touched.
 - Change the password (`passwd`): the default is `ps5` and SSH is open on the network.
 - Steam: own time zone and language, **Full** RGB range in game mode and on the desktop.
 - EmuDeck: **SteamOS** installer, **Steam Machine** device, **Internal** location.
-- DualSense: pair it over Bluetooth in a profile of its own (PS + Square).
+- DualSense: on a PS5 Pro (or on v2.x images without the shared address), pair it over Bluetooth in a profile of its own (PS + Square). On the original and the Slim with image v3.0 or later, the PS5 pairing is shared.
 - For a bug report to the image author: their `ps5-report`.
 
 ## License

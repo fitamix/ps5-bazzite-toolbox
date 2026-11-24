@@ -5,6 +5,107 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+## [1.18.0] - 2026-11-24
+
+### Añadido
+
+- **Los ajustes de la consola van en 19 bloques y 5 grupos**, con nombres en inglés, en el orden en que se aplican:
+  `basic` (language usbdisk controller splash kernelmsg warmreboot), `performance` (vram gpu40 memory fans), `nas` (nas),
+  `games` (emulators portproton unifideck) y `desktop` (trash firewall browsers space monitorweb). El nombre de un grupo
+  vale donde vale el de un bloque: `--setup --only performance`, `--setup --only vram,nas`; la opción 52 lista los
+  grupos con sus bloques, y la lista de ajustes pone el título de cada grupo. El README agrupa igual la tabla y las
+  secciones.
+- **Bloques con varias partes.** Un bloque que reúne varios ajustes enseña primero sus partes (✔ hecha, · pendiente,
+  – no aplica aquí) y luego pregunta por cada parte pendiente, con su propia explicación; un bloque de una sola parte
+  pregunta una vez. Si lo pides por su nombre (`--only X`, opción 52), las partes ya hechas se ofrecen otra vez (por
+  defecto, no) para cambiar sus valores. Cada parte guarda su propia respuesta (`SKIP_<parte>`) con el nombre que tenía
+  como bloque, así que las respuestas anteriores y lo que ya estaba aplicado siguen contando. Decir que no a un bloque
+  entero es decir que no a cada una de sus partes pendientes; el estado enseña «no aplicado (lo decidiste)» cuando has
+  rechazado todas.
+  - `language`: `locale` (idioma, teclado y zona horaria) y `bootlang` (idioma y teclado ya desde el arranque).
+  - `usbdisk`: `usbquirk` (`usb-storage.quirks` sin UAS para el disco USB de arranque) y `disk` (sin consultas SMART de KDE).
+  - `controller`: `bt` (`ps5-bt-guard`) y `steambt` (Bluetooth de Steam siempre activado).
+  - `memory`: `zram`, `swapdisco` y `memoria` (en pruebas, sin aplicarse por defecto).
+  - `nas`: `nas` (monta el NAS y enlaza las ROMs de EmuDeck/ES-DE), `copiar` (comando `copiarNas` y enlace `~/NAS`), `bios`
+    y `media`. Si tienes un NAS, te pregunta todo lo que se puede hacer con él.
+  - `emulators`: `esde` (arregla el `es_systems.xml` de EmuDeck y añade Citra) y `rpcs3` (mando de la PS5 en modo juego).
+  - `portproton`: `portproton` (ajustes por defecto) y `exeactions` (acciones de Dolphin sobre un `.exe`).
+  - Bloques de una parte con nombre nuevo: `splash` (`arranque`), `kernelmsg` (`consola`), `trash` (`papelera`),
+    `browsers` (`navegadores`) y `space` (`spacetool`).
+- **Partes `bootlang`, `usbquirk`, `exeactions` y `spacetool`**: son lo que antes hacían `cmdline` y `atajos`, ahora por
+  separado. `bootlang` pone `locale.LANG` y `vconsole.keymap` en `cmdline.txt`; `usbquirk`, el `usb-storage.quirks` del
+  disco USB de arranque; `exeactions`, el botón derecho de Dolphin sobre un `.exe` (instalar, cambiar aislamiento,
+  desinstalar); `spacetool`, «Ver lo que ocupa cada carpeta» y el comando `espacio`. Deshacer: `sudo cp
+  /efi/cmdline.txt.bak-<fecha> /efi/cmdline.txt` (las dos primeras) y `rm ~/.local/share/kio/servicemenus/ps5-bazzite-toolbox-*.desktop;
+  sudo rm /usr/local/bin/espacio` (las otras).
+- **El bloque `vram` incluye la GTT**: tras elegir la VRAM pregunta (sí por defecto) si añadir
+  `ttm.pages_limit=3145728 ttm.page_pool_size=3145728` a `cmdline.txt` (GTT de 12 GB: la gráfica puede tomar RAM
+  prestada hasta 12 GB; sin ello el límite del kernel es la mitad de la RAM; no reserva nada), con copia previa
+  `cmdline.txt.bak-<fecha>`. La respuesta se guarda como `VRAM_GTT=on|off`, y el bloque cuenta como aplicado solo con
+  los parámetros `ttm`, salvo que hayas dicho que no. Con menos de 4 GB de VRAM pide confirmación (la imagen aconseja 4
+  GB o más). Desde la imagen v3.0.2 el modo juego se guarda 512 MiB de VRAM para su propia imagen
+  (`/etc/ps5-bazzite-deck/vram-floor`), así que llenar la VRAM ya no saca a los juegos del modo juego («Failed to pin
+  framebuffer»): 4 GB de VRAM + 12 GB de GTT bastan para juegos de PC pesados y dejan mucha más RAM a los emuladores que
+  6 GB. Medido: un juego de PC pesado de Unreal Engine, 40 min con la VRAM llena y hasta 1,4 GB desbordados a la GTT, sin
+  cierres; un emulador de Switch 2, más de 2 h antes de los tirones de memoria, frente a ~35 min con 6 GB.
+  Deshacer: `sudo cp /efi/vram.txt.orig /efi/vram.txt` y quitar los parámetros `ttm` de `cmdline.txt` (o copiar encima
+  un `cmdline.txt.bak-*`).
+- **Bloque `browsers`** (parte `navegadores`; sustituye a `brave` y `edge`): trata los navegadores Flatpak que haya
+  instalados (Brave, Microsoft Edge) sin la Cartera de KDE y pregunta por cada uno; no aplica si no hay ninguno; por
+  defecto, no. Deshacer: borrar la línea de `brave-flags.conf` o `edge-flags.conf`.
+
+### Cambiado
+
+- **Bloques renombrados o reunidos** (el nombre antiguo sigue valiendo con `--only` y en la opción 52):
+
+  | Antes | Ahora |
+  |---|---|
+  | `locale`, `cmdline` | `language` (`locale`, `bootlang`) y `usbdisk` (`usbquirk`) |
+  | `disk` | `usbdisk` (`disk`) |
+  | `bt`, `steambt` | `controller` (`bt`, `steambt`) |
+  | `arranque` | `splash` |
+  | `consola` | `kernelmsg` |
+  | `hdmi` | parte de `warmreboot` (ofrece `ps5-hdmi-kick`, respuesta `HDMI_KICK`) |
+  | `zram`, `swapdisco`, `memoria` | `memory` (con esos tres nombres como partes) |
+  | `nas`, `copiar`, `bios`, `media` | `nas` (con esos cuatro nombres como partes) |
+  | `esde`, `rpcs3` | `emulators` (`esde`, `rpcs3`) |
+  | `portproton`, `atajos` | `portproton` (`portproton`, `exeactions`) y `space` (`spacetool`) |
+  | `papelera` | `trash` |
+  | `brave`, `edge` | `browsers` (`navegadores`) |
+
+- **Nombres antiguos con `--only` y la opción 52:** los de una parte ejecutan solo esa parte (`--only zram`, `--only bt`,
+  `--only locale`, `--only hdmi`…); `cmdline` ejecuta `bootlang` y `usbquirk`; `atajos`, `exeactions` y `spacetool`;
+  `brave` y `edge`, `navegadores`. `updates`, `wifi` y `cpufreq` dicen que ya no existen.
+- **Migración:** tus respuestas a los bloques antiguos se conservan. Un «no» a `cmdline` pasa a `bootlang` y `usbquirk`;
+  un «no» a `atajos`, a `exeactions` y `spacetool`; un «no» a `brave` y a `edge` a la vez, a `navegadores`; un «no» a
+  `hdmi`, a `HDMI_KICK=off`. Tras actualizar, `vram` aparecerá como pendiente hasta que respondas la pregunta de la GTT
+  (`--setup --only vram`).
+- **`memoria`** (sigue en pruebas y sin aplicarse por defecto): las medidas ahora son con 4 GB de VRAM y los cuatro
+  ajustes puestos: un emulador de Switch 2 aguantó más de 2 h sin tirones de memoria y la presión no pasó del 7 %
+  (antes, con 6 GB de VRAM y ~8,7 GB de RAM, la presión llegó al 3,5 %).
+- **La opción de VRAM**: la lista ofrece 2, 4, 5, 6 y 8 GB (0,5 GB sigue pudiéndose escribir).
+- El README ya no dice que el «mando compartido» de la imagen v2.x desactiva el reinicio en caliente en el IW620
+  (`ps5-bt-address off`): desde la imagen v3.0 la dirección Bluetooth solo de Linux existe solo en la PS5 Pro; en la
+  original y la Slim el emparejamiento con la PS5 es siempre compartido.
+- El aviso final «empareja el DualSense en un perfil propio» solo sale en una PS5 Pro o en imágenes v2.x sin la
+  dirección compartida.
+- El README y el CHANGELOG ya no nombran ningún juego concreto.
+
+### Quitado
+
+- **Bloque `updates`**: solo servía a imágenes que no son bootc (bloqueaba las actualizaciones automáticas y el kernel,
+  Mesa, el firmware y gamescope en `dnf`). Una instalación antigua se deshace con
+  `sudo systemctl unmask uupd.timer rpm-ostreed-automatic.timer; sudo rm /etc/dnf/libdnf5.conf.d/90-ps5-hold.conf`.
+- **Bloque `wifi`**: solo servía a imágenes anteriores a la v1.5.0. La parte de `cmdline` que quitaba
+  `module_blacklist=moal` de `cmdline.txt` tampoco existe ya. Para deshacer lo que dejó: `sudo rm -f
+  /etc/NetworkManager/conf.d/99-ps5-no-wifi.conf; sudo systemctl unmask wpa_supplicant.service; sudo systemctl restart
+  NetworkManager`.
+- **Bloque `cpufreq`**: las imágenes v2.11 o posteriores ya ponen el `rate_limit_us` de `schedutil` a 10 ms ellas mismas
+  (VivaLaVent, incidencia #53). Una instalación antigua no estorba; para quitarla:
+  `sudo systemctl disable ps5-cpufreq-calm; sudo rm /usr/local/sbin/ps5-cpufreq-calm /etc/systemd/system/ps5-cpufreq-calm.service`.
+- Los bloques `hdmi`, `brave`, `edge`, `atajos`, `cmdline` y los demás nombres antiguos como bloques propios de la lista
+  (sus nombres siguen valiendo en `--only`).
+
 ## [1.17.0] - 2026-11-22
 
 ### Añadido
@@ -300,7 +401,7 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 ### Añadido
 
 - **Generación de fotogramas por juego** (Lossless Scaling de PortProton), en «Mis juegos» (opción 11) y con
-  `--framegen Juego.exe`: activarla (×2, calidad 0.5, modelo de calidad, probado en Gears of War E-Day), cambiar el
+  `--framegen Juego.exe`: activarla (×2, calidad 0.5, modelo de calidad, probado en un juego de PC pesado), cambiar el
   multiplicador, la calidad o el modelo, o quitarla. Explica el retraso del mando que añade. Nunca activada por defecto.
 
 ### Cambiado
@@ -477,7 +578,8 @@ Primera versión publicada.
 - Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
-[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.17.0...HEAD
+[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.18.0...HEAD
+[1.18.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.17.0...v1.18.0
 [1.17.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.16.1...v1.17.0
 [1.16.1]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.16.0...v1.16.1
 [1.16.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.15.0...v1.16.0

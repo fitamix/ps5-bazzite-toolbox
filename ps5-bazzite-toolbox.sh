@@ -8,8 +8,10 @@
 #  - PortProton and Steam: add or remove a Windows game (PortProton + Desktop + Steam + "PortProton" collection),
 #    sync the collection; global PortProton defaults (setup block "portproton"). Tools: space taken by each folder,
 #    a backup of the home folder (picking what goes) that restores here or on another install.
-#  - Settings (setup): blocks that adapt the image (language, boot options, Wi-Fi, updates, VRAM, fans, warm
-#    reboot, HDMI fix, disk, quiet kernel console, firewall, Brave, Edge, NAS, the monitor in a phone's browser, zram swap size and compressor, swap on disk, memory settings for heavy emulators, the GPU's 40 compute units). Each explains what it changes, why and how to undo it, and asks.
+#  - Settings (setup): blocks that adapt the image, in groups: basic (language, USB drive, controller, boot splash,
+#    kernel messages, warm reboot), performance (VRAM and GTT, 40 GPU units, memory, fans), NAS (mount, copies,
+#    ROMs/BIOS/media), games (emulators, PortProton, Unifideck), desktop (trash, firewall, browsers, folder sizes,
+#    the monitor in a phone's browser). Each explains what it changes, why and how to undo it, and asks.
 #    Answers are kept in ~/.config/ps5-bazzite-toolbox.conf; running it again only offers what is pending.
 #
 #   bash ps5-bazzite-toolbox.sh                         # menu (the first time it offers to install itself as the
@@ -41,10 +43,12 @@
 #   bash ps5-bazzite-toolbox.sh --version
 #   bash ps5-bazzite-toolbox.sh --lang es|en [...]      # interface language (before the other options); saved. Default: the system
 #                                               locale (LANG/LC_ALL/LC_MESSAGES starting with "es" = Spanish, else English)
-# Setup blocks: locale cmdline wifi updates vram gpu40 zram swapdisco memoria fans cpufreq warmreboot hdmi arranque bt steambt disk papelera consola firewall brave edge nas bios media copiar esde rpcs3 portproton unifideck atajos monitorweb
+# Setup blocks, by group (a group name also works with --only; old block names too):
+#   basic: language usbdisk controller splash kernelmsg warmreboot · performance: vram gpu40 memory fans
+#   nas: nas · games: emulators portproton unifideck · desktop: trash firewall browsers space monitorweb
 set -uo pipefail
 
-TOOLBOX_VERSION=1.17.0                   # bump on every release (see CHANGELOG.md and release.sh)
+TOOLBOX_VERSION=1.18.0                   # bump on every release (see CHANGELOG.md and release.sh)
 TOOLBOX_REPO=fitamix/ps5-bazzite-toolbox
 TOOLBOX_BIN=$HOME/.local/bin/ps5-bazzite-toolbox                      # where --install puts it
 TOOLBOX_DESKTOP=$HOME/.local/share/applications/ps5-bazzite-toolbox.desktop
@@ -72,7 +76,7 @@ while [ $# -gt 0 ]; do
         --status) MODE=setup; STATUS_ONLY=1; shift ;;
         --all) MODE=setup; ALL=1; shift ;;
         --only) [ -n "${2:-}" ] && [[ $2 != -* ]] ||
-                    { echo "$(L 'Uso: --only bloque1,bloque2 (p. ej. --only vram,nas)' 'Usage: --only block1,block2 (e.g. --only vram,nas)')" >&2; exit 2; }
+                    { echo "$(L 'Uso: --only bloque1,bloque2 o un grupo (p. ej. --only vram,nas o --only performance)' 'Usage: --only block1,block2 or a group (e.g. --only vram,nas or --only performance)')" >&2; exit 2; }
                 MODE=setup; ONLY=${2//,/ }; shift 2 ;;
         --update) MODE=update; UPDATE_TAG=''
                   if [ $# -gt 1 ] && [[ $2 != -* ]]; then UPDATE_TAG=$2; shift; fi; shift ;;
@@ -155,7 +159,53 @@ MONWEB_UNIT=$HOME/.config/systemd/user/ps5-monitor-web.service
 MONWEB_CSV_DIR=${MONWEB_CSV_DIR:-$HOME/.local/share/ps5-bazzite-toolbox/monitor}   # a session's CSV, when you say so
 BRAVE_FLAGS=$HOME/.var/app/com.brave.Browser/config/brave-flags.conf
 EDGE_FLAGS=$HOME/.var/app/com.microsoft.Edge/config/edge-flags.conf
-BLOCKS="locale cmdline wifi updates vram gpu40 zram swapdisco memoria fans cpufreq warmreboot hdmi arranque bt steambt disk papelera consola firewall brave edge nas bios media copiar esde rpcs3 portproton unifideck atajos monitorweb"
+# Setup blocks in groups (the order they run in): "group|Spanish title|English title|blocks". A group name works
+# wherever a block name does (--only performance, menu 52), and runs all its blocks.
+BLOCK_GROUPS=(
+    "basic|Básico|Basic|language usbdisk controller splash kernelmsg warmreboot"
+    "performance|Rendimiento|Performance|vram gpu40 memory fans"
+    "nas|NAS|NAS|nas"
+    "games|Juegos y emuladores|Games and emulators|emulators portproton unifideck"
+    "desktop|Escritorio y extras|Desktop and extras|trash firewall browsers space monitorweb"
+)
+BLOCKS=$(for g in "${BLOCK_GROUPS[@]}"; do printf '%s ' "${g##*|}"; done); BLOCKS=${BLOCKS% }
+# A block is made of one or more parts; each part has its own desc_/check_/apply_ functions and its own saved answer
+# (SKIP_part), named as the blocks were up to 1.17, so earlier answers and what is already applied still count.
+# A block not listed here is a single part with its own name.
+block_parts() {
+    case $1 in
+        language) echo "locale bootlang" ;;
+        usbdisk) echo "usbquirk disk" ;;
+        controller) echo "bt steambt" ;;
+        splash) echo arranque ;;
+        kernelmsg) echo consola ;;
+        memory) echo "zram swapdisco memoria" ;;
+        nas) echo "nas copiar bios media" ;;
+        emulators) echo "esde rpcs3" ;;
+        portproton) echo "portproton exeactions" ;;
+        trash) echo papelera ;;
+        browsers) echo navegadores ;;
+        space) echo spacetool ;;
+        *) echo "$1" ;;
+    esac
+}
+# Names accepted by --only and menu 52 besides the blocks: groups, and the old block names (they run just that part).
+block_alias() {                          # block_alias NAME -> the block(s) or part(s) to run for it
+    case $1 in
+        brave|edge) echo navegadores; return ;;
+        cmdline) echo "bootlang usbquirk"; return ;;
+        atajos) echo "exeactions spacetool"; return ;;
+        updates|wifi|cpufreq) echo "$(L "«$1» ya no existe (quitado en la 1.18.0: la imagen actual no lo necesita)." "'$1' no longer exists (removed in 1.18.0: the current image doesn't need it).")" >&2; return ;;
+    esac
+    local g; for g in "${BLOCK_GROUPS[@]}"; do [ "${g%%|*}" = "$1" ] && { echo "${g##*|}"; return; }; done
+    echo "$1"
+}
+block_group() {                          # block_group BLOCK -> "Title" of its group (in the interface language)
+    local g t es en bl; for g in "${BLOCK_GROUPS[@]}"; do
+        IFS='|' read -r t es en bl <<<"$g"
+        [[ " $bl " == *" $1 "* ]] && { L "$es" "$en"; return; }
+    done
+}
 
 # ======================================== settings (setup) ========================================
 # --- saved answers -------------------------------------------------------------------------------
@@ -165,6 +215,20 @@ touch "$CONF"
 # shellcheck disable=SC1090
 . "$CONF"
 NAS_MNT=${NAS_MNT:-/var/mnt/nas}         # where the NAS share is mounted
+# 1.18.0 merged brave+edge into navegadores: a "no" to the old ones is a "no" to the new one
+if [ -z "${SKIP_navegadores:-}" ] && [ "${SKIP_brave:-}${SKIP_edge:-}" != "" ] &&
+   [ "${SKIP_brave:-1}" = 1 ] && [ "${SKIP_edge:-1}" = 1 ]; then
+    printf 'SKIP_navegadores=1\n' >>"$CONF"; SKIP_navegadores=1
+fi
+# 1.18.0 split cmdline into bootlang + usbquirk and atajos into exeactions + spacetool: a "no" carries over
+for _o in "cmdline bootlang usbquirk" "atajos exeactions spacetool"; do
+    read -r _a _b _c <<<"$_o"; _v=SKIP_$_a
+    if [ -n "${!_v:-}" ]; then for _n in "$_b" "$_c"; do
+        _w=SKIP_$_n; [ -n "${!_w:-}" ] || { printf '%s=%s\n' "$_w" "${!_v}" >>"$CONF"; printf -v "$_w" '%s' "${!_v}"; }
+    done; fi
+done; unset _o _a _b _c _v _n _w
+# ...and hdmi into warmreboot: a "no" to hdmi is a "no" to its question there
+if [ -z "${HDMI_KICK:-}" ] && [ "${SKIP_hdmi:-}" = 1 ]; then printf 'HDMI_KICK=off\n' >>"$CONF"; HDMI_KICK=off; fi
 remember() {                             # remember KEY VALUE -> kept in $CONF and in this run
     sed -i "/^$1=/d" "$CONF"; printf '%s=%q\n' "$1" "$2" >>"$CONF"; printf -v "$1" '%s' "$2"
 }
@@ -269,7 +333,7 @@ apply_locale() {
         say "$(L "Idioma del escritorio: $SYS_LANG (cuenta la próxima vez que entres en él)." "Desktop language: $SYS_LANG (takes effect the next time you enter it).")"
 }
 
-# --- cmdline -------------------------------------------------------------------------------------
+# --- bootlang and usbquirk (the "cmdline" block until 1.17; parts of language and usbdisk) -----------------
 quirk_for() {                            # quirk_for VID:PID -> the letters a drive known here needs (1 if none)
     case $1 in 21c4:0003) echo u ;;      # Lexar ES3: UAS errors and resets (no UAS alone has been stable; "m" is not needed)
                *) return 1 ;; esac
@@ -280,105 +344,62 @@ want_quirk() {                           # quirk letters for the boot drive: sav
     quirk_for "${u%% *}" && return
     [ "${u#* }" = uas ] && [ "$(usb_errors)" -gt 0 ] && echo u
 }
-desc_cmdline() {
-    local u q; u=$(root_usb); q=$(want_quirk)
+desc_bootlang() {
     section
-    say "$(L "Añade parámetros de arranque a $CMDLINE (con copia previa en $CMDLINE.bak-FECHA):" "Adds boot parameters to $CMDLINE (backed up first to $CMDLINE.bak-DATE):")"
-    say "$(L "- locale.LANG / vconsole.keymap: idioma y teclado ya desde el arranque, no solo en el escritorio." "- locale.LANG / vconsole.keymap: language and keyboard from boot, not only on the desktop.")"
-    if [ -n "$u" ]; then
-        say "$(L "- Disco de arranque por USB: ${u%% *} (driver ${u#* }), $(usb_errors) errores USB en este arranque." "- Boot drive over USB: ${u%% *} (driver ${u#* }), $(usb_errors) USB errors this boot.")"
-        say "$(L "  usb-storage.quirks=${u%% *}:LETRAS cambia cómo se le habla: u = sin UAS (algunos adaptadores" "  usb-storage.quirks=${u%% *}:LETTERS changes how it is talked to: u = no UAS (some adapters")"
-        say "$(L "  USB-NVMe dan errores y resets con UAS), m = transferencias de 32 KB (solo si u no basta). Recomendado: ${q:-ninguno}." "  USB-NVMe give errors and resets with UAS), m = 32 KB transfers (only if u is not enough). Recommended: ${q:-none}.")"
-    fi
-    ver_ge 1.5.0 && say "$(L "- Quita module_blacklist=moal si está: desde la v1.5.0 el Wi-Fi IW620 ya no se cuelga." "- Removes module_blacklist=moal if present: since v1.5.0 the IW620 Wi-Fi no longer hangs.")"
-    say "$(L "POR QUÉ: consola en tu idioma y un disco USB estable." "WHY: console in your language and a stable USB drive.")"
-    say "$(L "DESHACER: copia un $CMDLINE.bak-* sobre $CMDLINE (con sudo)." "UNDO: copy a $CMDLINE.bak-* over $CMDLINE (with sudo).")"
-    say "$(L "Cuenta a partir del siguiente arranque." "Takes effect from the next boot.")"
+    say "$(L "Idioma y teclado ya desde el arranque (locale.LANG y vconsole.keymap en $CMDLINE, con copia previa):" "Language and keyboard from boot on (locale.LANG and vconsole.keymap in $CMDLINE, backed up first):")"
+    say "$(L "los mensajes y la consola de texto salen en tu idioma y con tu teclado, no solo el escritorio." "messages and the text console come out in your language and keyboard, not just the desktop.")"
+    say "$(L "DESHACER: copia un $CMDLINE.bak-* sobre $CMDLINE (con sudo). Cuenta a partir del siguiente arranque." "UNDO: copy a $CMDLINE.bak-* over $CMDLINE (with sudo). Takes effect from the next boot.")"
 }
-check_cmdline() {
+check_bootlang() {
     sudo test -f "$CMDLINE" || return 2
-    local q; q=$(want_quirk)
-    cmd_has "locale.LANG=$LANG_WANT" && cmd_has "vconsole.keymap=$KEYMAP_WANT" || return 1
-    if [ -n "$q" ]; then local u; u=$(root_usb); cmd_has "usb-storage.quirks=${u%% *}:$q" || return 1; fi
-    ! { ver_ge 1.5.0 && sudo grep -q 'module_blacklist=moal' "$CMDLINE"; }
+    cmd_has "locale.LANG=$LANG_WANT" && cmd_has "vconsole.keymap=$KEYMAP_WANT"
 }
-apply_cmdline() {
-    local u; u=$(root_usb)
-    if [ -n "$u" ]; then
-        local q; q=$(want_quirk)
-        value USB_QUIRK "$(L "Letras para usb-storage.quirks (u, um, o - para ninguna)" "Letters for usb-storage.quirks (u, um, or - for none)")" "${q:-}"
-    fi
+apply_bootlang() {
     sudo cp "$CMDLINE" "$CMDLINE.bak-$(date +%Y%m%d-%H%M%S)" || return 1
     cmd_set locale.LANG "$LANG_WANT" && cmd_set vconsole.keymap "$KEYMAP_WANT" || return 1
-    if [ -n "$u" ] && [ -n "${USB_QUIRK:-}" ]; then cmd_set usb-storage.quirks "${u%% *}:$USB_QUIRK" || return 1; fi
-    ver_ge 1.5.0 && sudo sed -i 's| module_blacklist=moal||' "$CMDLINE"
-    say "$(L "Ahora: $(sudo cat "$CMDLINE")" "Now: $(sudo cat "$CMDLINE")")"
     REBOOT=1
 }
-
-# --- wifi ----------------------------------------------------------------------------------------
-NOWIFI=/etc/NetworkManager/conf.d/99-ps5-no-wifi.conf
-wifi_blocked() { grep -qs 'unmanaged-devices=type:wifi' "$NOWIFI"; }
-desc_wifi() {
+desc_usbquirk() {
+    local u q; u=$(root_usb); q=$(want_quirk)
     section
-    if ver_ge 1.5.0; then
-        say "$(L "Vuelve a activar el Wi-Fi: borra $NOWIFI y desenmascara wpa_supplicant." "Turns Wi-Fi back on: deletes $NOWIFI and unmasks wpa_supplicant.")"
-        say "$(L "POR QUÉ: en imágenes anteriores a la v1.5.0 el driver moal (IW620) se colgaba con el Wi-Fi" "WHY: in images before v1.5.0 the moal driver (IW620) hung with Wi-Fi")"
-        say "$(L "activo y había que apagarlo. Desde la v1.5.0 funciona (probado: 1 GB a ~54 MB/s, sin cuelgues)." "on and it had to be turned off. Since v1.5.0 it works (tested: 1 GB at ~54 MB/s, no hangs).")"
-        say "$(L "Si vas solo por cable puedes dejarlo apagado (responde no)." "If you only use a cable you can leave it off (answer no).")"
-    else
-        say "$(L "Apaga el Wi-Fi sin bloquear el driver moal, que también lleva el Bluetooth: NetworkManager" "Turns Wi-Fi off without blocking the moal driver, which also runs Bluetooth: NetworkManager")"
-        say "$(L "ignora la interfaz Wi-Fi y wpa_supplicant queda enmascarado." "ignores the Wi-Fi interface and wpa_supplicant is masked.")"
-        say "$(L "POR QUÉ: con esta versión ($VERSION) el driver moal se cuelga con el Wi-Fi activo" "WHY: with this version ($VERSION) the moal driver hangs with Wi-Fi on")"
-        say "$(L "(woal_set_get_tx_power, procesos en estado D). Usa cable, o actualiza a la v1.5.0 o posterior." "(woal_set_get_tx_power, processes in D state). Use a cable, or update to v1.5.0 or later.")"
-    fi
-    say "$(L "DESHACER: vuelve a ejecutar el bloque tras cambiar de versión, o borra/crea $NOWIFI a mano." "UNDO: run the block again after changing version, or delete/create $NOWIFI by hand.")"
+    say "$(L "Disco de arranque por USB: ${u%% *} (driver ${u#* }), $(usb_errors) errores USB en este arranque." "Boot drive over USB: ${u%% *} (driver ${u#* }), $(usb_errors) USB errors this boot.")"
+    say "$(L "usb-storage.quirks=${u%% *}:LETRAS en $CMDLINE cambia cómo se le habla: u = sin UAS (algunos adaptadores" "usb-storage.quirks=${u%% *}:LETTERS in $CMDLINE changes how it is talked to: u = no UAS (some adapters")"
+    say "$(L "USB-NVMe dan errores y resets con UAS), m = transferencias de 32 KB (solo si u no basta). Recomendado: ${q:-ninguno}." "USB-NVMe give errors and resets with UAS), m = 32 KB transfers (only if u is not enough). Recommended: ${q:-none}.")"
+    say "$(L "DESHACER: copia un $CMDLINE.bak-* sobre $CMDLINE (con sudo). Cuenta a partir del siguiente arranque." "UNDO: copy a $CMDLINE.bak-* over $CMDLINE (with sudo). Takes effect from the next boot.")"
 }
-check_wifi() {
-    ls /sys/class/net/*/wireless >/dev/null 2>&1 || wifi_blocked || return 2
-    if ver_ge 1.5.0; then ! wifi_blocked
-    else wifi_blocked && [ "$(systemctl is-enabled wpa_supplicant.service 2>/dev/null)" = masked ]; fi
+check_usbquirk() {
+    sudo test -f "$CMDLINE" || return 2
+    local u q; u=$(root_usb) || return 2; [ -n "$u" ] || return 2
+    q=$(want_quirk); q=${q#-}
+    [ -z "$q" ] || cmd_has "usb-storage.quirks=${u%% *}:$q"
 }
-apply_wifi() {
-    if ver_ge 1.5.0; then
-        sudo rm -f "$NOWIFI" && sudo systemctl unmask wpa_supplicant.service && sudo systemctl restart NetworkManager
-    else
-        printf '[keyfile]\nunmanaged-devices=type:wifi\n' | sudo tee "$NOWIFI" >/dev/null || return 1
-        sudo systemctl mask --now wpa_supplicant.service && sudo systemctl reload NetworkManager
-    fi
+apply_usbquirk() {
+    local u q; u=$(root_usb); q=$(want_quirk)
+    value USB_QUIRK "$(L "Letras para usb-storage.quirks (u, um, o - para ninguna)" "Letters for usb-storage.quirks (u, um, or - for none)")" "${q:-}"
+    [ -n "${USB_QUIRK#-}" ] || return 0
+    cmd_has "usb-storage.quirks=${u%% *}:$USB_QUIRK" && return 0     # already so: nothing to write
+    sudo cp "$CMDLINE" "$CMDLINE.bak-$(date +%Y%m%d-%H%M%S)" || return 1
+    cmd_set usb-storage.quirks "${u%% *}:$USB_QUIRK" || return 1
+    REBOOT=1
 }
-
-# --- updates -------------------------------------------------------------------------------------
-desc_updates() {
-    section
-    say "$(L "Desactiva las actualizaciones automáticas (uupd, rpm-ostree) e impide que dnf actualice el kernel," "Disables automatic updates (uupd, rpm-ostree) and stops dnf from updating the kernel,")"
-    say "$(L "Mesa, linux-firmware o gamescope (/etc/dnf/libdnf5.conf.d/90-ps5-hold.conf)." "Mesa, linux-firmware or gamescope (/etc/dnf/libdnf5.conf.d/90-ps5-hold.conf).")"
-    say "$(L "POR QUÉ: la imagen no es ostree (ujust update y rpm-ostree no sirven) y esos paquetes llevan" "WHY: the image is not ostree (ujust update and rpm-ostree don't work) and those packages carry")"
-    say "$(L "parches para la PS5: un dnf upgrade los sustituiría por los normales y podría no arrancar." "PS5 patches: a dnf upgrade would replace them with the stock ones and it might not boot.")"
-    say "$(L "Las actualizaciones de la imagen se hacen con su propio update.sh (ver el README del autor)." "Image updates are done with its own update.sh (see the author's README).")"
-    say "$(L "En una instalación bootc no aplica: ahí las actualizaciones son las del autor (opción 62) y se deshacen." "On a bootc install it does not apply: there updates are the author's (option 62) and can be undone.")"
-    say "$(L "DESHACER: sudo systemctl unmask uupd.timer rpm-ostreed-automatic.timer; borra 90-ps5-hold.conf." "UNDO: sudo systemctl unmask uupd.timer rpm-ostreed-automatic.timer; delete 90-ps5-hold.conf.")"
-}
-check_updates() {
-    [ $IS_BOOTC = 1 ] && return 2        # bootc updates are the image's own, whole and undoable: never block them
-    [ "$(systemctl is-enabled uupd.timer 2>/dev/null)" = masked ] &&
-        [ "$(systemctl is-enabled rpm-ostreed-automatic.timer 2>/dev/null)" = masked ] &&
-        grep -qs '^excludepkgs=kernel\*,mesa-\*,linux-firmware\*,gamescope\*' /etc/dnf/libdnf5.conf.d/90-ps5-hold.conf || return 1     # grep says 2 for a missing file: that is pending, not "doesn't apply"
-}
-apply_updates() {
-    sudo systemctl mask --now uupd.timer rpm-ostreed-automatic.timer || return 1
-    sudo mkdir -p /etc/dnf/libdnf5.conf.d &&
-        printf '[main]\nexcludepkgs=kernel*,mesa-*,linux-firmware*,gamescope*\n' |
-        sudo tee /etc/dnf/libdnf5.conf.d/90-ps5-hold.conf >/dev/null
-}
+# "wifi" (only for images before v1.5.0) and "updates" (only for non-bootc images) were removed in 1.18.0.
 
 # --- vram ----------------------------------------------------------------------------------------
+# Two settings that go together: the VRAM the loader carves out at boot (vram.txt) and how much normal RAM the GPU may
+# borrow on top (GTT, ttm.pages_limit/page_pool_size in cmdline.txt; lichii-bc250 README step 6). Measured on an original
+# PS5, v3.0.2+ image (Game Mode keeps a 512 MiB VRAM floor for its own picture): 4 GB VRAM + 12 GB GTT ran a heavy
+# Unreal Engine PC game 40 min with VRAM full and up to 1.4 GB spilled to GTT, no "Failed to pin framebuffer" (on v3.0.1
+# the same game closed at 4 GB), and a Switch 2 emulator went >2 h before memory stutters vs ~35 min at 6 GB VRAM.
 VRAM_WANT=${VRAM_SIZE:-0x100000000}         # 4 GB unless you chose another amount
-VRAM_MIN=$((512 << 20)) VRAM_MAX=$((8 << 30)) VRAM_STEP=$((256 << 20))
+VRAM_MIN=$((512 << 20)) VRAM_MAX=$((8 << 30)) VRAM_STEP=$((256 << 20)) VRAM_SAFE=$((4 << 30))
 LINUX_TOTAL_MB=14950                     # RAM Linux sees with no VRAM carved out (14.4 GB at 512 MB, 10.9 at 4 GB)
+GTT_PAGES=3145728                        # 12 GB in 4 KB pages: the GPU may borrow up to that much normal RAM
 vram_gb() { awk -v v="$(( $1 ))" 'BEGIN { printf "%g GB", v / 2^30 }'; }
 vram_left() { awk -v v="$(( $1 ))" -v t="$LINUX_TOTAL_MB" 'BEGIN { printf "~%.1f GB", (t - v / 2^20) / 1024 }'; }
 vram_cur() { sudo cat "$VRAMTXT" 2>/dev/null | tr -d '[:space:]'; }
+gtt_set() { cmd_has "ttm.pages_limit=$GTT_PAGES" && cmd_has "ttm.page_pool_size=$GTT_PAGES"; }   # at the next boot
+gtt_now() { awk '{ printf "%.1f GB", $1 / 2^30 }' "$(gpu_dev)/mem_info_gtt_total" 2>/dev/null; }
+vram_floor() { [ -r /etc/ps5-bazzite-deck/vram-floor ] && tr -d '[:space:]' </etc/ps5-bazzite-deck/vram-floor; }  # MiB, v3.0.2+
 vram_parse() {                           # "4", "4G", "3.5GB", "1536M", "0x100000000" -> bytes (empty if invalid)
     local v; v=$(tr '[:lower:],' '[:upper:].' <<<"$1" | tr -d ' B')
     case $v in
@@ -388,50 +409,68 @@ vram_parse() {                           # "4", "4G", "3.5GB", "1536M", "0x10000
     esac
 }
 desc_vram() {
-    local cur; cur=$(vram_cur)
+    local cur fl; cur=$(vram_cur); fl=$(vram_floor)
     section
-    say "$(L "Memoria de vídeo que el cargador reserva para la gráfica (${VRAMTXT}, hexadecimal)." "Video memory the loader reserves for the GPU (${VRAMTXT}, hexadecimal).")"
-    say "$(L "Ahora: ${cur:-sin fichero}${cur:+ ($(vram_gb "$cur"); Linux con $(vram_left "$cur") de RAM)}." "Now: ${cur:-no file}${cur:+ ($(vram_gb "$cur"); Linux with $(vram_left "$cur") of RAM)}.")"
-    say "$(L "La PS5 tiene 16 GB compartidos: lo que va a la gráfica lo pierde Linux. Puedes poner cualquier cantidad" "The PS5 has 16 GB shared: what goes to the GPU is lost to Linux. You can set any amount")"
-    say "$(L "entre $(vram_gb $VRAM_MIN) y $(vram_gb $VRAM_MAX) (en pasos de 256 MB); recomendado 4 GB." "between $(vram_gb $VRAM_MIN) and $(vram_gb $VRAM_MAX) (in 256 MB steps); 4 GB recommended.")"
+    say "$(L "Dos cosas que van juntas: la memoria de vídeo que el cargador reserva para la gráfica (${VRAMTXT}) y" "Two things that go together: the video memory the loader reserves for the GPU (${VRAMTXT}) and")"
+    say "$(L "cuánta RAM normal le puede prestar Linux encima (GTT: ttm.pages_limit en $CMDLINE)." "how much normal RAM Linux may lend it on top (GTT: ttm.pages_limit in $CMDLINE).")"
+    say "$(L "Ahora: VRAM ${cur:-sin fichero}${cur:+ ($(vram_gb "$cur"); Linux con $(vram_left "$cur") de RAM)}, GTT $(gtt_now || echo '?')$(gtt_set && echo ' (12 GB pedidos)')." "Now: VRAM ${cur:-no file}${cur:+ ($(vram_gb "$cur"); Linux with $(vram_left "$cur") of RAM)}, GTT $(gtt_now || echo '?')$(gtt_set && echo ' (12 GB asked for)').")"
+    say "$(L "La PS5 tiene 16 GB compartidos: lo que va a la VRAM lo pierde Linux. Recomendado: 4 GB de VRAM + 12 GB de GTT." "The PS5 has 16 GB shared: what goes to VRAM is lost to Linux. Recommended: 4 GB VRAM + 12 GB GTT.")"
     say "$(L "POR QUÉ: con 512 MB (lo que pone el cargador) los juegos DirectX 12 / Unreal Engine 5 se caen a los" "WHY: with 512 MB (what the loader sets) DirectX 12 / Unreal Engine 5 games crash within")"
-    say "$(L "pocos segundos ('radv/amdgpu: Not enough memory for command submission', VK_ERROR_DEVICE_LOST) y en el" "a few seconds ('radv/amdgpu: Not enough memory for command submission', VK_ERROR_DEVICE_LOST) and in")"
-    say "$(L "modo juego la gráfica se reinicia. Con 4 GB funcionan y a Linux le quedan ~10,6 GB. Más de 6 GB solo" "game mode the GPU resets. With 4 GB they work and Linux keeps ~10.6 GB. More than 6 GB only")"
-    say "$(L "si un juego se queda corto de VRAM (la gráfica también toma RAM prestada cuando le falta)." "if a game runs short of VRAM (the GPU also borrows RAM when it runs out).")"
-    say "$(L "DESHACER: sudo cp $VRAMTXT.orig $VRAMTXT (o elige 512 MB aquí)." "UNDO: sudo cp $VRAMTXT.orig $VRAMTXT (or choose 512 MB here).")"
-    say "$(L "Cuenta solo tras APAGAR y arrancar con el cargador (un reinicio en caliente no la cambia)." "Takes effect only after POWERING OFF and booting with the loader (a warm reboot does not change it).")"
+    say "$(L "pocos segundos (VK_ERROR_DEVICE_LOST). Con 4 GB funcionan, a Linux le quedan ~10,6 GB y lo que no cabe en la" "a few seconds (VK_ERROR_DEVICE_LOST). With 4 GB they work, Linux keeps ~10.6 GB and what doesn't fit in")"
+    say "$(L "VRAM va a la GTT. Desde la imagen v3.0.2 el modo juego se guarda ${fl:-512} MB de VRAM para su propia imagen, así" "VRAM goes to GTT. Since image v3.0.2 Game Mode keeps ${fl:-512} MB of VRAM for its own picture, so")"
+    say "$(L "que un juego que llena la VRAM ya no lo tira ('Failed to pin framebuffer'): 4 GB vale también para juegos" "a game that fills VRAM no longer knocks it out ('Failed to pin framebuffer'): 4 GB is enough for heavy PC")"
+    say "$(L "de PC pesados, y deja más RAM a los emuladores (el zram tarda mucho más en llenarse que con 6 GB)." "games too, and leaves more RAM to emulators (zram takes much longer to fill than with 6 GB).")"
+    say "$(L "Menos de 4 GB: la imagen lo desaconseja. Más de 6 GB solo si un juego concreto lo necesita." "Less than 4 GB: the image advises against it. More than 6 GB only if a particular game needs it.")"
+    say "$(L "DESHACER: sudo cp $VRAMTXT.orig $VRAMTXT y quita ttm.pages_limit/ttm.page_pool_size de $CMDLINE" "UNDO: sudo cp $VRAMTXT.orig $VRAMTXT and remove ttm.pages_limit/ttm.page_pool_size from $CMDLINE")"
+    say "$(L "(o copia un $CMDLINE.bak-* encima). Cuenta solo tras APAGAR y arrancar con el cargador." "(or copy a $CMDLINE.bak-* over it). Takes effect only after POWERING OFF and booting with the loader.")"
 }
 check_vram() {
     sudo test -f "$CMDLINE" || return 2
     local cur; cur=$(vram_cur)
-    if [ -n "${VRAM_SIZE:-}" ]; then [ "$cur" = "$VRAM_SIZE" ]   # the amount you chose here
-    else [ -n "$cur" ] && [ "$(( cur ))" -ge $((2 << 30)) ]; fi  # nothing chosen: any 2 GB or more counts as done
+    if [ -n "${VRAM_SIZE:-}" ]; then [ "$cur" = "$VRAM_SIZE" ] || return 1   # the amount you chose here
+    else [ -n "$cur" ] && [ "$(( cur ))" -ge $((2 << 30)) ] || return 1; fi  # nothing chosen: any 2 GB or more counts
+    if [ "${VRAM_GTT:-}" = off ]; then return 0; fi                        # you said no to the bigger GTT
+    gtt_set
 }
 apply_vram() {
     local c bytes cur; cur=$(vram_cur)
     if [ $ALL = 1 ]; then bytes=$(( VRAM_WANT ))
     else
         local g
-        for g in 0.5 2 4 6 8; do
+        for g in 2 4 5 6 8; do
             bytes=$(vram_parse "$g")
             say "$(L "$(printf '%-7s' "$(vram_gb "$bytes")") → Linux con $(vram_left "$bytes") de RAM$([ "$g" = 4 ] && echo '   (recomendado)')" "$(printf '%-7s' "$(vram_gb "$bytes")") → Linux with $(vram_left "$bytes") of RAM$([ "$g" = 4 ] && echo '   (recommended)')")"
         done
         while :; do
-            read -rp "$(L "  ¿Cuánta VRAM? (p. ej. 4, 3G, 1536M; Intro = $(vram_gb "$VRAM_WANT")): " "  How much VRAM? (e.g. 4, 3G, 1536M; Enter = $(vram_gb "$VRAM_WANT")): ")" c </dev/tty
+            read -rp "$(L "  ¿Cuánta VRAM? (p. ej. 4, 5G, 4608M; Intro = $(vram_gb "$VRAM_WANT")): " "  How much VRAM? (e.g. 4, 5G, 4608M; Enter = $(vram_gb "$VRAM_WANT")): ")" c </dev/tty
             bytes=$(vram_parse "${c:-$VRAM_WANT}")
             if [ -z "$bytes" ]; then say "$(L "No entiendo «$c»." "I don't understand '$c'.")"
             elif [ "$bytes" -lt $VRAM_MIN ] || [ "$bytes" -gt $VRAM_MAX ]; then
                 say "$(L "Tiene que estar entre $(vram_gb $VRAM_MIN) y $(vram_gb $VRAM_MAX)." "It must be between $(vram_gb $VRAM_MIN) and $(vram_gb $VRAM_MAX).")"
             elif [ $(( bytes % VRAM_STEP )) != 0 ]; then say "$(L "Tiene que ser múltiplo de 256 MB (p. ej. 3G, 3.25G, 1536M)." "It must be a multiple of 256 MB (e.g. 3G, 3.25G, 1536M).")"
+            elif [ "$bytes" -lt $VRAM_SAFE ] && ! ask "$(L "  Con menos de 4 GB algunos juegos se caen y el modo juego puede quedarse sin sitio para su imagen. ¿Seguro?" "  With less than 4 GB some games crash and Game Mode may run out of room for its picture. Sure?")" N; then :
             else break; fi
         done
     fi
     VRAM_WANT=$(printf '0x%x' "$bytes")
     remember VRAM_SIZE "$VRAM_WANT"
+    [ -n "$cur" ] && [ "$(( cur ))" = "$bytes" ] || COLD=1   # a power off is only needed if something changes
     sudo test -f "$VRAMTXT.orig" || { [ -n "$cur" ] && sudo cp "$VRAMTXT" "$VRAMTXT.orig"; }
     echo "$VRAM_WANT" | sudo tee "$VRAMTXT" >/dev/null || return 1
     say "$(L "VRAM: $(vram_gb "$VRAM_WANT") ($VRAM_WANT); Linux tendrá $(vram_left "$VRAM_WANT") de RAM tras el próximo arranque en frío." "VRAM: $(vram_gb "$VRAM_WANT") ($VRAM_WANT); Linux will have $(vram_left "$VRAM_WANT") of RAM after the next cold boot.")"
-    COLD=1
+    say "$(L "GTT de 12 GB: la gráfica puede tomar prestada RAM normal hasta 12 GB cuando la VRAM se llena (sin ello," "12 GB GTT: the GPU may borrow normal RAM up to 12 GB when VRAM is full (without it, the kernel's")"
+    say "$(L "el límite del núcleo es la mitad de la RAM). No reserva nada: solo usa la RAM que el juego necesita." "limit is half the RAM). It reserves nothing: it only uses the RAM the game needs.")"
+    if ask "$(L "  ¿Poner la GTT a 12 GB (ttm.pages_limit=$GTT_PAGES ttm.page_pool_size=$GTT_PAGES)?" "  Set GTT to 12 GB (ttm.pages_limit=$GTT_PAGES ttm.page_pool_size=$GTT_PAGES)?")" S; then
+        if ! gtt_set; then
+            sudo cp "$CMDLINE" "$CMDLINE.bak-$(date +%Y%m%d-%H%M%S)" || return 1
+            cmd_set ttm.pages_limit "$GTT_PAGES" && cmd_set ttm.page_pool_size "$GTT_PAGES" || return 1
+            COLD=1
+        fi
+        remember VRAM_GTT on
+    else
+        remember VRAM_GTT off
+    fi
+    [ $COLD = 1 ] || say "$(L "Sin cambios respecto a lo que ya usa la consola: no hace falta apagar." "No change from what the console already uses: no need to power off.")"
 }
 
 # --- gpu40 ---------------------------------------------------------------------------------------
@@ -443,6 +482,7 @@ GPU_CU_PARAM=/sys/module/amdgpu/parameters/ps5_cu_unlock
 gpu_cu_now() {                           # active compute units this boot (amdgpu logs active_cu_number)
     sudo journalctl -k -b --no-pager 2>/dev/null | grep -o 'active_cu_number[^0-9]*[0-9]\+' | tail -1 | grep -o '[0-9]\+$'
 }
+is_pro() { local n; n=$(gpu_cu_now); [ -n "$n" ] && [ "$n" -ge 60 ]; }   # a PS5 Pro has 60 compute units active
 gpu_cu_set() { sudo grep -qE '(^| )amdgpu\.ps5_cu_unlock=[1-9]' "$CMDLINE"; }   # unlock asked for at the next boot
 desc_gpu40() {
     local now; now=$(gpu_cu_now)
@@ -509,7 +549,7 @@ desc_zram() {
     say "$(L "Propuesta: zram-size = $ZRAM_WANT (toda la RAM de Linux, como SteamOS) y compresor $ZRAM_ALGO_WANT, en $ZRAM_DROPIN." "Proposal: zram-size = $ZRAM_WANT (all of Linux's RAM, like SteamOS) and compressor $ZRAM_ALGO_WANT, in $ZRAM_DROPIN.")"
     say "$(L "POR QUÉ el tamaño: Bazzite pone la mitad. Un juego grande (p. ej. un Unreal Engine 5 con 6 GB de VRAM) la" "WHY the size: Bazzite sets half. A big game (e.g. an Unreal Engine 5 one with 6 GB of VRAM) fills it")"
     say "$(L "llena y a partir de ahí, sin swap libre, el sistema cierra el juego si pide más. No reserva nada: solo gasta" "and from then on, with no free swap, the system kills the game if it asks for more. It reserves nothing: it only uses")"
-    say "$(L "RAM cuando se usa. No se añade swap en el disco USB aquí (eso es el bloque swapdisco, aparte)." "RAM when used. No swap is added on the USB disk here (that is the swapdisco block, separate).")"
+    say "$(L "RAM cuando se usa. No se añade swap en el disco USB aquí (eso es otra parte del bloque memory)." "RAM when used. No swap is added on the USB disk here (that is another part of the memory block).")"
     say "$(L "POR QUÉ el compresor: la zram comprime justo cuando se acaba la RAM, normalmente jugando, y mientras" "WHY the compressor: zram compresses exactly when RAM runs out, usually while gaming, and while")"
     say "$(L "comprime el juego espera. Los que hay:" "it compresses the game waits. The options:")"
     say "$(L "  lz4     muy rápido (varias veces más que zstd) y guarda menos (~1,7-2 a 1). Los tirones por memoria se" "  lz4     very fast (several times faster than zstd) and stores less (~1.7-2 to 1). Memory stutters")"
@@ -603,8 +643,9 @@ apply_swapdisco() {
 # Memory settings for heavy emulators, from lichii-bc250's README "Step 1" (github.com/lethevimlet/lichii-bc250), measured
 # on an AMD BC-250 (the PS5's own APU, also on Bazzite). Only what applies to the PS5: no UMA carve-out, no overclock,
 # zram and disk swap are the blocks above. Tried 2026-11-22 on an original PS5 (VRAM 6 GB, ~8.7 GB RAM, lichii-bc250 v21):
-# the biggest area load had memory pressure at most 3.5 % and 8 GB in swap. Not yet compared with Bazzite's
-# defaults in the same session: EXPERIMENTAL, off by default. Same file names as the standalone memoria-bc250.sh.
+# the biggest area load had memory pressure at most 3.5 % and 8 GB in swap. 2026-11-23, 4 GB VRAM + 12 GB GTT on the
+# v3.0.2 image, all four on: the same emulator ran >2 h before the first memory stutters (~35 min at 6 GB VRAM, mostly
+# thanks to the extra RAM). Not yet compared with Bazzite's defaults in the same session: EXPERIMENTAL, off by default. Same file names as the standalone memoria-bc250.sh.
 MEM_SWAP_CONF=/etc/sysctl.d/99-ps5-memoria-swappiness.conf
 MEM_COMP_CONF=/etc/sysctl.d/99-ps5-memoria-compaction.conf
 MEM_WMARK_CONF=/etc/sysctl.d/99-ps5-memoria-watermark.conf
@@ -621,8 +662,9 @@ desc_memoria() {
     section
     say "$(L "Ajustes de memoria de Linux para emuladores que llenan la RAM (Lichii, CheezyEmu, Eglantine)." "Linux memory settings for emulators that fill the RAM (Lichii, CheezyEmu, Eglantine).")"
     say "$(L "Vienen de la guía de lichii-bc250, medidos en una AMD BC-250 (el mismo chip que la PS5, con Bazzite)." "They come from lichii-bc250's guide, measured on an AMD BC-250 (the PS5's own chip, on Bazzite).")"
-    say "$(L "EN PRUEBAS: en una PS5 original la carga de zona más grande tuvo la presión de memoria al 3,5 % como mucho, pero" "EXPERIMENTAL: on an original PS5 the biggest area load had memory pressure at 3.5 % at most, but")"
-    say "$(L "aún no se ha comparado con los valores de Bazzite en la misma partida. Pregunta cada uno por separado:" "it has not been compared with Bazzite's values in the same session yet. It asks for each one separately:")"
+    say "$(L "EN PRUEBAS: en una PS5 original con 4 GB de VRAM y los cuatro puestos, un emulador de Switch 2 aguantó más de" "EXPERIMENTAL: on an original PS5 with 4 GB VRAM and all four on, a Switch 2 emulator ran more than")"
+    say "$(L "2 h sin tirones de memoria y la presión no pasó del 7 %; aún no se ha comparado con los valores de Bazzite" "2 h without memory stutters and pressure stayed under 7 %; not yet compared with Bazzite's values")"
+    say "$(L "en la misma partida. Pregunta cada uno por separado:" "in the same session. It asks for each one separately:")"
     say "$(L "  swappiness 10 (Bazzite: 180): no mandar el juego al intercambio mientras quede RAM libre; al recuperarlo" "  swappiness 10 (Bazzite: 180): don't push the game to swap while RAM is still free; getting it back")"
     say "$(L "      se congela segundos." "      freezes it for seconds.")"
     say "$(L "  compactación 100 (núcleo: 20): juntar huecos de memoria en segundo plano; la GPU pide bloques de 2 MB y" "  compaction 100 (kernel: 20): defragment memory in the background; the GPU asks for 2 MB blocks and")"
@@ -773,59 +815,10 @@ apply_fans() {
     say "$(L "Objetivo del ventilador ahora: $(fan_now || echo '?') °C." "Fan target now: $(fan_now || echo '?') °C.")"
 }
 
-# --- cpufreq -------------------------------------------------------------------------------------
-# The image's CPU frequency driver (ps5-cpufreq) lets schedutil re-evaluate every 75 us. At rest that is ~275
-# frequency changes a second; the governor's kthread (sugov:0) takes ~20 % of a core and the cores hover at
-# 2.3-2.6 GHz instead of resting at 800 MHz: heat the fan has to remove. With 10 ms: ~90 changes a second,
-# sugov ~8 %, cores at ~1.25 GHz on average (v2.10, 2026-11-10). Games still get full speed.
-# It is a kernel setting that resets at every boot, so a small service writes it at startup.
-CPUFREQ_RATE=10000
-CPUFREQ_KNOB=/sys/devices/system/cpu/cpufreq/schedutil/rate_limit_us
-cpufreq_now() { cat "$CPUFREQ_KNOB" 2>/dev/null; }
-desc_cpufreq() {
-    section
-    say "$(L "Instala ps5-cpufreq-calm: al arrancar pone el regulador de frecuencia de la CPU (schedutil) a revisar" "Installs ps5-cpufreq-calm: at boot it sets the CPU frequency governor (schedutil) to re-evaluate")"
-    say "$(L "la frecuencia como mucho cada $((CPUFREQ_RATE / 1000)) ms ($CPUFREQ_KNOB = $CPUFREQ_RATE)." "the frequency at most every $((CPUFREQ_RATE / 1000)) ms ($CPUFREQ_KNOB = $CPUFREQ_RATE).")"
-    say "$(L "POR QUÉ: el driver de la imagen le deja revisarla cada 0,075 ms. En reposo eso son unos 275 cambios" "WHY: the image's driver lets it re-evaluate every 0.075 ms. At idle that is about 275 frequency")"
-    say "$(L "de frecuencia por segundo: el propio regulador (sugov:0) gasta ~20 % de un núcleo y los núcleos no" "changes per second: the governor itself (sugov:0) uses ~20% of a core and the cores do not")"
-    say "$(L "bajan de 2,3-2,6 GHz. Con $((CPUFREQ_RATE / 1000)) ms: ~90 cambios por segundo, ~8 % y ~1,25 GHz de media," "drop below 2.3-2.6 GHz. With $((CPUFREQ_RATE / 1000)) ms: ~90 changes per second, ~8% and ~1.25 GHz on average,")"
-    say "$(L "así que hay menos calor y menos ventilador en reposo. Jugando, la CPU sigue subiendo a su máximo." "so there is less heat and less fan at idle. While gaming, the CPU still goes up to its maximum.")"
-    say "$(L "Ahora: $(cpufreq_now) µs." "Now: $(cpufreq_now) µs.")"
-    say "$(L "DESHACER: sudo systemctl disable ps5-cpufreq-calm (cuenta desde el siguiente arranque)." "UNDO: sudo systemctl disable ps5-cpufreq-calm (takes effect from the next boot).")"
-}
-check_cpufreq() {
-    [ -e "$CPUFREQ_KNOB" ] || return 2   # another governor, or a kernel without the knob
-    # v2.11+ kernels set transition_delay_us to 10 ms themselves: nothing to add unless ours is already there
-    [ -x /usr/local/sbin/ps5-cpufreq-calm ] || [ "$(cpufreq_now)" -lt "$CPUFREQ_RATE" ] 2>/dev/null || return 2
-    [ -x /usr/local/sbin/ps5-cpufreq-calm ] && systemctl is-enabled -q ps5-cpufreq-calm.service 2>/dev/null &&
-        [ "$(cpufreq_now)" = "$CPUFREQ_RATE" ]
-}
-apply_cpufreq() {
-    sudo tee /usr/local/sbin/ps5-cpufreq-calm >/dev/null <<CALM || return 1
-#!/bin/bash
-# Let schedutil re-evaluate the CPU frequency at most every $CPUFREQ_RATE us instead of the driver's 75 us.
-# Installed by ps5-bazzite-toolbox.sh (block cpufreq). Log: journalctl -b -u ps5-cpufreq-calm
-K=$CPUFREQ_KNOB
-for _ in \$(seq 30); do [ -w "\$K" ] && break; sleep 1; done
-[ -w "\$K" ] || { echo "\$K isn't there (governor not schedutil?): nothing to do"; exit 0; }
-echo $CPUFREQ_RATE >"\$K" && echo "schedutil rate_limit_us: \$(cat "\$K")"
-CALM
-    sudo chmod 755 /usr/local/sbin/ps5-cpufreq-calm &&
-    sudo tee /etc/systemd/system/ps5-cpufreq-calm.service >/dev/null <<'UNIT' || return 1
-[Unit]
-Description=Calm the CPU frequency governor (schedutil rate limit, ps5-bazzite-toolbox)
-After=systemd-modules-load.service ps5-perf.service
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/sbin/ps5-cpufreq-calm
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-    sudo systemctl daemon-reload && sudo systemctl enable --now ps5-cpufreq-calm.service
-}
+# --- cpufreq: removed in 1.18.0 -----------------------------------------------------------------------
+# Images v2.11+ set schedutil's rate_limit_us to 10 ms themselves (VivaLaVent issue #53), which is what the block's
+# ps5-cpufreq-calm service did. An old install of it is harmless (it writes the same value); to remove it:
+# sudo systemctl disable ps5-cpufreq-calm; sudo rm /usr/local/sbin/ps5-cpufreq-calm /etc/systemd/system/ps5-cpufreq-calm.service
 
 # --- warmreboot ----------------------------------------------------------------------------------
 desc_warmreboot() {
@@ -834,16 +827,27 @@ desc_warmreboot() {
     say "$(L "vuelve directo a Linux en ~20 s, sin pasar por el sistema de la PS5 ni el cargador." "it comes straight back to Linux in ~20 s, without going through the PS5 system or the loader.")"
     say "$(L "Apagar sigue siendo apagar: tras un apagado hace falta el cargador." "Power off is still power off: after a shutdown you need the loader.")"
     say "$(L "POR QUÉ: comodidad. Es experimental: en algunas consolas la imagen sale en negro o corrupta" "WHY: convenience. It is experimental: on some consoles the picture comes up black or corrupt")"
-    say "$(L "(el bloque hdmi lo arregla) y tras actualizar el kernel hay que APAGAR, no reiniciar." "(the hdmi block fixes that) and after a kernel update you must POWER OFF, not reboot.")"
-    say "$(L "DESHACER: ps5-warm-reboot off." "UNDO: ps5-warm-reboot off.")"
+    say "$(L "y tras actualizar el kernel hay que APAGAR, no reiniciar. Para la imagen en negro, este bloque ofrece" "and after a kernel update you must POWER OFF, not reboot. For the black picture, this block also offers")"
+    say "$(L "además ps5-hdmi-kick: en cada arranque, cuando aparece el modo juego, cambia a otra consola de texto" "ps5-hdmi-kick: on every boot, once Game Mode is up, it switches to another text console and back")"
+    say "$(L "y vuelve (chvt 2; chvt 1), el truco del README de la imagen para recuperar la salida HDMI." "(chvt 2; chvt 1), the trick from the image's README to bring the HDMI output back.")"
+    say "$(L "Ahora: reinicio en caliente $(warm_on && echo activado || echo desactivado), ps5-hdmi-kick $(check_hdmi && echo instalado || echo 'no instalado')." "Now: warm reboot $(warm_on && echo on || echo off), ps5-hdmi-kick $(check_hdmi && echo installed || echo 'not installed').")"
+    say "$(L "DESHACER: ps5-warm-reboot off; sudo systemctl disable ps5-hdmi-kick." "UNDO: ps5-warm-reboot off; sudo systemctl disable ps5-hdmi-kick.")"
 }
 check_warmreboot() {
     command -v ps5-warm-reboot >/dev/null || return 2
-    if [ "${WARM_REBOOT:-}" = off ]; then ! warm_on; else warm_on; fi
+    if [ "${WARM_REBOOT:-}" = off ]; then ! warm_on; return; fi
+    warm_on || return 1
+    [ "${HDMI_KICK:-}" = off ] || check_hdmi             # with warm reboot on, the HDMI fix too (unless you said no)
 }
-apply_warmreboot() { remember WARM_REBOOT on; ps5-warm-reboot on; }
+apply_warmreboot() {
+    remember WARM_REBOOT on; ps5-warm-reboot on || return 1
+    if check_hdmi; then return 0; fi
+    if ask "$(L "  ¿Instalar también ps5-hdmi-kick (recupera la imagen si sale en negro tras reiniciar)?" "  Also install ps5-hdmi-kick (brings the picture back if it is black after a reboot)?")" S; then
+        remember HDMI_KICK on; apply_hdmi
+    else remember HDMI_KICK off; fi
+}
 
-# --- hdmi ----------------------------------------------------------------------------------------
+# --- hdmi (part of warmreboot since 1.18.0; "--only hdmi" still works) ------------------------------
 desc_hdmi() {
     section
     say "$(L "Instala ps5-hdmi-kick: en cada arranque, cuando aparece el modo juego, cambia a otra consola" "Installs ps5-hdmi-kick: on every boot, once Game Mode is up, it switches to another text console")"
@@ -1166,38 +1170,45 @@ apply_firewall() {
         { echo "  $(L "Sigue fallido: sudo tail -40 /var/log/firewalld" "Still failed: sudo tail -40 /var/log/firewalld")"; return 1; }
 }
 
-# --- brave ---------------------------------------------------------------------------------------
-desc_brave() {
+# --- navegadores (brave + edge until 1.17; "--only brave" / "--only edge" still work) ------------------
+# Chromium browsers installed as Flatpak keep their keys in the KDE Wallet, which never opens on an auto-login session,
+# so they ask for its password at every start. --password-store=basic in their flags file avoids it.
+BROWSERS="com.brave.Browser:Brave:$BRAVE_FLAGS com.microsoft.Edge:Edge:$EDGE_FLAGS"
+browsers_here() {                        # "id:Name:flags" of each one installed
+    local b; for b in $BROWSERS; do flatpak info "${b%%:*}" >/dev/null 2>&1 && echo "$b"; done
+}
+browser_ok() { grep -qs -- '--password-store=basic' "${1##*:}"; }   # grep says 2 for a missing file: that is pending
+desc_navegadores() {
+    local b names=''
+    for b in $(browsers_here); do b=${b#*:}; names="$names ${b%%:*}"; done
     section
-    say "$(L "Brave (Flatpak) guarda sus claves sin la Cartera de KDE (--password-store=basic en $BRAVE_FLAGS)." "Brave (Flatpak) stores its keys without the KDE Wallet (--password-store=basic in $BRAVE_FLAGS).")"
-    say "$(L "POR QUÉ: como la sesión entra sola, la Cartera de KDE no se abre y Brave pide su contraseña cada vez." "WHY: since the session logs in by itself, the KDE Wallet doesn't open and Brave asks for its password every time.")"
-    say "$(L "Ojo: las sesiones y contraseñas ya guardadas en Brave dejan de leerse (hay que volver a entrar)." "Note: sessions and passwords already saved in Brave stop being readable (you have to sign in again).")"
-    say "$(L "DESHACER: borra esa línea del fichero." "UNDO: delete that line from the file.")"
+    say "$(L "Los navegadores Flatpak (Brave, Microsoft Edge) guardan sus claves sin la Cartera de KDE" "Flatpak browsers (Brave, Microsoft Edge) store their keys without the KDE Wallet")"
+    say "$(L "(--password-store=basic en su fichero de opciones). Instalados aquí:${names:- ninguno}." "(--password-store=basic in their flags file). Installed here:${names:- none}.")"
+    say "$(L "POR QUÉ: como la sesión entra sola, la Cartera de KDE no se abre y el navegador pide su contraseña cada vez." "WHY: since the session logs in by itself, the KDE Wallet doesn't open and the browser asks for its password every time.")"
+    say "$(L "Ojo: las sesiones y contraseñas ya guardadas en él dejan de leerse (hay que volver a entrar)." "Note: sessions and passwords already saved in it stop being readable (you have to sign in again).")"
+    say "$(L "DESHACER: borra esa línea de $BRAVE_FLAGS o $EDGE_FLAGS." "UNDO: delete that line from $BRAVE_FLAGS or $EDGE_FLAGS.")"
 }
-check_brave() {
-    flatpak info com.brave.Browser >/dev/null 2>&1 || return 2
-    grep -qs -- '--password-store=basic' "$BRAVE_FLAGS" || return 1     # grep says 2 for a missing file: that is pending, not "doesn't apply"
+check_navegadores() {
+    local b any=0
+    for b in $(browsers_here); do
+        any=1
+        local n=${b#*:}; n=${n%%:*}; local v=BROWSER_$n
+        [ "${!v:-}" = off ] || browser_ok "$b" || return 1
+    done
+    [ $any = 1 ] || return 2
 }
-apply_brave() {
-    mkdir -p "$(dirname "$BRAVE_FLAGS")" && echo '--password-store=basic' >>"$BRAVE_FLAGS" &&
-        { flatpak kill com.brave.Browser 2>/dev/null; true; }
-}
-
-# --- edge ----------------------------------------------------------------------------------------
-desc_edge() {
-    section
-    say "$(L "Microsoft Edge (Flatpak) guarda sus claves sin la Cartera de KDE (--password-store=basic en $EDGE_FLAGS)." "Microsoft Edge (Flatpak) stores its keys without the KDE Wallet (--password-store=basic in $EDGE_FLAGS).")"
-    say "$(L "POR QUÉ: como la sesión entra sola, la Cartera de KDE no se abre y Edge pide su contraseña cada vez." "WHY: since the session logs in by itself, the KDE Wallet doesn't open and Edge asks for its password every time.")"
-    say "$(L "Ojo: las sesiones y contraseñas ya guardadas en Edge dejan de leerse (hay que volver a entrar)." "Note: sessions and passwords already saved in Edge stop being readable (you have to sign in again).")"
-    say "$(L "DESHACER: borra esa línea del fichero." "UNDO: delete that line from the file.")"
-}
-check_edge() {
-    flatpak info com.microsoft.Edge >/dev/null 2>&1 || return 2
-    grep -qs -- '--password-store=basic' "$EDGE_FLAGS" || return 1
-}
-apply_edge() {
-    mkdir -p "$(dirname "$EDGE_FLAGS")" && echo '--password-store=basic' >>"$EDGE_FLAGS" &&
-        { flatpak kill com.microsoft.Edge 2>/dev/null; true; }
+apply_navegadores() {
+    local b n f
+    for b in $(browsers_here); do
+        n=${b#*:}; n=${n%%:*}; f=${b##*:}
+        browser_ok "$b" && continue
+        if ask "$(L "  ¿$n sin la Cartera de KDE?" "  $n without the KDE Wallet?")" S; then
+            mkdir -p "$(dirname "$f")" && echo '--password-store=basic' >>"$f" || return 1
+            flatpak kill "${b%%:*}" 2>/dev/null
+            remember "BROWSER_$n" on
+        else remember "BROWSER_$n" off; fi
+    done
+    return 0
 }
 
 # --- nas -----------------------------------------------------------------------------------------
@@ -2093,7 +2104,7 @@ apply_unifideck() {
     say "$(L "Hecho: Unifideck acepta Python $v (copia en $orig). Vale desde el próximo juego que lances." "Done: Unifideck accepts Python $v (copy in $orig). It applies from the next game you launch.")"
 }
 
-# --- atajos --------------------------------------------------------------------------------------
+# --- exeactions and spacetool (the "atajos" block until 1.17) --------------------------------------------------------------------------------------
 # Desktop shortcuts that call this toolbox, so they follow it when it is updated.
 TOOLBOX_SELF=$(realpath "$0" 2>/dev/null)
 SM_DIR=$HOME/.local/share/kio/servicemenus
@@ -2110,44 +2121,32 @@ run_then_close() {
     printf '%s' "bash \"$TOOLBOX_SELF\" $*; rc=\$?; if [ \$rc = 0 ]; then echo; echo \"$closing\"; sleep $secs; else echo; echo \"Error (\$rc). $errmsg\"; read -r _; fi"
 }
 # The desktop "Colección PortProton" shortcut of v1.x: no longer made (adding, changing and removing a game already
-# sync the collection; menu option 15 does it by hand). apply_atajos removes it.
+# sync the collection; menu option 15 does it by hand). apply_exeactions removes it.
 COLL_DESKTOP="$(desk_dir)/portproton-collection.desktop"
-desc_atajos() {
+desc_exeactions() {
     section
-    case $TB_LANG in
-        es)
-    say "Atajos que llaman a este toolbox ($TOOLBOX_SELF):"
-    say "- Dolphin, botón derecho sobre un .exe: «Instalar en PortProton y Steam», «Cambiar aislamiento» y «Desinstalar» ($SM_GAME);"
-    say "- Dolphin, botón derecho sobre una carpeta: «Ver lo que ocupa cada carpeta» ($SM_SPACE);"
-    say "- el comando «espacio [carpeta]» en cualquier terminal ($SPACE_BIN);"
-    say "La colección «PortProton» de Steam se actualiza sola al instalar, cambiar o desinstalar un juego (y a mano,"
-    say "opción 15): el acceso «Colección PortProton» del escritorio ya no hace falta y este bloque lo quita si lo hay."
-    say "POR QUÉ: tenerlos tras instalar desde cero; antes eran scripts sueltos en ~ (add-proton-game.sh,"
-    say "portproton-collection.sh, verEspacioCadaDirectorio.sh), que este bloque ya no necesita."
-    say "Si mueves el toolbox de sitio, repite este bloque. DESHACER: rm '$SM_GAME' '$SM_SPACE'; sudo rm $SPACE_BIN"
-            ;;
-        *)
-    say "Shortcuts that call this toolbox ($TOOLBOX_SELF):"
-    say "- Dolphin, right-click on an .exe: \"Install in PortProton and Steam\", \"Change isolation\" and \"Uninstall\" ($SM_GAME);"
-    say "- Dolphin, right-click on a folder: \"See what each folder takes up\" ($SM_SPACE);"
-    say "- the command \"espacio [folder]\" in any terminal ($SPACE_BIN);"
-    say "The Steam \"PortProton\" collection updates itself when you install, change or uninstall a game (and by hand,"
-    say "option 15): the desktop \"PortProton Collection\" shortcut is no longer needed and this block removes it if present."
-    say "WHY: to have them after a fresh install; they used to be loose scripts in ~ (add-proton-game.sh,"
-    say "portproton-collection.sh, verEspacioCadaDirectorio.sh), which this block no longer needs."
-    say "If you move the toolbox, repeat this block. UNDO: rm '$SM_GAME' '$SM_SPACE'; sudo rm $SPACE_BIN"
-            ;;
-    esac
+    say "$(L "Dolphin, botón derecho sobre un .exe: «Instalar en PortProton y Steam», «Cambiar aislamiento» y «Desinstalar»" "Dolphin, right-click on an .exe: \"Install in PortProton and Steam\", \"Change isolation\" and \"Uninstall\"")"
+    say "$(L "($SM_GAME), que llaman a esta toolbox. Quita el acceso «Colección PortProton» del escritorio si lo hay:" "($SM_GAME), which call this toolbox. Removes the desktop \"PortProton Collection\" shortcut if present:")"
+    say "$(L "la colección se actualiza sola al instalar, cambiar o desinstalar un juego (y a mano, opción 15)." "the collection updates itself when you install, change or uninstall a game (and by hand, option 15).")"
+    say "$(L "Si mueves la toolbox de sitio, repite esto. DESHACER: rm '$SM_GAME'" "If you move the toolbox, repeat this. UNDO: rm '$SM_GAME'")"
 }
-check_atajos() {
+check_exeactions() {
     [ -n "$TOOLBOX_SELF" ] && [ -f "$TOOLBOX_SELF" ] || return 2       # run from a pipe: nothing to point at
-    # a missing file makes grep return 2, which here means "doesn't apply": anything missing is pending (1)
-    grep -qs -F "$TOOLBOX_SELF" "$SM_GAME" && grep -qs -F "$TOOLBOX_SELF" "$SM_SPACE" &&
-        grep -qs -F "$TOOLBOX_SELF" "$SPACE_BIN" && [ ! -e "$COLL_DESKTOP" ] && grep -qs -F "$(L 'Se cierra en' 'Closes in')" "$SM_GAME" &&
-        grep -qs -- '--remove-game' "$SM_GAME" && grep -qs -- '--change-level' "$SM_GAME" || return 1   # launchers that close by themselves
+    grep -qs -F "$TOOLBOX_SELF" "$SM_GAME" && [ ! -e "$COLL_DESKTOP" ] && grep -qs -F "$(L 'Se cierra en' 'Closes in')" "$SM_GAME" &&
+        grep -qs -- '--remove-game' "$SM_GAME" && grep -qs -- '--change-level' "$SM_GAME" || return 1
 }
-apply_atajos() {
-    mkdir -p "$SM_DIR" "$(desk_dir)" || return 1
+desc_spacetool() {
+    section
+    say "$(L "Lo que ocupa cada carpeta: en Dolphin, botón derecho sobre una carpeta → «Ver lo que ocupa cada carpeta»" "What each folder takes up: in Dolphin, right-click on a folder → \"See what each folder takes up\"")"
+    say "$(L "($SM_SPACE), y el comando «espacio [carpeta]» en cualquier terminal ($SPACE_BIN)." "($SM_SPACE), and the command \"espacio [folder]\" in any terminal ($SPACE_BIN).")"
+    say "$(L "Si mueves la toolbox de sitio, repite esto. DESHACER: rm '$SM_SPACE'; sudo rm $SPACE_BIN" "If you move the toolbox, repeat this. UNDO: rm '$SM_SPACE'; sudo rm $SPACE_BIN")"
+}
+check_spacetool() {
+    [ -n "$TOOLBOX_SELF" ] && [ -f "$TOOLBOX_SELF" ] || return 2
+    grep -qs -F "$TOOLBOX_SELF" "$SM_SPACE" && grep -qs -F "$TOOLBOX_SELF" "$SPACE_BIN" || return 1
+}
+apply_exeactions() {
+    mkdir -p "$SM_DIR" || return 1
     cat >"$SM_GAME" <<EOF
 [Desktop Entry]
 Type=Service
@@ -2170,6 +2169,14 @@ Name=$(L 'Desinstalar (de Steam, PortProton y el disco; pregunta cada paso)' 'Un
 Icon=edit-delete
 Exec=konsole -e bash -c '$(run_then_close 5 '--remove-game "$1"')' _ %f
 EOF
+    chmod +x "$SM_GAME"                  # Plasma 6 ignores service menus that aren't executable
+    # the stand-alone versions this replaces (made by hand or by add-proton-game.sh --install)
+    rm -f "$SM_DIR/add-proton-game.desktop" "$HOME/.local/bin/add-proton-game.sh" "$COLL_DESKTOP" \
+        "$SM_DIR/ps5-toolbox-add-game.desktop"    # name before v1.0.0
+    say "$(L 'Si Dolphin estaba abierto, ciérralo y ábrelo para ver las acciones nuevas.' 'If Dolphin was open, close it and reopen it to see the new actions.')"
+}
+apply_spacetool() {
+    mkdir -p "$SM_DIR" || return 1
     cat >"$SM_SPACE" <<EOF
 [Desktop Entry]
 Type=Service
@@ -2181,23 +2188,115 @@ Name=$(L 'Ver lo que ocupa cada carpeta' 'See what each folder takes up')
 Icon=filelight
 Exec=konsole --hold -e bash "$TOOLBOX_SELF" --space %f
 EOF
-    chmod +x "$SM_GAME" "$SM_SPACE"      # Plasma 6 ignores service menus that aren't executable
+    chmod +x "$SM_SPACE"
     printf '#!/bin/sh\n# espacio [CARPETA]: lo que ocupa cada carpeta de CARPETA (ps5-bazzite-toolbox.sh --space)\nexec bash "%s" --space "$@"\n' \
         "$TOOLBOX_SELF" | sudo tee "$SPACE_BIN" >/dev/null && sudo chmod 755 "$SPACE_BIN" || return 1
-    # the stand-alone versions this replaces (made by hand or by add-proton-game.sh --install)
-    rm -f "$SM_DIR/add-proton-game.desktop" "$HOME/.local/bin/add-proton-game.sh" "$COLL_DESKTOP" \
-        "$SM_DIR/ps5-toolbox-add-game.desktop" "$SM_DIR/ps5-toolbox-space.desktop"    # names before v1.0.0
+    rm -f "$SM_DIR/ps5-toolbox-space.desktop"      # name before v1.0.0
     local old; old=$(cd ~ && ls portproton-collection.sh verEspacioCadaDirectorio.sh parpadeoVideo.sh 2>/dev/null | tr '\n' ' ')
     [ -n "$old" ] && say "$(L "Ya no hacen falta (bórralos si quieres): ~/${old// / ~/}" "No longer needed (delete them if you like): ~/${old// / ~/}")"
-    say "$(L 'Si Dolphin estaba abierto, ciérralo y ábrelo para ver las acciones nuevas.' 'If Dolphin was open, close it and reopen it to see the new actions.')"
+    return 0
+}
+
+# --- blocks made of parts (see block_parts) ----------------------------------------------------------------
+part_title() {                           # part_title PART -> what it does, in a few words
+    case $1 in
+        locale) L "idioma, teclado y zona horaria (sistema, escritorio y modo juego)" "language, keyboard and time zone (system, desktop and Game Mode)" ;;
+        bootlang) L "idioma y teclado desde el arranque" "language and keyboard from boot" ;;
+        usbquirk) L "disco USB sin UAS (usb-storage.quirks)" "USB drive without UAS (usb-storage.quirks)" ;;
+        disk) L "sin consultas SMART de KDE al disco" "no KDE SMART queries to the drive" ;;
+        bt) L "Bluetooth que se recupera solo al arrancar (ps5-bt-guard)" "Bluetooth that recovers by itself at boot (ps5-bt-guard)" ;;
+        steambt) L "Bluetooth de Steam siempre activado" "Steam's Bluetooth always on" ;;
+        zram) L "tamaño y compresor de la zram" "zram size and compressor" ;;
+        swapdisco) L "swap en el disco detrás de la zram" "swap on disk behind zram" ;;
+        memoria) L "ajustes del kernel para cuando falta RAM (en pruebas)" "kernel settings for when RAM runs short (experimental)" ;;
+        nas) L "montar el NAS y usar sus ROMs en EmuDeck y ES-DE" "mount the NAS and use its ROMs in EmuDeck and ES-DE" ;;
+        copiar) L "comando copiarNas y enlace ~/NAS" "copiarNas command and ~/NAS link" ;;
+        bios) L "BIOS de los emuladores desde el NAS" "emulator BIOS from the NAS" ;;
+        media) L "imágenes y vídeos de ES-DE desde el NAS" "ES-DE images and videos from the NAS" ;;
+        esde) L "reparar la lista de sistemas de ES-DE (y añadir Citra)" "fix ES-DE's system list (and add Citra)" ;;
+        rpcs3) L "mando de la PS5 en RPCS3 también en modo juego" "PS5 controller in RPCS3 in Game Mode too" ;;
+        portproton) L "ajustes por defecto de PortProton" "PortProton defaults" ;;
+        exeactions) L "acciones de Dolphin sobre un .exe" "Dolphin actions on an .exe" ;;
+        *) echo "$1" ;;
+    esac
+}
+blk_exists() { local p; for p in $(block_parts "$1"); do declare -F "check_$p" >/dev/null || return 1; done; }
+blk_check() {                            # blk_check BLOCK -> 0 applied, 1 pending, 2 not applicable, 3 you said no
+    local p st v any=0 done=0
+    for p in $(block_parts "$1"); do
+        check_"$p" >/dev/null 2>&1; st=$?
+        case $st in
+            2) ;;
+            0) any=1 done=1 ;;
+            *) any=1; v=SKIP_$p; [ "${!v:-}" = 1 ] || return 1 ;;     # a part you said no to doesn't count as pending
+        esac
+    done
+    [ $any = 1 ] || return 2
+    [ $done = 1 ] && return 0
+    return 3
+}
+blk_default() {                          # blk_default BLOCK -> S if a pending part would be applied by default
+    local p v; for p in $(block_parts "$1"); do
+        check_"$p" >/dev/null 2>&1; [ $? = 1 ] || continue
+        v=SKIP_$p
+        case ${!v:-} in 0) echo S; return ;; 1) continue ;; esac       # you said yes to it before: that wins
+        [ "$(default_for "$p")" = S ] && { echo S; return; }
+    done
+    echo N
+}
+blk_desc() {
+    local ps p st m; ps=$(block_parts "$1")
+    if [ "$(wc -w <<<"$ps")" = 1 ]; then desc_$ps; return; fi
+    section
+    say "$(L "Tiene varias partes; te pregunta cada una, con su explicación:" "It has several parts; it asks for each one, with its explanation:")"
+    for p in $ps; do
+        check_"$p" >/dev/null 2>&1; st=$?
+        case $st in 0) m='✔' ;; 2) m='–' ;; *) m='·' ;; esac
+        say "  $m $(part_title "$p")$([ $st = 2 ] && L ' (no aplica aquí)' ' (not applicable here)')"
+    done
+}
+blk_apply() {                            # asks for each pending part (or each part, when the block was asked for by name)
+    local ps p st d q v ok n fail=0 did=0 no=0; ps=$(block_parts "$1"); n=$(wc -w <<<"$ps")
+    for p in $ps; do
+        check_"$p" >/dev/null 2>&1; st=$?
+        [ $st = 2 ] && continue
+        if [ "$n" = 1 ]; then ok=0          # the block's own question was this part's
+        else
+            if [ $st = 0 ]; then
+                [ -n "$ONLY" ] || continue
+                q="$(L "«$(part_title "$p")» ya está. ¿Volver a aplicarlo (para cambiar sus valores)?" "'$(part_title "$p")' is already done. Apply it again (to change its values)?")" d=N
+            else
+                q="$(L "¿Aplicar «$(part_title "$p")»?" "Apply '$(part_title "$p")'?")" d=$(default_for "$p")
+                v=SKIP_$p; [ "${!v:-}" = 0 ] && d=S
+            fi
+            echo; printf '  %s%s%s\n' "$B" "$(part_title "$p")" "$N"; desc_"$p"
+            ask "  $q" "$d"; ok=$?
+        fi
+        if [ $ok = 0 ]; then
+            remember "SKIP_$p" 0
+            if apply_"$p"; then did=1; else fail=1; say "$(L "  → falló: $(part_title "$p")" "  → failed: $(part_title "$p")")"; fi
+        elif [ $st != 0 ]; then
+            no=1; [ $ALL = 1 ] || remember "SKIP_$p" 1
+            [ "$p" = warmreboot ] && remember WARM_REBOOT off
+        fi
+    done
+    [ $fail = 1 ] && return 1
+    [ $did = 0 ] && [ $no = 1 ] && return 3     # you said no to every part asked
+    return 0
+}
+blk_decline() {                          # "no" to a whole block: "no" to each of its pending parts
+    local p; for p in $(block_parts "$1"); do
+        check_"$p" >/dev/null 2>&1; [ $? = 1 ] || continue
+        remember "SKIP_$p" 1; [ "$p" = warmreboot ] && remember WARM_REBOOT off
+    done
 }
 
 # --- recommended answer per block ------------------------------------------------------------------
 default_for() {
     case $1 in
         warmreboot) echo N ;;
-        hdmi) warm_on && echo S || echo N ;;
-        brave|edge) echo N ;;
+        hdmi) warm_on && echo S || echo N ;;    # only by name ("--only hdmi"): part of warmreboot now
+        navegadores) echo N ;;
         monitorweb) echo N ;;            # a server always listening: only if you want it            # loses the browser's saved logins: only if the wallet prompt bothers you
         nas) [ -n "${NAS_IP:-}" ] && echo S || echo N ;;
         bios|media) echo N ;;
@@ -2338,7 +2437,7 @@ check_k "$(L "Atascos y errores del disco" "Disk stalls and errors")" "$P_DISK" 
 use=$(df --output=pcent / | tail -1 | tr -dc 0-9)
 if [ "$use" -ge 90 ]; then bad "$(L "Espacio: / al $use %" "Space: / at $use %")"; else ok "$(L "Espacio: / al $use % ($(df -h --output=avail / | tail -1 | tr -d ' ') libres)" "Space: / at $use % ($(df -h --output=avail / | tail -1 | tr -d ' ') free)")"; fi
 if sudo test -f "$POLKIT_RULE"; then ok "$(L "Regla anti-SMART de KDE puesta (el escritorio no se atasca)" "KDE anti-SMART rule in place (the desktop does not stall)")"
-elif grep -q '^ID_BUS=usb' <<<"$props"; then warn "$(L "Sin la regla anti-SMART de KDE: el paso al escritorio puede tardar ~60 s (bloque disk)" "No KDE anti-SMART rule: switching to the desktop can take ~60 s (block disk)")"; fi
+elif grep -q '^ID_BUS=usb' <<<"$props"; then warn "$(L "Sin la regla anti-SMART de KDE: el paso al escritorio puede tardar ~60 s (bloque usbdisk)" "No KDE anti-SMART rule: switching to the desktop can take ~60 s (block usbdisk)")"; fi
 
 # --- GPU -----------------------------------------------------------------------------------------------
 head_ "$(L "Gráfica" "Graphics")"
@@ -2410,16 +2509,15 @@ info "$(L "Avisos 'Salina poller' (ruido del parche USB, no es un fallo): $(kcou
 head_ "$(L "Ajustes de la consola" "Console settings")"
 info "cmdline: $(sed -E 's/root=[^ ]+ //' /proc/cmdline)"
 for b in $BLOCKS; do
-    check_"$b" >/dev/null 2>&1; st=$?
-    skipvar=SKIP_$b
+    blk_check "$b"; st=$?
     case $st in
         0) ok "$(L "$b: aplicado" "$b: applied")" ;;
         2) info "$(L "$b: no aplica en esta consola" "$b: not applicable on this console")" ;;
-        *) if [ "${!skipvar:-0}" = 1 ]; then info "$(L "$b: no aplicado (lo decidiste)" "$b: not applied (your choice)")"
-           else warn "$(L "$b: pendiente (menú 51, o --setup)" "$b: pending (menu 51, or --setup)")"; fi ;;
+        3) info "$(L "$b: no aplicado (lo decidiste)" "$b: not applied (your choice)")" ;;
+        *) warn "$(L "$b: pendiente (menú 51, o --setup)" "$b: pending (menu 51, or --setup)")" ;;
     esac
 done
-if warm_on && ! check_hdmi; then warn "$(L "Reinicio en caliente sin ps5-hdmi-kick: la imagen puede salir en negro (bloque hdmi)" "Warm reboot without ps5-hdmi-kick: the picture may come up black (block hdmi)")"; fi
+if warm_on && ! check_hdmi; then warn "$(L "Reinicio en caliente sin ps5-hdmi-kick: la imagen puede salir en negro (bloque warmreboot)" "Warm reboot without ps5-hdmi-kick: the picture may come up black (block warmreboot)")"; fi
 
 # --- graphical session ---------------------------------------------------------------------------------
 head_ "$(L "Sesión gráfica" "Graphical session")"
@@ -2441,7 +2539,7 @@ if [ "$NEED_BT" = 1 ] && [ -t 0 ]; then
     read -rp "$(L 'El Bluetooth no tiene adaptador. ¿Recargar su driver ahora (btusb)? [S/n] ' 'Bluetooth has no adapter. Reload its driver now (btusb)? [Y/n] ')" a
     if [[ $a != [nN]* ]]; then
         sudo modprobe -r btusb && sleep 2 && sudo modprobe btusb && sleep 5
-        if bt_present; then echo "$(L "Adaptador recuperado. Para que se haga solo en cada arranque: menú 52 → bt." "Adapter recovered. To make it happen by itself on every boot: menu 52 → bt.")"
+        if bt_present; then echo "$(L "Adaptador recuperado. Para que se haga solo en cada arranque: menú 52 → controller." "Adapter recovered. To make it happen by itself on every boot: menu 52 → controller.")"
         else echo "$(L "Sigue sin adaptador: apaga y arranca con el cargador (un arranque en frío reinicia el chip)." "Still no adapter: power off and boot with the charger (a cold boot resets the chip).")"; fi
     fi
 fi
@@ -2461,34 +2559,34 @@ fi
 echo "$(L "Ajustes de la consola ${VERSION:+(v$VERSION)} — respuestas guardadas en $CONF" "Console settings ${VERSION:+(v$VERSION)} — answers saved in $CONF")"
 REBOOT=0 COLD=0
 DONE="" FAILED="" SKIPPED=""
+local list='' x grp='' g
+if [ -n "$ONLY" ]; then for x in $ONLY; do list="$list $(block_alias "$x")"; done; ONLY=${list# }; fi
 for b in ${ONLY:-$BLOCKS}; do
-    declare -F "check_$b" >/dev/null || { echo "$(L "Bloque desconocido: $b" "Unknown block: $b")" >&2; continue; }
-    check_"$b"; st=$?
-    skipvar=SKIP_$b
-    if [ $st = 1 ] && [ "${!skipvar:-0}" = 1 ] && [ -z "$ONLY" ]; then st=3; fi
+    blk_exists "$b" || { echo "$(L "Ajuste desconocido: $b (menú 52 muestra la lista)" "Unknown setting: $b (menu 52 shows the list)")" >&2; continue; }
+    g=$(block_group "$b"); [ "$g" = "$grp" ] || { grp=$g; printf '%s%s%s\n' "$B" "${g:-$(L Otros Others)}" "$N"; }
+    blk_check "$b"; st=$?
+    [ $st = 3 ] && [ -n "$ONLY" ] && [ $STATUS_ONLY = 0 ] && st=1   # asked for by name: ask again
     case $st in
-        0) printf "$(L '✔ %-10s aplicado\n' '✔ %-10s applied\n')" "$b" ;;
-        2) printf "$(L '– %-10s no aplica en esta consola\n' '– %-10s not applicable on this console\n')" "$b" ;;
-        3) printf "$(L '– %-10s no aplicado (lo decidiste; menú 52 o --only %s para volver a preguntar)\n' '– %-10s not applied (your choice; menu 52 or --only %s to ask again)\n')" "$b" "$b" ;;
-        *) printf "$(L '✘ %-10s pendiente\n' '✘ %-10s pending\n')" "$b" ;;
+        0) printf "$(L '✔ %-12s aplicado\n' '✔ %-12s applied\n')" "$b" ;;
+        2) printf "$(L '– %-12s no aplica en esta consola\n' '– %-12s not applicable on this console\n')" "$b" ;;
+        3) printf "$(L '– %-12s no aplicado (lo decidiste; menú 52 o --only %s para volver a preguntar)\n' '– %-12s not applied (your choice; menu 52 or --only %s to ask again)\n')" "$b" "$b" ;;
+        *) printf "$(L '✘ %-12s pendiente\n' '✘ %-12s pending\n')" "$b" ;;
     esac
     [ $STATUS_ONLY = 1 ] && continue
-    if [ $st = 1 ]; then q="$(L "¿Aplicar '$b'?" "Apply '$b'?")" d=$(default_for "$b")
-        # you said yes to it before (SKIP_x=0 is only saved on a yes): that answer wins over the block's default,
-        # so --all on a new install applies the opt-in blocks you had (gpu40, monitorweb, swapdisco...)
-        [ "${!skipvar:-}" = 0 ] && d=S
+    if [ $st = 1 ]; then q="$(L "¿Aplicar '$b'?" "Apply '$b'?")" d=$(blk_default "$b")
     elif [ $st = 0 ] && [ -n "$ONLY" ]; then     # asked for by name: allow changing its values
         q="$(L "'$b' ya está aplicado. ¿Volver a aplicarlo (para cambiar sus valores)?" "'$b' is already applied. Apply it again (to change its values)?")" d=N
     else continue; fi
-    desc_"$b"
+    blk_desc "$b"
     if ask "$q" "$d"; then
-        remember "$skipvar" 0
-        if apply_"$b"; then DONE="$DONE $b"; say "$(L "→ hecho" "→ done")"
-        else FAILED="$FAILED $b"; say "$(L "→ FALLÓ (revisa los mensajes de arriba)" "→ FAILED (check the messages above)")"
-        fi
+        blk_apply "$b"
+        case $? in
+            0) DONE="$DONE $b"; say "$(L "→ hecho" "→ done")" ;;
+            3) SKIPPED="$SKIPPED $b"; say "$(L "→ nada aplicado" "→ nothing applied")" ;;
+            *) FAILED="$FAILED $b"; say "$(L "→ FALLÓ (revisa los mensajes de arriba)" "→ FAILED (check the messages above)")" ;;
+        esac
     elif [ $st = 1 ]; then
-        [ $ALL = 1 ] || remember "$skipvar" 1
-        [ "$b" = warmreboot ] && remember WARM_REBOOT off
+        [ $ALL = 1 ] || blk_decline "$b"
         SKIPPED="$SKIPPED $b"
     fi
     echo
@@ -2519,8 +2617,10 @@ By hand (cannot be automated from here):
 EOF
 ;;
 esac
-# with the shared address (ps5-bt-address off) the PS5's pairings are imported at boot: nothing to pair
-[ -e /etc/ps5-bazzite-deck/bt-address-off ] ||
+# The PS5's pairings are imported at boot when Linux shares the console's Bluetooth address: always on an original
+# PS5 or a Slim since image v3.0 (the Linux-only address is for the Pro only), and on v2.x after "ps5-bt-address off".
+# Only otherwise is there something to pair by hand.
+{ [ -e /etc/ps5-bazzite-deck/bt-address-off ] || { ver_ge 3.0 && ! is_pro; }; } ||
     echo "$(L '  - DualSense por Bluetooth: emparejar en un perfil propio del mando (PS + Cuadrado).' \
                "  - DualSense over Bluetooth: pair it in the controller's own profile (PS + Square).")"
 fi
@@ -2666,8 +2766,8 @@ mem_watch() {
     { [ "$min_ra" -lt 512 ] || [ "$peak_s" -gt $(( ${su0:-0} + 512 )) ]; } && ram_short=1
     [ "$vt" -gt 0 ] && [ $((peak_v * 100 / vt)) -ge 90 ] && vram_full=1
     if [ "$st" -gt 0 ] && [ "$peak_s" -ge $((st - 64)) ]; then
-        echo "$(L "  → La swap se llenó: si el juego pide más memoria, el sistema lo cierra. Agrándala (menú 52 → zram)" "  → Swap filled up: if the game asks for more memory, the system kills it. Enlarge it (menu 52 → zram)")"
-        echo "$(L "    o añade swap en disco (menú 52 → swapdisco)." "    or add disk swap (menu 52 → swapdisco).")"
+        echo "$(L "  → La swap se llenó: si el juego pide más memoria, el sistema lo cierra. Agrándala (menú 52 → memory)" "  → Swap filled up: if the game asks for more memory, the system kills it. Enlarge it (menu 52 → memory)")"
+        echo "$(L "    o añade swap en disco (menú 52 → memory)." "    or add disk swap (menu 52 → memory).")"
     fi
     [ "$peak_d" -ge 256 ] && awk -v d="$peak_d" -v f="$(L '  → Usó %.1f GB de swap en disco: el juego siguió, pero más lento en esos momentos. Si el sistema\n    entero se congeló (ratón parado), quítala (menú 52 → swapdisco, tamaño 0).\n' '  → It used %.1f GB of disk swap: the game kept going, but slower at those moments. If the whole\n    system froze (mouse stuck), remove it (menu 52 → swapdisco, size 0).\n')" 'BEGIN { printf f, d / 1024 }'
     if [ $ram_short = 1 ] && [ $vram_full = 1 ]; then
@@ -2799,7 +2899,7 @@ install_self() {
     say "$(L "al menú de aplicaciones de KDE ($TOOLBOX_DESKTOP)." "to the KDE applications menu ($TOOLBOX_DESKTOP).")"
     [ -f "$TOOLBOX_BIN" ] && say "$(L "Sustituye la que ya hay instalada ($("$TOOLBOX_BIN" --version 2>/dev/null))." "It replaces the one already installed ($("$TOOLBOX_BIN" --version 2>/dev/null)).")"
     say "$(L 'POR QUÉ: abrirla desde cualquier terminal con «ps5-bazzite-toolbox» o desde el menú, sin acordarte de la' 'WHY: open it from any terminal with "ps5-bazzite-toolbox" or from the menu, without having to remember the')"
-    say "$(L 'ruta. Las actualizaciones (opción 61) y los atajos del bloque atajos usan siempre esa copia.' 'path. Updates (option 61) and the shortcuts of the atajos block always use that copy.')"
+    say "$(L 'ruta. Las actualizaciones (opción 61) y los atajos de Dolphin y el comando espacio usan siempre esa copia.' 'path. Updates (option 61) and the Dolphin shortcuts and the espacio command always use that copy.')"
     say "$(L "DESHACER: ps5-bazzite-toolbox --uninstall (o rm $TOOLBOX_BIN $TOOLBOX_DESKTOP)." "UNDO: ps5-bazzite-toolbox --uninstall (or rm $TOOLBOX_BIN $TOOLBOX_DESKTOP).")"
     yesno "$(L '¿Instalarla?' 'Install it?')" S || return 1
     mkdir -p "$(dirname "$TOOLBOX_BIN")" && install -m 755 "$TOOLBOX_SELF" "$TOOLBOX_BIN" || return 1
@@ -2809,9 +2909,9 @@ install_self() {
     case :$PATH: in *":$HOME/.local/bin:"*) ;; *) echo "$(L "  ($HOME/.local/bin no está en tu PATH: usa $TOOLBOX_BIN)" "  ($HOME/.local/bin is not in your PATH: use $TOOLBOX_BIN)")" ;; esac
     local src=$TOOLBOX_SELF               # the downloaded file (TOOLBOX_SELF changes below, for the shortcuts)
     TOOLBOX_SELF=$TOOLBOX_BIN
-    if atajos_used && ! check_atajos; then
+    if atajos_used && { ! check_exeactions || ! check_spacetool; }; then
         echo "$(L 'Tus atajos (Dolphin, «espacio») usan otra copia de la toolbox.' 'Your shortcuts (Dolphin, "espacio") use another copy of the toolbox.')"
-        yesno "$(L "¿Los cambio para que usen la instalada ($TOOLBOX_BIN)?" "Change them to use the installed one ($TOOLBOX_BIN)?")" S && need_sudo && apply_atajos
+        yesno "$(L "¿Los cambio para que usen la instalada ($TOOLBOX_BIN)?" "Change them to use the installed one ($TOOLBOX_BIN)?")" S && need_sudo && { [ ! -e "$SM_GAME" ] || apply_exeactions; } && { [ ! -e "$SM_SPACE" ] && [ ! -e "$SPACE_BIN" ] || apply_spacetool; }
     fi
     TOOLBOX_SELF=$src
     # The downloaded file is no longer needed; a copy inside a git checkout is someone's working copy: leave it
@@ -5759,7 +5859,7 @@ menu_pick() {                            # menu_pick ANSWER -> "code sudo" of th
     return 1
 }
 menu_run() {                             # menu_run CODE -> 0, or 2 to leave the menu
-    local a
+    local a g es en bl
     case $1 in
         11) pp_add_game ;;
         12) pp_my_games ;;
@@ -5782,8 +5882,10 @@ menu_run() {                             # menu_run CODE -> 0, or 2 to leave the
         51) STATUS_ONLY=1 ALL=0 ONLY=''; setup_run; STATUS_ONLY=0
             echo; yesno "$(L "¿Aplico ahora los que faltan, uno a uno (preguntando cada uno)?" "Apply the missing ones now, one by one (asking for each)?")" S &&
                 { ALL=0 ONLY=''; setup_run; } ;;
-        52) echo "$(L "Ajustes: $BLOCKS" "Settings: $BLOCKS")"
-            read -rp "$(L "¿Cuáles? (separados por espacios o comas): " "Which ones? (separated by spaces or commas): ")" a
+        52) for a in "${BLOCK_GROUPS[@]}"; do
+                IFS='|' read -r g es en bl <<<"$a"; printf '  %s%-11s%s %s: %s\n' "$B" "$g" "$N" "$(L "$es" "$en")" "$bl"
+            done
+            read -rp "$(L "¿Cuáles? (ajustes o grupos, separados por espacios o comas): " "Which ones? (settings or groups, separated by spaces or commas): ")" a
             [ -n "$a" ] && { STATUS_ONLY=0 ALL=0 ONLY=${a//,/ }; setup_run; ONLY=''; } ;;
         61) self_update && { echo "$(L "Saliendo para que abras la versión nueva." "Exiting so you can open the new version.")"; return 2; } ;;
         62) img_menu ;;
