@@ -48,7 +48,7 @@
 #   nas: nas · games: emulators portproton unifideck · desktop: trash firewall browsers space monitorweb
 set -uo pipefail
 
-TOOLBOX_VERSION=1.18.0                   # bump on every release (see CHANGELOG.md and release.sh)
+TOOLBOX_VERSION=1.18.1                   # bump on every release (see CHANGELOG.md and release.sh)
 TOOLBOX_REPO=fitamix/ps5-bazzite-toolbox
 TOOLBOX_BIN=$HOME/.local/bin/ps5-bazzite-toolbox                      # where --install puts it
 TOOLBOX_DESKTOP=$HOME/.local/share/applications/ps5-bazzite-toolbox.desktop
@@ -2060,7 +2060,9 @@ EOF
         return 1
     fi
     if monweb_fw; then
-        sudo firewall-cmd --permanent --add-rich-rule="$(monweb_rule)" >/dev/null && sudo firewall-cmd --reload >/dev/null || return 1
+        if ! sudo firewall-cmd --permanent --query-rich-rule="$(monweb_rule)" >/dev/null 2>&1; then   # already there: nothing to add
+            sudo firewall-cmd --permanent --add-rich-rule="$(monweb_rule)" >/dev/null && sudo firewall-cmd --reload >/dev/null || return 1
+        fi
     fi
     sleep 1
     curl -fs -o /dev/null "http://127.0.0.1:$MONWEB_PORT/" || { echo "  $(L 'El servicio no responde' 'The service does not respond'): journalctl --user -u ps5-monitor-web"; return 1; }
@@ -2557,7 +2559,7 @@ if [ -z "$VERSION" ] && [ $STATUS_ONLY = 0 ]; then
     read -rp "$(L '¿Continuar de todos modos? [s/N] ' 'Continue anyway? [y/N] ')" a </dev/tty; [[ $a == [sSyY]* ]] || return 1
 fi
 echo "$(L "Ajustes de la consola ${VERSION:+(v$VERSION)} — respuestas guardadas en $CONF" "Console settings ${VERSION:+(v$VERSION)} — answers saved in $CONF")"
-REBOOT=0 COLD=0
+REBOOT=0 COLD=0 PENDING=0
 DONE="" FAILED="" SKIPPED=""
 local list='' x grp='' g
 if [ -n "$ONLY" ]; then for x in $ONLY; do list="$list $(block_alias "$x")"; done; ONLY=${list# }; fi
@@ -2570,7 +2572,7 @@ for b in ${ONLY:-$BLOCKS}; do
         0) printf "$(L '✔ %-12s aplicado\n' '✔ %-12s applied\n')" "$b" ;;
         2) printf "$(L '– %-12s no aplica en esta consola\n' '– %-12s not applicable on this console\n')" "$b" ;;
         3) printf "$(L '– %-12s no aplicado (lo decidiste; menú 52 o --only %s para volver a preguntar)\n' '– %-12s not applied (your choice; menu 52 or --only %s to ask again)\n')" "$b" "$b" ;;
-        *) printf "$(L '✘ %-12s pendiente\n' '✘ %-12s pending\n')" "$b" ;;
+        *) printf "$(L '✘ %-12s pendiente\n' '✘ %-12s pending\n')" "$b"; PENDING=1 ;;
     esac
     [ $STATUS_ONLY = 1 ] && continue
     if [ $st = 1 ]; then q="$(L "¿Aplicar '$b'?" "Apply '$b'?")" d=$(blk_default "$b")
@@ -5880,8 +5882,10 @@ menu_run() {                             # menu_run CODE -> 0, or 2 to leave the
         43) BOOT=0; run_checks ;;
         44) trap ':' INT; watch_kernel; trap - INT ;;
         51) STATUS_ONLY=1 ALL=0 ONLY=''; setup_run; STATUS_ONLY=0
-            echo; yesno "$(L "¿Aplico ahora los que faltan, uno a uno (preguntando cada uno)?" "Apply the missing ones now, one by one (asking for each)?")" S &&
-                { ALL=0 ONLY=''; setup_run; } ;;
+            echo
+            if [ "${PENDING:-0}" = 0 ]; then echo "$(L "Todo aplicado: no falta nada. Para cambiar uno concreto: opción 52." "Everything applied: nothing missing. To change a particular one: option 52.")"
+            else yesno "$(L "¿Aplico ahora los que faltan, uno a uno (preguntando cada uno)?" "Apply the missing ones now, one by one (asking for each)?")" S &&
+                { ALL=0 ONLY=''; setup_run; }; fi ;;
         52) for a in "${BLOCK_GROUPS[@]}"; do
                 IFS='|' read -r g es en bl <<<"$a"; printf '  %s%-11s%s %s: %s\n' "$B" "$g" "$N" "$(L "$es" "$en")" "$bl"
             done

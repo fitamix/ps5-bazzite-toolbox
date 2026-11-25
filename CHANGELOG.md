@@ -5,6 +5,17 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Numeració
 
 ## [Sin publicar]
 
+## [1.18.1] - 2026-11-25
+
+### Arreglado
+
+- **Opción 51**: si todos los ajustes están aplicados, ya no pregunta «¿Aplico ahora los que faltan?»; dice que no falta
+  nada y recuerda la opción 52 para cambiar uno concreto.
+- **Bloque `monitorweb`**: si la regla del cortafuegos para el puerto del monitor ya existe, no la vuelve a añadir (antes
+  salía el aviso `Warning: ALREADY_ENABLED` de `firewall-cmd`, inofensivo pero confuso).
+- Los bloques `vram` y `usbdisk` solo piden apagar o reiniciar si de verdad cambia algo (VRAM, GTT o las letras del
+  disco USB); si lo elegido ya es lo que usa la consola, lo dicen.
+
 ## [1.18.0] - 2026-11-24
 
 ### Añadido
@@ -578,7 +589,8 @@ Primera versión publicada.
 - Quien usaba la versión sin publicar (`ps5-toolbox.sh`): las respuestas de `~/.config/ps5-bazzite-postinstall.conf`
   pasan solas a `~/.config/ps5-bazzite-toolbox.conf`; los atajos se rehacen con el bloque `atajos`.
 
-[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.18.0...HEAD
+[Sin publicar]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.18.1...HEAD
+[1.18.1]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.18.0...v1.18.1
 [1.18.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.17.0...v1.18.0
 [1.17.0]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.16.1...v1.17.0
 [1.16.1]: https://github.com/fitamix/ps5-bazzite-toolbox/compare/v1.16.0...v1.16.1
